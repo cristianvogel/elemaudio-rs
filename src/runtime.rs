@@ -1,0 +1,259 @@
+use crate::error::{describe_return_code, Error, Result};
+use crate::ffi;
+use serde_json::Value as JsonValue;
+use std::ffi::{c_void, CString};
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+use std::rc::Rc;
+
+pub type NodeId = i32;
+
+#[derive(Debug, Clone)]
+pub enum Instruction {
+    CreateNode {
+        node_id: NodeId,
+        node_type: String,
+    },
+    SetProperty {
+        node_id: NodeId,
+        property: String,
+        value: JsonValue,
+    },
+    AppendChild {
+        parent_id: NodeId,
+        child_id: NodeId,
+        child_output_channel: i32,
+    },
+    ActivateRoots {
+        roots: Vec<NodeId>,
+    },
+    CommitUpdates,
+}
+
+impl Instruction {
+    fn to_json_value(&self) -> JsonValue {
+        match self {
+            Self::CreateNode { node_id, node_type } => JsonValue::Array(vec![
+                JsonValue::from(0),
+                JsonValue::from(*node_id),
+                JsonValue::from(node_type.clone()),
+            ]),
+            Self::SetProperty {
+                node_id,
+                property,
+                value,
+            } => JsonValue::Array(vec![
+                JsonValue::from(3),
+                JsonValue::from(*node_id),
+                JsonValue::from(property.clone()),
+                value.clone(),
+            ]),
+            Self::AppendChild {
+                parent_id,
+                child_id,
+                child_output_channel,
+            } => JsonValue::Array(vec![
+                JsonValue::from(2),
+                JsonValue::from(*parent_id),
+                JsonValue::from(*child_id),
+                JsonValue::from(*child_output_channel),
+            ]),
+            Self::ActivateRoots { roots } => JsonValue::Array(vec![
+                JsonValue::from(4),
+                JsonValue::Array(roots.iter().copied().map(JsonValue::from).collect()),
+            ]),
+            Self::CommitUpdates => JsonValue::Array(vec![JsonValue::from(5)]),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct InstructionBatch {
+    instructions: Vec<Instruction>,
+}
+
+impl InstructionBatch {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(&mut self, instruction: Instruction) {
+        self.instructions.push(instruction);
+    }
+
+    pub fn to_json_string(&self) -> String {
+        let payload = JsonValue::Array(
+            self.instructions
+                .iter()
+                .map(Instruction::to_json_value)
+                .collect(),
+        );
+        serde_json::to_string(&payload).expect("instruction batch serialization is infallible")
+    }
+}
+
+pub struct Runtime {
+    handle: NonNull<ffi::ElementaryRuntimeHandle>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl Runtime {
+    pub fn new(sample_rate: f64, block_size: usize) -> Result<Self> {
+        let handle = unsafe { ffi::elementary_runtime_new(sample_rate, block_size as i32) };
+        let handle = NonNull::new(handle).ok_or(Error::NullHandle)?;
+
+        Ok(Self {
+            handle,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    pub fn apply_instructions(&self, batch: &InstructionBatch) -> Result<()> {
+        let json = CString::new(batch.to_json_string())?;
+        let code = unsafe {
+            ffi::elementary_runtime_apply_instructions(self.handle.as_ptr(), json.as_ptr())
+        };
+
+        if code == 0 {
+            return Ok(());
+        }
+
+        Err(Error::Native {
+            operation: "apply_instructions",
+            code,
+            message: describe_return_code(code).to_string(),
+        })
+    }
+
+    pub fn reset(&self) {
+        unsafe { ffi::elementary_runtime_reset(self.handle.as_ptr()) }
+    }
+
+    pub fn set_current_time_samples(&self, sample_time: i64) {
+        unsafe {
+            ffi::elementary_runtime_set_current_time_samples(self.handle.as_ptr(), sample_time)
+        }
+    }
+
+    pub fn set_current_time_ms(&self, sample_time_ms: f64) {
+        unsafe { ffi::elementary_runtime_set_current_time_ms(self.handle.as_ptr(), sample_time_ms) }
+    }
+
+    pub fn add_shared_resource_f32(&self, name: &str, data: &[f32]) -> Result<()> {
+        let name = CString::new(name)?;
+        let code = unsafe {
+            ffi::elementary_runtime_add_shared_resource_f32(
+                self.handle.as_ptr(),
+                name.as_ptr(),
+                data.as_ptr(),
+                data.len(),
+            )
+        };
+
+        if code == 0 {
+            return Ok(());
+        }
+
+        Err(Error::Native {
+            operation: "add_shared_resource_f32",
+            code,
+            message: "native runtime rejected the shared resource".to_string(),
+        })
+    }
+
+    pub fn process(
+        &self,
+        num_samples: usize,
+        inputs: &[&[f64]],
+        outputs: &mut [&mut [f64]],
+    ) -> Result<()> {
+        if inputs.iter().any(|channel| channel.len() < num_samples) {
+            return Err(Error::InvalidArgument(
+                "an input channel is shorter than num_samples",
+            ));
+        }
+
+        if outputs.iter().any(|channel| channel.len() < num_samples) {
+            return Err(Error::InvalidArgument(
+                "an output channel is shorter than num_samples",
+            ));
+        }
+
+        let input_ptrs: Vec<*const f64> = inputs.iter().map(|channel| channel.as_ptr()).collect();
+        let mut output_ptrs: Vec<*mut f64> = outputs
+            .iter_mut()
+            .map(|channel| channel.as_mut_ptr())
+            .collect();
+
+        let code = unsafe {
+            ffi::elementary_runtime_process(
+                self.handle.as_ptr(),
+                input_ptrs.as_ptr(),
+                input_ptrs.len(),
+                output_ptrs.as_mut_ptr(),
+                output_ptrs.len(),
+                num_samples,
+            )
+        };
+
+        if code == 0 {
+            return Ok(());
+        }
+
+        Err(Error::Native {
+            operation: "process",
+            code,
+            message: describe_return_code(code).to_string(),
+        })
+    }
+
+    pub fn gc(&self) -> Vec<NodeId> {
+        unsafe extern "C" fn collect(node_id: i32, user_data: *mut c_void) {
+            // The pointer comes from `gc` below and remains valid for the duration of the call.
+            let ids = unsafe { &mut *(user_data as *mut Vec<NodeId>) };
+            ids.push(node_id);
+        }
+
+        let mut ids = Vec::new();
+        unsafe {
+            ffi::elementary_runtime_gc(
+                self.handle.as_ptr(),
+                Some(collect),
+                &mut ids as *mut _ as *mut c_void,
+            );
+        }
+        ids
+    }
+}
+
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        unsafe { ffi::elementary_runtime_free(self.handle.as_ptr()) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn instruction_batch_serializes_to_runtime_shape() {
+        let mut batch = InstructionBatch::new();
+        batch.push(Instruction::CreateNode {
+            node_id: 7,
+            node_type: "osc".into(),
+        });
+        batch.push(Instruction::SetProperty {
+            node_id: 7,
+            property: "gain".into(),
+            value: json!(0.5),
+        });
+        batch.push(Instruction::CommitUpdates);
+
+        assert_eq!(
+            batch.to_json_string(),
+            r#"[[0,7,"osc"],[3,7,"gain",0.5],[5]]"#
+        );
+    }
+}
