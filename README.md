@@ -128,7 +128,6 @@ fn render(runtime: &Runtime) -> Result<()> {
 ## Examples
 
 - `examples/web-ui` is the working browser POC.
-- `examples/frontend-graph.ts` shows the basic multichannel graph shape.
 
 ## Whats Next
 
