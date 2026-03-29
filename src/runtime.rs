@@ -1,3 +1,5 @@
+//! Safe wrapper around the Elementary runtime handle and instruction batches.
+
 use crate::error::{describe_return_code, Error, Result};
 use crate::ffi;
 use serde_json::Value as JsonValue;
@@ -6,27 +8,43 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::rc::Rc;
 
+/// Runtime node identifier used by instruction batches and GC results.
 pub type NodeId = i32;
 
+/// Instruction supported by the current wrapper surface.
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    /// Create a runtime node with the given identifier and type.
     CreateNode {
+        /// Node identifier assigned by the caller.
         node_id: NodeId,
+        /// Native node type name.
         node_type: String,
     },
+    /// Set a property on an existing node.
     SetProperty {
+        /// Target node identifier.
         node_id: NodeId,
+        /// Property name.
         property: String,
+        /// JSON value to assign to the property.
         value: JsonValue,
     },
+    /// Append one node as a child of another node.
     AppendChild {
+        /// Parent node identifier.
         parent_id: NodeId,
+        /// Child node identifier.
         child_id: NodeId,
+        /// Output channel index on the child node.
         child_output_channel: i32,
     },
+    /// Activate the provided root nodes.
     ActivateRoots {
+        /// Root node identifiers.
         roots: Vec<NodeId>,
     },
+    /// Commit a pending set of runtime updates.
     CommitUpdates,
 }
 
@@ -67,20 +85,24 @@ impl Instruction {
     }
 }
 
+/// A batch of instructions serialized to the runtime JSON array shape.
 #[derive(Debug, Clone, Default)]
 pub struct InstructionBatch {
     instructions: Vec<Instruction>,
 }
 
 impl InstructionBatch {
+    /// Creates an empty instruction batch.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Appends one instruction to the batch.
     pub fn push(&mut self, instruction: Instruction) {
         self.instructions.push(instruction);
     }
 
+    /// Serializes the batch to the JSON payload expected by the native runtime.
     pub fn to_json_string(&self) -> String {
         let payload = JsonValue::Array(
             self.instructions
@@ -92,12 +114,14 @@ impl InstructionBatch {
     }
 }
 
+/// Safe owner for a native runtime handle.
 pub struct Runtime {
     handle: NonNull<ffi::ElementaryRuntimeHandle>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 impl Runtime {
+    /// Creates a runtime for the given sample rate and block size.
     pub fn new(sample_rate: f64, block_size: usize) -> Result<Self> {
         let handle = unsafe { ffi::elementary_runtime_new(sample_rate, block_size as i32) };
         let handle = NonNull::new(handle).ok_or(Error::NullHandle)?;
@@ -108,6 +132,7 @@ impl Runtime {
         })
     }
 
+    /// Applies a serialized batch of instructions to the runtime.
     pub fn apply_instructions(&self, batch: &InstructionBatch) -> Result<()> {
         let json = CString::new(batch.to_json_string())?;
         let code = unsafe {
@@ -125,20 +150,24 @@ impl Runtime {
         })
     }
 
+    /// Resets the runtime state.
     pub fn reset(&self) {
         unsafe { ffi::elementary_runtime_reset(self.handle.as_ptr()) }
     }
 
+    /// Sets the current runtime time in samples.
     pub fn set_current_time_samples(&self, sample_time: i64) {
         unsafe {
             ffi::elementary_runtime_set_current_time_samples(self.handle.as_ptr(), sample_time)
         }
     }
 
+    /// Sets the current runtime time in milliseconds.
     pub fn set_current_time_ms(&self, sample_time_ms: f64) {
         unsafe { ffi::elementary_runtime_set_current_time_ms(self.handle.as_ptr(), sample_time_ms) }
     }
 
+    /// Adds a shared `f32` resource by name.
     pub fn add_shared_resource_f32(&self, name: &str, data: &[f32]) -> Result<()> {
         let name = CString::new(name)?;
         let code = unsafe {
@@ -161,6 +190,9 @@ impl Runtime {
         })
     }
 
+    /// Processes one audio block.
+    ///
+    /// Every input and output channel must have at least `num_samples` samples.
     pub fn process(
         &self,
         num_samples: usize,
@@ -207,6 +239,7 @@ impl Runtime {
         })
     }
 
+    /// Runs garbage collection and returns the collected node identifiers.
     pub fn gc(&self) -> Vec<NodeId> {
         unsafe extern "C" fn collect(node_id: i32, user_data: *mut c_void) {
             // The pointer comes from `gc` below and remains valid for the duration of the call.
@@ -227,6 +260,7 @@ impl Runtime {
 }
 
 impl Drop for Runtime {
+    /// Releases the native runtime handle.
     fn drop(&mut self) {
         unsafe { ffi::elementary_runtime_free(self.handle.as_ptr()) }
     }
