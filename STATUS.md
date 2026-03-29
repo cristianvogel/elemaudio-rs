@@ -94,6 +94,10 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - ⚪ Expand to more runtime operations and event handling
 - ⚪ Add integration tests against the real runtime
 
+### Exploration Marker
+- REPL DSL marker: `REPL-DSL-RUST`
+- Goal: Rust-native graph DSL with a fast edit/evaluate loop and better diagnostics
+
 ---
 
 ## Known Issues & Blockers
