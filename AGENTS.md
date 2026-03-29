@@ -1,223 +1,127 @@
-# Ydun AI Workflow — Templates, Prompts, and Patterns for AI-Assisted Development
+# elemaudio-rs - Safe Rust FFI bindings for the Elementary audio runtime
 
-**Version**: 3.0.0
-**Last Updated**: 2026-03-09
+<!--
+TEMPLATE_VERSION: 1.7.0
+TEMPLATE_SOURCE: templates/core/AGENTS.md.template
+LAST_SYNC: 2026-03-29
+SYNC_CHECK: Run check-version.sh from your Ydun_ai_workflow clone to verify you have the latest template version
+AUTO_SYNC: Run sync-templates.sh from your Ydun_ai_workflow clone to update (preserves your customizations)
+CHANGELOG: See CHANGELOG.md for version history
+-->
+
+**STATUS: IN DEVELOPMENT** - Last Updated: 2026-03-29
 
 ## Repository Information
+- **GitHub Repository**: git@github-cristianvogel:cristianvogel/elemaudio-rs.git
+- **Local Directory**: `/Users/cristianvogel/RustroverProjects/elemaudio-rs`
+- **Primary Purpose**: Provides safe Rust bindings around the Elementary audio runtime and its native C++ engine surface.
 
-- **GitHub**: https://github.com/ydun-code-library/Ydun_ai_workflow
-- **Documentation**: https://docs.ydun.io
-- **License**: MIT
+## Important Context
 
-## What This Repo Contains
+This project is a Rust wrapper over `src/vendor/elementary`, which is a C++ runtime with header-only native APIs. The current implementation approach is a small C++ bridge plus a safe Rust layer that owns runtime handles, serializes instruction batches, and keeps raw FFI hidden from consumers.
 
-A collection of production-tested templates, prompt frameworks, and development tools for AI-assisted development. Clone it, copy what you need, fill the placeholders.
+The repository is intentionally narrow at this stage: initialize the crate correctly, keep the wrapper surface small, and expand only when a real runtime use case requires it.
 
-**This is a distribution repo** — pure files, no framework, no build step. The full documentation site with guides, research, and methodology deep-dives is at [docs.ydun.io](https://docs.ydun.io).
+## Core Development Principles (MANDATORY)
 
-## Repository Structure
+### 1. KISS
+- Prefer the smallest safe wrapper that can express the runtime API.
+- Avoid abstraction layers unless they reduce unsafe surface area.
 
-```
-Ydun_ai_workflow/
-├── templates/
-│   ├── core/                    # Project setup templates
-│   │   ├── AGENTS.md.template   # AI assistant guidelines (agents.md standard)
-│   │   ├── CLAUDE.md.template   # Claude quick reference
-│   │   ├── JIMMYS-WORKFLOW.md   # Validation system v2.1
-│   │   ├── STATUS.md.template   # Project status tracking
-│   │   └── NEXT-SESSION-START-HERE.md.template
-│   ├── init/                    # Project initialisation guides
-│   │   ├── init-project.md      # 14-step setup checklist
-│   │   └── AGENTS-TEMPLATE-GUIDE.md
-│   ├── docs/                    # Documentation standards
-│   │   ├── DOCUMENTATION-STANDARDS.md
-│   │   ├── AI-DRIVEN-SEO-BEST-PRACTICES.md
-│   │   └── doc-components/      # Reusable doc templates
-│   └── tools/                   # Shell scripts
-│       ├── audit-project.sh     # Compliance audit
-│       ├── check-version.sh     # Template version check
-│       └── sync-templates.sh    # Template sync utility
-├── prompts/
-│   ├── audit/                   # Multi-lens audit system
-│   │   ├── codebase-audit-prompt.md
-│   │   ├── claude-code-audit-prompt.md
-│   │   ├── json-sidecar-pattern.md
-│   │   └── templates/           # 5 execution templates
-│   └── methodology/             # Prompt engineering
-│       ├── cap-workflow-methodology.md
-│       ├── prompt-testing-implementation-guide.md
-│       ├── audit-map-execution-patterns.md
-│       └── god-prompt-methodology.md
-├── AGENTS.md                    # This file
-├── CLAUDE.md                    # Quick reference
-├── JIMMYS-WORKFLOW.md           # Workflow v2.1 (full reference)
-├── README.md                    # Project overview
-├── VERSION                      # Current version
-├── llms.txt                     # AI discoverability
-└── LICENSE                      # MIT
-```
+### 2. TDD
+- Add tests for instruction encoding, argument validation, and error mapping.
+- Do not add behavior without a corresponding validation path.
 
-## Quick Start
+### 3. Separation of Concerns
+- Keep C++ bridge code isolated from Rust API code.
+- Keep vendor code untouched unless a bridge file is explicitly required.
 
-```bash
-git clone https://github.com/ydun-code-library/Ydun_ai_workflow.git
-cd Ydun_ai_workflow
-
-# Copy core templates to your project
-cp templates/core/AGENTS.md.template /path/to/your-project/AGENTS.md
-cp templates/core/CLAUDE.md.template /path/to/your-project/CLAUDE.md
-cp templates/core/JIMMYS-WORKFLOW.md /path/to/your-project/
-
-# Fill the [PROJECT_SPECIFIC] sections with your project details
-```
-
-For the full 14-step project initialisation, see `templates/init/init-project.md`.
-
-## Core Development Principles
-
-### 1. KISS (Keep It Simple, Stupid)
-- Avoid over-complication and over-engineering
-- Choose simple solutions over complex ones
-- Question every abstraction layer
-
-### 2. TDD (Test-Driven Development)
-- Write tests first
-- Run tests to ensure they fail (Red phase)
-- Write minimal code to pass tests (Green phase)
-- Refactor while keeping tests green
-
-### 3. Separation of Concerns (SOC)
-- Each module/component has a single, well-defined responsibility
-- Clear boundaries between different parts of the system
-- Services should be loosely coupled
-
-### 4. DRY (Don't Repeat Yourself)
-- Eliminate code duplication
-- Extract common functionality into reusable components
+### 4. DRY
+- Centralize return-code mapping and JSON instruction encoding.
+- Do not duplicate FFI pointer setup across methods.
 
 ### 5. Documentation Standards
-- Always include the actual date when writing documentation
-- Use objective, factual language only
-- Avoid marketing terms ("production-ready", "world-class", "cutting-edge")
-- State current development status clearly
-- Document what IS, not what WILL BE
+- Use factual, dated, objective language.
+- Document what the wrapper currently supports, not what it might support later.
 
 ### 5.5. AI-Optimized Documentation
-Documentation is structured data for both humans AND AI consumption.
+- Keep status docs structured and current.
+- Use tables or bullet lists for commands and current work.
 
-**The 7 Principles:**
-1. Structured Data Over Prose — use tables, JSON, YAML instead of paragraphs
-2. Explicit Context — never assume prior knowledge
-3. Cause-Effect Relationships — clear "if X then Y" statements
-4. Machine-Readable Formats — consistent, parseable metadata
-5. Searchable Content — keywords, anchors, consistent terminology
-6. Version-Stamped — date all documentation updates
-7. Cross-Referenced — explicit links between related docs
-
-### 6. Jimmy's Workflow v2.1 (MANDATORY)
-Four-phase checkpoint system preventing AI hallucination:
+### 6. Jimmy's Workflow v2.1
+Use for all implementation tasks:
 
 ```
-PRE-FLIGHT → IMPLEMENT → VALIDATE → CHECKPOINT
+🔴 PRE-FLIGHT → 🔴 IMPLEMENT → 🟢 VALIDATE → 🔵 CHECKPOINT
 ```
 
-- **PRE-FLIGHT**: Verify context — do I have all files, requirements, dependencies?
-- **IMPLEMENT**: Write code, build features, make changes
-- **VALIDATE**: Run explicit validation with documented reasoning and confidence level
-- **CHECKPOINT**: Mark completion with confidence level and validity conditions
+- 🔴 **PRE-FLIGHT**: Verify context, vendor API surface, and build path.
+- 🔴 **IMPLEMENT**: Make the minimal safe change.
+- 🟢 **VALIDATE**: Run cargo checks/tests and note confidence.
+- 🔵 **CHECKPOINT**: Record what is complete and what could invalidate it.
 
-**Confidence Levels:**
-- **HIGH**: Proceed automatically
-- **MEDIUM**: Human spot-check recommended
-- **LOW**: Human validation required
-
-**Reference**: See `JIMMYS-WORKFLOW.md` for the complete system (877 lines with examples, decision trees, and templates).
-
-### 7. YAGNI (You Ain't Gonna Need It)
-- Don't implement features until they're actually needed
-- Build for current requirements, not hypothetical future ones
-- Every line of code is a liability — only write what's necessary
+### 7. YAGNI
+- Do not add features like audio file loading, device enumeration, or event streaming until the wrapper needs them.
 
 ### 8. Fix Now, Not Later
-- Fix vulnerabilities immediately when discovered
-- Fix warnings immediately — don't suppress or accumulate
-- Fix failing tests immediately — understand root cause, don't skip
-- Don't use suppressions without documented justification
+- Fix build and lint issues immediately.
+- Do not suppress warnings without documented reason.
 
 ### 9. Measure Twice, Cut Once
-- Always verify your understanding before executing
-- Double-check file paths, command syntax, and target locations
-- When in doubt, investigate first — don't guess
+- Verify vendor paths and crate commands before editing.
+- Read the native headers before extending the wrapper.
 
-### 10. No Shortcuts (Do It Right)
-- Complete the job properly — no half-measures
-- Don't skip steps to save time
-- Quality over speed — cutting corners creates debt
+### 10. No Shortcuts
+- Keep the unsafe boundary explicit and auditable.
+- Validate the wrapper after every meaningful change.
 
-### 11. Rules Persist (Context Compression Immunity)
-- ALL rules remain in effect after auto-compact/context summarisation
-- Core principles are NEVER optional, regardless of context length
-- If you can't remember a rule, re-read AGENTS.md
+### 11. Rules Persist
+- All principles remain in effect across sessions.
 
-## GitHub Workflow
+## Commands
 
-Use `gh` CLI for all GitHub operations:
+### Development
+- `cargo build`
+- `cargo run`
+- `cargo test`
+- `cargo check`
+- `cargo clippy --all-targets --all-features`
 
-```bash
-# Pull Requests
-gh pr create --title "Feature" --body "Description"
-gh pr list
-gh pr checks
+### Native Bridge
+- `cargo clean` if the C++ bridge needs a rebuild from stale artifacts.
 
-# Issues
-gh issue create --title "Bug" --body "Description"
-gh issue list
+## Project Structure
+- `src/lib.rs` - Public Rust API surface
+- `src/runtime.rs` - Safe runtime wrapper and instruction types
+- `src/error.rs` - Shared error types and return-code mapping
+- `src/ffi.rs` - Raw FFI declarations
+- `src/ffi/elementary_bridge.cpp` - C++ bridge into `src/vendor/elementary`
+- `src/vendor/elementary/` - Vendored Elementary runtime source
+- `build.rs` - Compiles the C++ bridge
 
-# CI/CD
-gh run list
-gh run watch
-```
+## Current Status
+- ✅ Repository initialized on `dev`
+- ✅ Core workflow docs added
+- ✅ Initial safe FFI scaffold validated with `cargo test`
+- 🔄 Native integration coverage beyond runtime/core instructions
+- ⚪ Tests for real runtime behavior
 
-## Template Version Management
+## Known Issues & Technical Debt
 
-This repo uses a VERSION file at root. Templates include version headers:
+### Critical Issues
+- None currently identified.
 
-```html
-<!-- TEMPLATE_VERSION: 1.7.0 -->
-```
+### Important Issues
+- The wrapper currently covers only the runtime constructor, instruction batches, processing, shared resources, and GC callbacks.
+- Event streaming and richer resource types are not exposed yet.
 
-**Check version:**
-```bash
-templates/tools/check-version.sh
-```
+### Technical Debt
+- Instruction encoding is JSON-based and should stay aligned with the vendor runtime contract.
+- The bridge should gain focused integration tests once the first real runtime flow is available.
 
-**Sync to latest:**
-```bash
-templates/tools/sync-templates.sh --dry-run   # Preview changes
-templates/tools/sync-templates.sh             # Apply with confirmation
-```
+## Environment Variables
+- None required yet.
 
-**Audit compliance:**
-```bash
-templates/tools/audit-project.sh              # Full audit
-templates/tools/audit-project.sh --quick      # Quick check
-```
-
-## Contributing
-
-1. Read this AGENTS.md
-2. Follow the 11 principles
-3. Use Jimmy's Workflow for all implementation tasks
-4. Write tests first (TDD)
-5. Document decisions with dates
-
-## Further Reading
-
-- **Full documentation**: [docs.ydun.io](https://docs.ydun.io)
-- **Jimmy's Workflow deep dive**: [docs.ydun.io/workflow/jimmys-workflow](https://docs.ydun.io/workflow/jimmys-workflow/)
-- **Multi-agent coordination**: [docs.ydun.io/guides/multi-agent-setup](https://docs.ydun.io/guides/multi-agent-setup/)
-- **agents.md standard**: [agents.md](https://agents.md/)
-
----
-
-**This document follows the [agents.md](https://agents.md/) standard for AI coding assistants.**
+## Session Notes
+- This repo is on the `dev` branch.
+- The Elementary vendor code lives under `src/vendor/elementary`.

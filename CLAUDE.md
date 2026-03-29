@@ -1,19 +1,27 @@
 # Claude AI Assistant Instructions
 
-Please refer to **AGENTS.md** for complete project guidelines and the 11 core development principles.
+Please refer to **AGENTS.md** for complete project guidelines and context.
 
-This repository follows the [agents.md](https://agents.md/) standard for AI coding assistants.
+This project follows the [agents.md](https://agents.md/) standard for AI coding assistants.
 
 ## Quick Reference
 
-**This is**: A public template collection for AI-assisted development.
-**Documentation**: [docs.ydun.io](https://docs.ydun.io)
+**Project**: elemaudio-rs
+**Purpose**: Safe Rust FFI bindings for the Elementary audio runtime
 
 ### Core Principles
 
-1. KISS  2. TDD  3. SOC  4. DRY  5. Documentation Standards
-5.5. AI-Optimized Docs  6. Jimmy's Workflow  7. YAGNI
-8. Fix Now  9. Measure Twice  10. No Shortcuts  11. Rules Persist
+1. KISS
+2. TDD
+3. SOC
+4. DRY
+5. Documentation Standards
+6. Jimmy's Workflow
+7. YAGNI
+8. Fix Now
+9. Measure Twice
+10. No Shortcuts
+11. Rules Persist
 
 ### Jimmy's Workflow v2.1
 
@@ -27,20 +35,22 @@ HIGH (proceed) | MEDIUM (human spot-check) | LOW (human required)
 
 | File | Purpose |
 |------|---------|
-| `AGENTS.md` | Complete project guidelines and principles |
+| `AGENTS.md` | Complete project guidelines and context |
 | `JIMMYS-WORKFLOW.md` | Full validation system v2.1 |
-| `templates/` | Template files for new projects |
-| `prompts/` | Prompt frameworks (audit, CAP, testing) |
-| `README.md` | Project overview and quick start |
+| `STATUS.md` | Live project status and metrics |
+| `NEXT-SESSION-START-HERE.md` | Session continuity and next steps |
+| `src/runtime.rs` | Safe Rust wrapper around the Elementary runtime |
+| `src/ffi/elementary_bridge.cpp` | Native bridge into the vendored C++ runtime |
 
-### Template Tools
+### Common Commands
 
 ```bash
-templates/tools/audit-project.sh     # Compliance audit
-templates/tools/check-version.sh     # Version check
-templates/tools/sync-templates.sh    # Template sync
+cargo build
+cargo test
+cargo check
+cargo clippy --all-targets --all-features
 ```
 
 ---
 
-*Last updated: 2026-03-09*
+*Last updated: 2026-03-29*
