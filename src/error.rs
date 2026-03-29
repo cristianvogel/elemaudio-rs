@@ -1,16 +1,27 @@
+//! Error types and native return-code mapping for the runtime wrapper.
+
 use std::ffi::NulError;
 use std::fmt::{Display, Formatter};
 
+/// Result type used by the public API.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Errors returned by the safe wrapper.
 #[derive(Debug)]
 pub enum Error {
+    /// The native runtime returned a null handle during construction.
     NullHandle,
+    /// A wrapper-side argument validation failure.
     InvalidArgument(&'static str),
+    /// A string contained an interior nul byte before crossing the FFI boundary.
     CString(NulError),
+    /// A native operation returned a non-zero status code.
     Native {
+        /// The operation that failed.
         operation: &'static str,
+        /// The raw native status code.
         code: i32,
+        /// Human-readable description of the status code.
         message: String,
     },
 }
@@ -40,6 +51,10 @@ impl From<NulError> for Error {
     }
 }
 
+/// Describes a native runtime return code.
+///
+/// The mapping is used when the native bridge reports a failure code and the
+/// wrapper needs to surface a human-readable message.
 pub fn describe_return_code(code: i32) -> &'static str {
     match code {
         0 => "Ok",
