@@ -21,6 +21,11 @@ type ResourceSnapshot = {
   resources: ResourceEntry[];
 };
 
+type ResourceMetadata = {
+  duration_ms: number;
+  channels: number;
+};
+
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (!app) {
@@ -57,11 +62,11 @@ app.innerHTML = `
     <p class="demo-link"><a href="/index.html">Back to the graph demo</a></p>
     <div class="controls">
       <div class="row">
-        <label for="resource-id">
+        <label>
           <span>Resource id</span>
           <span id="resource-count">0 resources</span>
         </label>
-        <input id="resource-id" type="text" value="sample-a" />
+        <div id="resource-id" class="resource-status">No resource selected</div>
       </div>
       <div class="row">
         <label for="browser-file">
@@ -87,6 +92,7 @@ app.innerHTML = `
         </label>
       </div>
       <div class="status" id="status">Idle</div>
+      <div class="resource-status" id="metadata-status">Metadata not loaded</div>
       <div class="resource-status" id="mirror-status">Browser VFS idle</div>
       <div class="resource-status" id="binary-status">Binary snapshot not loaded</div>
       <div class="resource-list" id="resource-list"></div>
@@ -94,7 +100,7 @@ app.innerHTML = `
   </div>
 `;
 
-const resourceIdInput = mustQuery<HTMLInputElement>("#resource-id");
+const resourceIdLabel = mustQuery<HTMLDivElement>("#resource-id");
 const browserFileInput = mustQuery<HTMLInputElement>("#browser-file");
 const selectedFileName = mustQuery<HTMLSpanElement>("#selected-file-name");
 const resourceCount = mustQuery<HTMLSpanElement>("#resource-count");
@@ -106,14 +112,16 @@ const pruneSelectedButton = mustQuery<HTMLButtonElement>("#prune-selected");
 const playSelectedButton = mustQuery<HTMLButtonElement>("#play-selected");
 const autoPlayCheckbox = mustQuery<HTMLInputElement>("#auto-play");
 const status = mustQuery<HTMLDivElement>("#status");
+const metadataStatus = mustQuery<HTMLDivElement>("#metadata-status");
 const mirrorStatus = mustQuery<HTMLDivElement>("#mirror-status");
 const binaryStatus = mustQuery<HTMLDivElement>("#binary-status");
 const resourceList = mustQuery<HTMLDivElement>("#resource-list");
 
-let selectedResourceId = resourceIdInput.value.trim();
+let selectedResourceId = "";
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 let activeMirrorPath = `${browserVfsRoot}/active.wav`;
+let activeMirrorChannels = 0;
 
 function api(path: string) {
   return `${apiBase}${path}`;
@@ -152,6 +160,17 @@ async function loadBinarySnapshotSize() {
   binaryStatus.textContent = `Binary snapshot: ${bytes.byteLength} bytes`;
 }
 
+async function loadMetadata(resourceId: string) {
+  const response = await fetch(api(`/api/resources/metadata?name=${encodeURIComponent(resourceId)}`), { mode: "cors" });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load metadata: ${response.status} ${response.statusText}`);
+  }
+
+  const metadata = (await response.json()) as ResourceMetadata;
+  metadataStatus.textContent = `Duration: ${metadata.duration_ms.toFixed(1)} ms, Channels: ${metadata.channels}`;
+}
+
 async function ensureAudio() {
   if (audioContext && renderer) {
     return;
@@ -174,25 +193,38 @@ async function mirrorSelectedResource(resourceId: string) {
 
   const bytes = await response.arrayBuffer();
   const buffer = await audioContext!.decodeAudioData(bytes);
-  const mono = buffer.getChannelData(0);
+  const mirrorPath = `${browserVfsRoot}/${encodeURIComponent(resourceId)}.wav`;
+  const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) =>
+    new Float32Array(buffer.getChannelData(index)),
+  );
 
-  activeMirrorPath = `${browserVfsRoot}/${encodeURIComponent(resourceId)}.wav`;
+  activeMirrorPath = mirrorPath;
+  activeMirrorChannels = buffer.numberOfChannels;
+
   await renderer!.updateVirtualFileSystem({
-    [activeMirrorPath]: new Float32Array(mono),
+    [mirrorPath]: buffer.numberOfChannels > 1 ? channels : channels[0],
   });
 
-  mirrorStatus.textContent = `Mirrored ${resourceId} into browser VFS at ${activeMirrorPath}`;
+  mirrorStatus.textContent = `Mirrored ${resourceId} into browser VFS at ${mirrorPath}`;
 }
 
-function buildGraph(rate: number): NodeRepr_t[] {
+function buildGraph(): NodeRepr_t[] {
   const trigger = el.train(el.const({ value: 0.2 }));
-  const playbackRate = el.const({ value: rate });
-  const sample = el.sample({ path: activeMirrorPath }, trigger, playbackRate);
 
-  return [
-    el.mul(el.const({ value: 0.5 }), sample),
-    el.mul(el.const({ value: 0.5 }), sample),
-  ];
+  if (activeMirrorChannels > 1) {
+    const roots = el.mc.sample({ path: activeMirrorPath, channels: activeMirrorChannels }, trigger);
+
+    const left = roots[0] ? el.mul(el.const({ value: 0.5 }), roots[0]) : el.const({ value: 0 });
+    const right = roots[1] ? el.mul(el.const({ value: 0.5 }), roots[1]) : left;
+
+    return [left, right];
+  }
+
+  const sample = el.sample({ path: activeMirrorPath }, trigger, el.const({ value: 1 }));
+  const left = el.mul(el.const({ value: 0.5 }), sample);
+  const right = el.mul(el.const({ value: 0.5 }), sample);
+
+  return [left, right];
 }
 
 async function renderCurrentGraph() {
@@ -201,7 +233,7 @@ async function renderCurrentGraph() {
   }
 
   await audioContext?.resume();
-  await renderer.render(...buildGraph(1));
+  await renderer.render(...buildGraph());
   await renderer.pruneVirtualFileSystem();
   status.textContent = `Playing ${selectedResourceId}`;
 }
@@ -245,8 +277,12 @@ function renderResources(snapshot: ResourceSnapshot) {
   resourceList.querySelectorAll<HTMLButtonElement>(".select-resource").forEach((button) => {
     button.addEventListener("click", () => {
       selectedResourceId = button.dataset.resourceId ?? selectedResourceId;
-      resourceIdInput.value = selectedResourceId;
+      resourceIdLabel.textContent = selectedResourceId;
       status.textContent = `Selected ${selectedResourceId}`;
+
+      void loadMetadata(selectedResourceId).catch((error) => {
+        metadataStatus.textContent = `Metadata failed: ${error instanceof Error ? error.message : String(error)}`;
+      });
 
       if (autoPlayCheckbox.checked) {
         void playSelectedResource().catch((error) => {
@@ -262,9 +298,23 @@ async function refresh() {
   renderResources(snapshot);
   await loadBinarySnapshotSize();
 
-  if (snapshot.resources.length > 0 && !snapshot.resources.some((resource) => resource.id === selectedResourceId)) {
+  if (snapshot.resources.length === 0) {
+    selectedResourceId = "";
+    resourceIdLabel.textContent = "No resource selected";
+    metadataStatus.textContent = "Metadata not loaded";
+    mirrorStatus.textContent = "Browser VFS idle";
+    return;
+  }
+
+  if (!snapshot.resources.some((resource) => resource.id === selectedResourceId)) {
     selectedResourceId = snapshot.resources[0].id;
-    resourceIdInput.value = selectedResourceId;
+    resourceIdLabel.textContent = selectedResourceId;
+  }
+
+  if (selectedResourceId) {
+    await loadMetadata(selectedResourceId).catch((error) => {
+      metadataStatus.textContent = `Metadata failed: ${error instanceof Error ? error.message : String(error)}`;
+    });
   }
 }
 
@@ -277,7 +327,7 @@ async function loadBundledSample() {
   const bytes = await response.arrayBuffer();
   await post(`/api/resources/load?name=${encodeURIComponent(bundledSampleName)}`, bytes);
   selectedResourceId = bundledSampleName;
-  resourceIdInput.value = selectedResourceId;
+  resourceIdLabel.textContent = selectedResourceId;
   status.textContent = `Loaded ${bundledSampleName} into Rust`;
   await refresh();
 
@@ -294,11 +344,21 @@ async function uploadBrowserFile() {
   }
 
   const bytes = await file.arrayBuffer();
-  const resourceId = resourceIdInput.value.trim() || file.name.replace(/\s+/g, "_");
+  const resourceId = file.name.replace(/\s+/g, "_");
+  const snapshot = await loadSnapshot();
+
+  if (snapshot.resources.some((resource) => resource.id === resourceId)) {
+    const confirmed = window.confirm(`Resource id with the same name exists (${resourceId}). Overwrite it?`);
+
+    if (!confirmed) {
+      status.textContent = `Upload cancelled for ${resourceId}`;
+      return;
+    }
+  }
 
   await post(`/api/resources/load?name=${encodeURIComponent(resourceId)}`, bytes);
   selectedResourceId = resourceId;
-  resourceIdInput.value = selectedResourceId;
+  resourceIdLabel.textContent = selectedResourceId;
   selectedFileName.textContent = file.name;
   status.textContent = `Uploaded ${file.name} as ${resourceId}`;
   await refresh();
@@ -326,7 +386,7 @@ async function renameSelected() {
 
   await post(`/api/resources/rename?from=${encodeURIComponent(selectedResourceId)}&to=${encodeURIComponent(nextId)}`);
   selectedResourceId = nextId;
-  resourceIdInput.value = selectedResourceId;
+  resourceIdLabel.textContent = selectedResourceId;
   status.textContent = `Renamed to ${nextId}`;
   await refresh();
 
@@ -386,10 +446,6 @@ playSelectedButton.addEventListener("click", () => {
 browserFileInput.addEventListener("change", () => {
   const file = browserFileInput.files?.[0];
   selectedFileName.textContent = file ? file.name : "No file selected";
-});
-
-resourceIdInput.addEventListener("input", () => {
-  selectedResourceId = resourceIdInput.value.trim();
 });
 
 void refresh().catch((error) => {

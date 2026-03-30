@@ -35,7 +35,7 @@ Or from the repo root:
 
 Open the local Vite URL, click `Start audio`, and adjust the slider.
 
-For the Rust resource manager demo, start the local server in another terminal:
+For the Rust resource manager demo, use the feature-enabled launcher:
 
 ```bash
 ./scripts/dev-all.sh
@@ -43,7 +43,11 @@ For the Rust resource manager demo, start the local server in another terminal:
 
 That command updates the `elemaudio-resources` dependency, starts the server from the public repo, and enables the browser feature flag.
 
-Then open `/resource-manager.html` in the Vite app. The server owns the resources in Rust, and the browser mirrors the selected resource into the VFS before playing it with `el.sample(...)`.
+Then open `/resource-manager.html` in the Vite app. The server owns the resources in Rust, the resource id is derived from the source filename, and the browser mirrors the selected resource into the VFS before playing it with `el.sample(...)` for mono or `el.mc.sample(...)` for multichannel.
+
+If the derived resource id already exists, the upload flow asks before overwriting it.
+
+The resource demo also requests metadata by resource id and displays `duration_ms` plus channel count.
 
 This demo is feature-gated. Set `VITE_ELEMAUDIO_RESOURCES=1` when running Vite to enable the resource manager UI in the browser build.
 
