@@ -185,6 +185,7 @@ fn render(runtime: &Runtime) -> Result<()> {
 - In the resource demo, ids are derived from the source filename, mono stays `sample`, and multichannel playback uses `mc.sample(...)`.
 - The resource demo metadata endpoint currently returns `duration_ms` and `channels` for a resource id.
 - Browser uploads confirm before overwriting an existing filename-derived resource id.
+- The graph export v1 draft lives in `docs/GRAPH-EXPORT.md`.
 
 ## Examples
 
