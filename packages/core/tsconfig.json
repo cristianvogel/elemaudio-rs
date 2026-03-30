@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@elem-rs/core": ["./src/index"],
+      "@elem-rs/core/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}
