@@ -13,6 +13,8 @@
     "shallowequal": "^1.1.0"
   },
   "devDependencies": {
+    "@types/invariant": "^2.2.37",
+    "@types/node": "^25.5.0",
     "typescript": "^5.8.0",
     "vite": "^6.0.0"
   }

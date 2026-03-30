@@ -1,0 +1,14 @@
+{
+  "name": "@elem-rs/core",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "typesVersions": {
+    "*": {
+      "*": ["src/*"]
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

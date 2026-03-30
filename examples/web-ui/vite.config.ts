@@ -34,6 +34,14 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: "@elem-rs/core",
+        replacement: resolve(__dirname, "../../packages/core/src/index.ts"),
+      },
+      {
+        find: /^@elem-rs\/core\/(.*)$/, 
+        replacement: resolve(__dirname, "../../packages/core/src/$1"),
+      },
+      {
         find: "@elemaudio/core",
         replacement: resolve(__dirname, "../../src/vendor/elementary/js/packages/core/index.ts"),
       },

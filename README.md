@@ -5,8 +5,19 @@ Safe Rust bindings for the Elementary audio runtime.
 Current state:
 - Native Rust wrapper around the Elementary runtime is working.
 - Browser POC is running from `examples/web-ui`.
+- JS/TS authoring is implemented in `packages/core`.
 - Multichannel graph rendering is demonstrated with idiomatic `el.*` syntax.
-- Planned next step: a Rust-native REPL DSL for graph authoring and debugging.
+- Planned next step: a simpler modern JS/TS authoring layer with no ES5-style lockin.
+
+Package layout:
+- `packages/core/src/core.ts`
+- `packages/core/src/math.ts`
+- `packages/core/src/filters.ts`
+- `packages/core/src/oscillators.ts`
+- `packages/core/src/signals.ts`
+- `packages/core/src/dynamics.ts`
+- `packages/core/src/envelopes.ts`
+- `packages/core/src/mc.ts`
 
 ## Elementary Graph Style
 
@@ -30,6 +41,34 @@ function buildGraph(frequency: number) {
 await renderer.render(...buildGraph(220));
 ```
 
+## JS/TS Authoring
+
+The intended composition workflow is JS/TS-first:
+
+1. Write `el.*` graphs in modern JS/TS.
+2. Use normal language features like variables, arrays, helpers, and functions.
+3. Use `render(...roots)` to describe the current graph.
+4. Use `key` for stable leaf identity when graphs change over time.
+5. Use refs for direct property updates on mounted nodes.
+6. Lower the graph to instruction batches.
+7. Inspect or transport the batch with tooling.
+8. Keep iteration fast with file watch / reload.
+
+Authoring example:
+
+```ts
+const base = 220;
+const graph = [
+  el.cycle(el.sm(el.const({ value: base }))),
+  el.cycle(el.sm(el.const({ value: base * 1.618 }))),
+];
+
+render(...graph);
+```
+
+See `docs/JS-TS-AUTHORING-PLAN.md` for the target surface.
+The current package entrypoint lives in `packages/core/src/index.ts`.
+
 ## Development Setup
 
 1. Install Rust with `rustup`.
@@ -42,6 +81,7 @@ await renderer.render(...buildGraph(220));
 ## Upstream Vendor Sync
 
 The Elementary JS/runtime sources are vendored under `src/vendor/elementary`.
+The JS/TS authoring package is generated into `packages/core`.
 
 To refresh that copy from the upstream repository:
 
@@ -55,6 +95,8 @@ To sync a specific ref:
 ./scripts/sync-elementary.sh <branch-or-tag>
 ```
 
+The sync script also regenerates `packages/core` from the upstream helper modules.
+
 
 ## Common Commands
 
@@ -63,7 +105,10 @@ cargo build
 cargo test
 cargo check
 cargo doc --open
+cargo run
 ```
+
+`cargo run` prints a small crate banner.
 
 ## Usage
 
@@ -129,6 +174,10 @@ fn render(runtime: &Runtime) -> Result<()> {
 
 - `examples/web-ui` is the working browser POC.
 
+## Plan
+
+- `docs/JS-TS-AUTHORING-PLAN.md` describes the new authoring surface.
+
 ## Whats Next
 
-- `REPL-DSL-RUST`: planned Rust-native graph DSL with a fast edit/evaluate loop and better diagnostics.
+- Improve the JS/TS authoring surface and reconciliation model.

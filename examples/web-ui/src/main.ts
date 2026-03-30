@@ -1,4 +1,5 @@
-import { el } from "../../../src/vendor/elementary/js/packages/core/index.ts";
+import { el } from "@elem-rs/core";
+import type { NodeRepr_t } from "@elem-rs/core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
 
@@ -38,10 +39,19 @@ if (!startButton || !frequencySlider || !frequencyValue || !status) {
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 
-function buildGraph(frequency: number) {
+const smoothedCycle = (key: string, value: number): NodeRepr_t => {
+    return el.cycle(el.sm(el.const({ key, value })));
+}
+
+const hann_LFO_VCA = (  input: NodeRepr_t , value: number = 1.0) => {
+    return el.mul( el.hann( el.phasor( el.const( { value } ) ) ), input  )
+}
+
+
+function buildGraph(frequency: number): NodeRepr_t[] {
   return [
-    el.cycle(el.sm(el.const({ key: "freqL", value: frequency }))),
-    el.cycle(el.sm(el.const({ key: "freqR", value: frequency * 1.618 }))),
+      hann_LFO_VCA( smoothedCycle("freqL", frequency) ),
+      hann_LFO_VCA( smoothedCycle("freqR", frequency * 1.618), 1.618)
   ];
 }
 
@@ -66,7 +76,7 @@ async function renderCurrentGraph() {
   frequencyValue.textContent = `${frequency} Hz`;
   status.textContent = `Running at ${frequency} Hz`;
 
-  await renderer.render(...buildGraph(frequency));
+  await renderer?.render(...buildGraph(frequency));
 
 }
 
@@ -85,7 +95,8 @@ startButton.addEventListener("click", async () => {
 });
 
 frequencySlider.addEventListener("input", () => {
-  frequencyValue.textContent = `${frequencySlider.value} Hz`;
+  const frequency = Number(frequencySlider.value);
+  frequencyValue.textContent = `${frequency} Hz`;
 
   if (renderer && audioContext?.state === "running") {
     void renderCurrentGraph();
