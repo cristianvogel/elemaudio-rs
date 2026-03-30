@@ -1,6 +1,7 @@
 # elemaudio-rs
 
 Safe Rust bindings for the Elementary audio runtime.
+For detailed documentation and examples please visit the original website by Nick Thompson  => https://www.elementary.audio/
 
 Current state:
 - Native Rust wrapper around the Elementary runtime is working.
