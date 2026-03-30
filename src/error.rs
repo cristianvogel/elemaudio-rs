@@ -24,6 +24,19 @@ pub enum Error {
         /// Human-readable description of the status code.
         message: String,
     },
+    /// A resource with the given id already exists.
+    ResourceExists(String),
+    /// A resource with the given id could not be found.
+    ResourceNotFound(String),
+    /// A resource exists but does not match the requested type.
+    ResourceTypeMismatch {
+        /// Resource identifier.
+        id: String,
+        /// Expected kind.
+        expected: &'static str,
+        /// Actual kind.
+        actual: &'static str,
+    },
 }
 
 impl Display for Error {
@@ -38,6 +51,15 @@ impl Display for Error {
                 message,
             } => {
                 write!(f, "{operation} failed with code {code}: {message}")
+            }
+            Self::ResourceExists(id) => write!(f, "resource already exists: {id}"),
+            Self::ResourceNotFound(id) => write!(f, "resource not found: {id}"),
+            Self::ResourceTypeMismatch {
+                id,
+                expected,
+                actual,
+            } => {
+                write!(f, "resource {id} has kind {actual}, expected {expected}")
             }
         }
     }

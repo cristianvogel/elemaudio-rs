@@ -2,11 +2,14 @@
 
 use crate::error::{describe_return_code, Error, Result};
 use crate::ffi;
+use crate::resource::{Resource, ResourceManager};
 use serde_json::Value as JsonValue;
+use std::cell::{Ref, RefCell};
 use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::rc::Rc;
+use std::sync::Arc;
 
 /// Runtime node identifier used by instruction batches and GC results.
 pub type NodeId = i32;
@@ -117,6 +120,7 @@ impl InstructionBatch {
 /// Safe owner for a native runtime handle.
 pub struct Runtime {
     handle: NonNull<ffi::ElementaryRuntimeHandle>,
+    resources: RefCell<ResourceManager>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
@@ -128,6 +132,7 @@ impl Runtime {
 
         Ok(Self {
             handle,
+            resources: RefCell::new(ResourceManager::new()),
             _not_send_or_sync: PhantomData,
         })
     }
@@ -167,19 +172,64 @@ impl Runtime {
         unsafe { ffi::elementary_runtime_set_current_time_ms(self.handle.as_ptr(), sample_time_ms) }
     }
 
-    /// Adds a shared `f32` resource by name.
+    /// Returns the current resource registry.
+    pub fn resources(&self) -> Ref<'_, ResourceManager> {
+        self.resources.borrow()
+    }
+
+    /// Adds a resource to the registry if the id is unused.
+    pub fn add_resource(&self, name: impl AsRef<str>, resource: Resource) -> Result<()> {
+        self.resources.borrow_mut().add(name, resource)
+    }
+
+    /// Inserts or replaces a resource in the registry.
+    pub fn set_resource(
+        &self,
+        name: impl AsRef<str>,
+        resource: Resource,
+    ) -> Result<Option<Resource>> {
+        self.resources.borrow_mut().insert(name, resource)
+    }
+
+    /// Replaces an existing resource and returns the previous value.
+    pub fn replace_resource(&self, name: impl AsRef<str>, resource: Resource) -> Result<Resource> {
+        self.resources.borrow_mut().replace(name, resource)
+    }
+
+    /// Removes a resource from the registry.
+    pub fn remove_resource(&self, name: impl AsRef<str>) -> Result<Resource> {
+        self.resources.borrow_mut().remove(name)
+    }
+
+    /// Renames a resource without changing its value.
+    pub fn rename_resource(&self, from: impl AsRef<str>, to: impl AsRef<str>) -> Result<()> {
+        self.resources.borrow_mut().rename(from, to)
+    }
+
+    /// Returns a cloned resource by name.
+    pub fn resource(&self, name: impl AsRef<str>) -> Option<Resource> {
+        self.resources.borrow().get_cloned(name)
+    }
+
+    /// Adds a shared `f32` resource by name and mirrors it into the Rust registry.
     pub fn add_shared_resource_f32(&self, name: &str, data: &[f32]) -> Result<()> {
-        let name = CString::new(name)?;
+        if name.trim().is_empty() {
+            return Err(Error::InvalidArgument("resource id cannot be empty"));
+        }
+
+        let resource = Resource::f32(Arc::from(data.to_vec().into_boxed_slice()));
+        let resource_name = CString::new(name)?;
         let code = unsafe {
             ffi::elementary_runtime_add_shared_resource_f32(
                 self.handle.as_ptr(),
-                name.as_ptr(),
+                resource_name.as_ptr(),
                 data.as_ptr(),
                 data.len(),
             )
         };
 
         if code == 0 {
+            self.resources.borrow_mut().insert(name, resource)?;
             return Ok(());
         }
 
