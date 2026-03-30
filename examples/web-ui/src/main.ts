@@ -39,15 +39,19 @@ if (!startButton || !frequencySlider || !frequencyValue || !status) {
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 
+
+/// Here we define nodes in the graph, using the `el` utilities.
 const smoothedCycle = (key: string, value: number): NodeRepr_t => {
     return el.cycle(el.sm(el.const({ key, value })));
 }
 
+/// This is an example of a node that takes a single input and produces a single output.
+/// It multiplies the input with a Hann window, which in turn is read by a phasor with a low frequency
 const hann_LFO_VCA = (  input: NodeRepr_t , value: number = 1.0) => {
     return el.mul( el.hann( el.phasor( el.const( { value } ) ) ), input  )
 }
 
-
+/// Now we wire up the "modules" defined above to form a graph.
 function buildGraph(frequency: number): NodeRepr_t[] {
   return [
       hann_LFO_VCA( smoothedCycle("freqL", frequency) ),
@@ -67,6 +71,8 @@ async function ensureAudio() {
   worklet.connect(audioContext.destination);
 }
 
+/// and this is the main renderer call, where the frequency of the oscillators
+///  will be dynamically changed at runtime by a standard HTML slider input element.
 async function renderCurrentGraph() {
   if (!renderer || !frequencyValue || !status) {
     return;
@@ -74,7 +80,7 @@ async function renderCurrentGraph() {
 
   const frequency = Number(frequencySlider?.value);
   frequencyValue.textContent = `${frequency} Hz`;
-  status.textContent = `Running at ${frequency} Hz`;
+  status.textContent = `Running.`;
 
   await renderer?.render(...buildGraph(frequency));
 
