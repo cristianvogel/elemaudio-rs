@@ -3,22 +3,8 @@
 Safe Rust bindings for the Elementary audio runtime.
 For detailed documentation and examples please visit the original website by Nick Thompson  => https://www.elementary.audio/
 
-Current state:
-- Native Rust wrapper around the Elementary runtime is working.
-- Browser POC is running from `examples/web-ui`.
-- JS/TS authoring is implemented in `packages/core`.
-- Multichannel graph rendering is demonstrated with idiomatic `el.*` syntax.
-- Planned next step: a simpler modern JS/TS authoring layer with no ES5-style lockin.
+👀 You might also want to take a look at the sister repo, a Rust resource server for the Elem VFS https://github.com/cristianvogel/elemaudio-resources 
 
-Package layout:
-- `packages/core/src/core.ts`
-- `packages/core/src/math.ts`
-- `packages/core/src/filters.ts`
-- `packages/core/src/oscillators.ts`
-- `packages/core/src/signals.ts`
-- `packages/core/src/dynamics.ts`
-- `packages/core/src/envelopes.ts`
-- `packages/core/src/mc.ts`
 
 ## Elementary Graph Style
 
