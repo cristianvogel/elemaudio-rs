@@ -15,6 +15,6 @@ pub use error::{Error, Result};
 /// Rust-native graph primitives.
 pub use graph::{el, Graph, Node};
 /// Rust-native resource registry and resource values.
-pub use resource::{Resource, ResourceId, ResourceManager};
+pub use resource::{AudioBuffer, Resource, ResourceId, ResourceManager};
 /// Instruction types and the runtime wrapper.
 pub use runtime::{Instruction, InstructionBatch, NodeId, Runtime};

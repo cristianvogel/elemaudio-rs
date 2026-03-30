@@ -111,6 +111,16 @@ cargo run
 
 `cargo run` prints a small crate banner.
 
+## Demo Launchers
+
+```bash
+./scripts/dev-web-ui.sh
+./scripts/dev-all.sh
+```
+
+- `dev-web-ui.sh` starts the base browser demos.
+- `dev-all.sh` starts the browser demos plus the resource-manager server, with `VITE_ELEMAUDIO_RESOURCES=1` enabled and the `resources` Cargo feature pulled from the public repo.
+
 ## Usage
 
 ### Create a runtime
@@ -170,6 +180,8 @@ fn render(runtime: &Runtime) -> Result<()> {
 
 - The crate currently wraps the runtime constructor, instruction batches, shared `f32` resources, processing, timing, and GC.
 - The native bridge is built from `build.rs` and the vendored Elementary source tree.
+- The Rust resource manager and browser mirror demos are an optional extension to the vendor VFS model, not a replacement for Elementary's original resource lookup path.
+- The native resource server and VFS demo binaries live in `elemaudio-resources` and are consumed here as an optional feature-gated extension.
 
 ## Examples
 

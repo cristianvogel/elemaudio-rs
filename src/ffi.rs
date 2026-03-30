@@ -44,6 +44,8 @@ unsafe extern "C" {
         data: *const f32,
         num_samples: usize,
     ) -> c_int;
+    /// Prunes native shared resources that are no longer referenced.
+    pub fn elementary_runtime_prune_shared_resources(handle: *mut ElementaryRuntimeHandle);
     /// Processes one audio block.
     pub fn elementary_runtime_process(
         handle: *mut ElementaryRuntimeHandle,

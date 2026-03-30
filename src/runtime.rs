@@ -2,7 +2,7 @@
 
 use crate::error::{describe_return_code, Error, Result};
 use crate::ffi;
-use crate::resource::{Resource, ResourceManager};
+use crate::resource::{AudioBuffer, Resource, ResourceManager};
 use serde_json::Value as JsonValue;
 use std::cell::{Ref, RefCell};
 use std::ffi::{c_void, CString};
@@ -121,6 +121,7 @@ impl InstructionBatch {
 pub struct Runtime {
     handle: NonNull<ffi::ElementaryRuntimeHandle>,
     resources: RefCell<ResourceManager>,
+    retired_resources: RefCell<Vec<Resource>>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
@@ -133,6 +134,7 @@ impl Runtime {
         Ok(Self {
             handle,
             resources: RefCell::new(ResourceManager::new()),
+            retired_resources: RefCell::new(Vec::new()),
             _not_send_or_sync: PhantomData,
         })
     }
@@ -198,12 +200,29 @@ impl Runtime {
 
     /// Removes a resource from the registry.
     pub fn remove_resource(&self, name: impl AsRef<str>) -> Result<Resource> {
-        self.resources.borrow_mut().remove(name)
+        let removed = self.resources.borrow_mut().remove(name)?;
+        self.retired_resources.borrow_mut().push(removed.clone());
+        Ok(removed)
     }
 
     /// Renames a resource without changing its value.
     pub fn rename_resource(&self, from: impl AsRef<str>, to: impl AsRef<str>) -> Result<()> {
-        self.resources.borrow_mut().rename(from, to)
+        let resource = self
+            .resource(from.as_ref())
+            .ok_or_else(|| Error::ResourceNotFound(from.as_ref().to_string()))?;
+
+        self.resources
+            .borrow_mut()
+            .rename(from.as_ref(), to.as_ref())?;
+
+        if let Resource::F32(samples) = &resource {
+            self.add_shared_resource_f32(to.as_ref(), samples.as_ref())?;
+        } else if let Resource::Audio(buffer) = &resource {
+            self.add_audio_resource(to.as_ref(), buffer.clone())?;
+        }
+
+        self.retired_resources.borrow_mut().push(resource);
+        Ok(())
     }
 
     /// Returns a cloned resource by name.
@@ -238,6 +257,21 @@ impl Runtime {
             code,
             message: "native runtime rejected the shared resource".to_string(),
         })
+    }
+
+    /// Adds a decoded mono audio buffer as a shared resource.
+    pub fn add_audio_resource(&self, name: &str, buffer: AudioBuffer) -> Result<()> {
+        self.add_shared_resource_f32(name, buffer.samples.as_ref())?;
+        self.resources
+            .borrow_mut()
+            .insert(name, Resource::audio(buffer))?;
+        Ok(())
+    }
+
+    /// Prunes native shared resources and releases retired Rust buffers.
+    pub fn prune_shared_resources(&self) {
+        unsafe { ffi::elementary_runtime_prune_shared_resources(self.handle.as_ptr()) }
+        self.retired_resources.borrow_mut().clear();
     }
 
     /// Processes one audio block.

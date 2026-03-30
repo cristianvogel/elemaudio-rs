@@ -34,6 +34,9 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - [x] Added `JIMMYS-WORKFLOW.md` and `NEXT-SESSION-START-HERE.md`
 - [x] Updated `STATUS.md` for the current project state
 - [x] Implemented the Rust-native `ResourceManager`
+- [x] Added optional `resources` Cargo feature backed by the public `elemaudio-resources` repo
+- [x] Removed local native resource binaries from the core crate
+- [x] Verified `cargo build`, `cargo build --features resources`, and `npm --prefix examples/web-ui run build`
 
 ### Blockers
 - None currently identified.
@@ -46,6 +49,7 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - ✅ JS/TS package split by domain modules
 - ✅ `Renderer` exposed from `@elem-rs/core`
 - ✅ Rust-native `ResourceManager` added
+- ✅ Public optional resource extension split into `elemaudio-resources`
 
 ### In Progress
 - 🔄 Connect resource management to runtime-facing usage patterns

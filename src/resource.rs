@@ -7,6 +7,7 @@
 use crate::error::{Error, Result};
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
@@ -47,6 +48,8 @@ impl AsRef<str> for ResourceId {
 /// A resource stored in the manager.
 #[derive(Clone)]
 pub enum Resource {
+    /// Shared decoded audio buffer.
+    Audio(AudioBuffer),
     /// Shared floating-point samples.
     F32(Arc<[f32]>),
     /// Shared double-precision samples.
@@ -62,6 +65,11 @@ pub enum Resource {
 impl Debug for Resource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Audio(buffer) => f
+                .debug_struct("Audio")
+                .field("sample_rate", &buffer.sample_rate)
+                .field("samples", &buffer.samples.len())
+                .finish(),
             Self::F32(data) => f.debug_tuple("F32").field(&data.len()).finish(),
             Self::F64(data) => f.debug_tuple("F64").field(&data.len()).finish(),
             Self::Bytes(data) => f.debug_tuple("Bytes").field(&data.len()).finish(),
@@ -75,6 +83,11 @@ impl Resource {
     /// Wraps a `f32` slice in an owned shared resource.
     pub fn f32(data: impl Into<Arc<[f32]>>) -> Self {
         Self::F32(data.into())
+    }
+
+    /// Wraps a decoded audio buffer.
+    pub fn audio(buffer: AudioBuffer) -> Self {
+        Self::Audio(buffer)
     }
 
     /// Wraps a `f64` slice in an owned shared resource.
@@ -120,6 +133,7 @@ impl Resource {
     /// Returns the resource kind for diagnostics.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::Audio(_) => "audio",
             Self::F32(_) => "f32",
             Self::F64(_) => "f64",
             Self::Bytes(_) => "bytes",
@@ -132,6 +146,14 @@ impl Resource {
     pub fn as_f32(&self) -> Option<&[f32]> {
         match self {
             Self::F32(data) => Some(data.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Attempts to view the resource as a decoded audio buffer.
+    pub fn as_audio(&self) -> Option<&AudioBuffer> {
+        match self {
+            Self::Audio(buffer) => Some(buffer),
             _ => None,
         }
     }
@@ -169,6 +191,33 @@ impl Resource {
             Self::Any(value) => value.clone().downcast::<T>().ok(),
             _ => None,
         }
+    }
+}
+
+/// Decoded audio stored in Rust-owned memory.
+#[derive(Clone, Debug)]
+pub struct AudioBuffer {
+    /// Interleaved or mono PCM data.
+    pub samples: Arc<[f32]>,
+    /// Source sample rate in Hz.
+    pub sample_rate: u32,
+    /// Number of channels in `samples`.
+    pub channels: u16,
+}
+
+impl AudioBuffer {
+    /// Creates a mono audio buffer.
+    pub fn mono(samples: impl Into<Arc<[f32]>>, sample_rate: u32) -> Self {
+        Self {
+            samples: samples.into(),
+            sample_rate,
+            channels: 1,
+        }
+    }
+
+    /// Returns the number of frames in the buffer.
+    pub fn frames(&self) -> usize {
+        self.samples.len() / self.channels as usize
     }
 }
 
@@ -331,6 +380,35 @@ impl ResourceManager {
     pub fn iter(&self) -> impl Iterator<Item = (&ResourceId, &Resource)> {
         self.resources.iter()
     }
+
+    /// Returns a cloned snapshot of all registered resources.
+    pub fn snapshot(&self) -> Vec<(ResourceId, Resource)> {
+        self.resources
+            .iter()
+            .map(|(id, resource)| (id.clone(), resource.clone()))
+            .collect()
+    }
+
+    /// Removes every resource whose id is not listed in `keep`.
+    pub fn prune_except<I, S>(&mut self, keep: I) -> Vec<(ResourceId, Resource)>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let keep: HashSet<String> = keep.into_iter().map(|id| id.as_ref().to_string()).collect();
+
+        let mut removed = Vec::new();
+        self.resources.retain(|id, resource| {
+            if keep.contains(id.as_str()) {
+                true
+            } else {
+                removed.push((id.clone(), resource.clone()));
+                false
+            }
+        });
+
+        removed
+    }
 }
 
 #[cfg(test)]
@@ -370,5 +448,28 @@ mod tests {
         let downcast = resource.downcast::<RingBuffer>().unwrap();
 
         assert_eq!(downcast.as_ref().0, 128);
+    }
+
+    #[test]
+    fn audio_resources_report_kind() {
+        let buffer = AudioBuffer::mono([0.0, 1.0], 44100);
+        let resource = Resource::audio(buffer);
+
+        assert_eq!(resource.kind(), "audio");
+        assert_eq!(resource.as_audio().unwrap().frames(), 2);
+    }
+
+    #[test]
+    fn prune_except_removes_unkept_resources() {
+        let mut manager = ResourceManager::new();
+
+        manager.add("keep", Resource::text("a")).unwrap();
+        manager.add("drop", Resource::text("b")).unwrap();
+
+        let pruned = manager.prune_except(["keep"]);
+
+        assert_eq!(pruned.len(), 1);
+        assert!(manager.contains("keep"));
+        assert!(!manager.contains("drop"));
     }
 }

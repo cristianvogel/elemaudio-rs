@@ -114,4 +114,18 @@ export default class WebRenderer extends EventEmitter {
 
     return Promise.resolve(stats);
   }
+
+  async updateVirtualFileSystem(vfs: Record<string, Float32Array | Float32Array[]>) {
+    return await this._sendWorkletRequest("updateSharedResourceMap", {
+      resources: vfs,
+    });
+  }
+
+  async pruneVirtualFileSystem() {
+    return await this._sendWorkletRequest("pruneVirtualFileSystem", {});
+  }
+
+  async listVirtualFileSystem() {
+    return await this._sendWorkletRequest("listVirtualFileSystem", {});
+  }
 }

@@ -125,6 +125,26 @@ pub mod el {
         Node::new("cycle", Value::Null, vec![rate])
     }
 
+    /// Phasor helper.
+    pub fn phasor(rate: Node) -> Node {
+        Node::new("phasor", Value::Null, vec![rate])
+    }
+
+    /// Less-than helper.
+    pub fn le(left: Node, right: Node) -> Node {
+        Node::new("le", Value::Null, vec![left, right])
+    }
+
+    /// Pulse train helper.
+    pub fn train(rate: Node) -> Node {
+        le(phasor(rate), const_(0.5))
+    }
+
+    /// Sample playback node.
+    pub fn sample(props: serde_json::Value, trigger: Node, rate: Node) -> Node {
+        Node::new("sample", props, vec![trigger, rate])
+    }
+
     /// One-pole smoother helper.
     pub fn sm(x: Node) -> Node {
         Node::new("sm", Value::Null, vec![x])
