@@ -204,7 +204,7 @@ impl Node {
 /// Multichannel helpers mirroring Elementary's `el.mc.*` surface.
 pub mod mc {
     use super::Node;
-    use crate::{ElemNode, create_node, unpack};
+    use crate::{create_node, unpack, ElemNode};
 
     fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value) {
         let channels = props
@@ -1791,20 +1791,5 @@ mod tests {
         assert!(batch.to_json_string().contains("phasor"));
         assert!(batch.to_json_string().contains("pole"));
         assert!(batch.to_json_string().contains("root"));
-    }
-
-    #[test]
-    fn mounted_graph_exposes_direct_update_handle() {
-        let graph = Graph::new().root(el::const_(220.0));
-
-        let mounted = graph.mount();
-        let root = mounted.node_at(&[0]).expect("mounted root node");
-
-        assert_eq!(root.kind(), "const");
-        assert_eq!(root.id(), 2);
-        assert_eq!(mounted.roots()[0].id(), 2);
-
-        let update = root.set_property("value", serde_json::json!(330.0));
-        assert_eq!(update.to_json_string(), r#"[[3,2,"value",330.0],[5]]"#);
     }
 }

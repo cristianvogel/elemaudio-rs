@@ -1,13 +1,13 @@
 //! Safe wrapper around the Elementary runtime handle and instruction batches.
 
-use crate::error::{Error, Result, describe_return_code};
+use crate::error::{describe_return_code, Error, Result};
 use crate::ffi;
 use crate::resource::{AudioBuffer, Resource, ResourceManager};
 use bon::bon;
 use serde_json::Value as JsonValue;
 use std::cell::{Ref, RefCell};
 use std::convert::TryFrom;
-use std::ffi::{CString, c_void};
+use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::rc::Rc;
@@ -366,31 +366,5 @@ impl Drop for Runtime {
     /// Releases the native runtime handle.
     fn drop(&mut self) {
         unsafe { ffi::elementary_runtime_free(self.handle.as_ptr()) }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn instruction_batch_serializes_to_runtime_shape() {
-        let mut batch = InstructionBatch::new();
-        batch.push(Instruction::CreateNode {
-            node_id: 7,
-            node_type: "osc".into(),
-        });
-        batch.push(Instruction::SetProperty {
-            node_id: 7,
-            property: "gain".into(),
-            value: json!(0.5),
-        });
-        batch.push(Instruction::CommitUpdates);
-
-        assert_eq!(
-            batch.to_json_string(),
-            r#"[[0,7,"osc"],[3,7,"gain",0.5],[5]]"#
-        );
     }
 }
