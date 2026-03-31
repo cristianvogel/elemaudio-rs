@@ -1,141 +1,105 @@
-use std::collections::VecDeque;
 use std::error::Error;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use cpal::traits::StreamTrait;
-use elemaudio_rs::{el, Graph, Runtime};
+use elemaudio_rs::{el, AudioRingBuffer, Graph, Runtime};
 
 #[path = "audio_support.rs"]
 mod audio_support;
 
 #[test]
 #[ignore]
-fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Error>> {
+fn play_sparseq_sequence_through_ring_buffer() -> std::result::Result<(), Box<dyn Error>> {
     let (device, supported) = audio_support::default_output_setup()?;
-
     let stream_config = supported.config();
     let sample_rate = stream_config.sample_rate.0 as f64;
-    let channels = stream_config.channels as usize;
+    let hardware_channels = stream_config.channels as usize;
+    let process_channels = hardware_channels.max(1);
     let buffer_size = 128usize;
-    let seconds = 2.0;
-    let total_frames = (sample_rate * seconds) as usize;
 
     let runtime = Runtime::new()
         .sample_rate(sample_rate)
         .buffer_size(buffer_size)
         .call()?;
 
-    let graph = (0..channels).fold(Graph::new(), |graph, _| {
-        graph.root(el::cycle(el::const_(220.0)))
-    });
+    let trigger = el::train(el::const_(2.0));
+    let graph = Graph::new().root(el::mul([
+        el::hann(el::phasor(el::const_(50.0))),
+        el::env(
+            el::tau2pole(el::const_(0.01)),
+            el::tau2pole(el::const_(0.1)),
+            trigger.clone(),
+        ),
+        el::cycle(el::sparseq(
+            serde_json::json!({
+                "seq": [
+                    { "value": 110.0, "tickTime": 0.0 },
+                    { "value": 165.0, "tickTime": 1.0 },
+                    { "value": 220.0, "tickTime": 2.0 },
+                    { "value": 330.0, "tickTime": 3.0 },
+                    { "value": 440.0, "tickTime": 4.0 },
+                    { "value": 660.0, "tickTime": 5.0 }
+                ],
+                "loop": [0, 5]
+            }),
+            trigger,
+            el::const_(0.0),
+            el::const_(0.0),
+        )),
+    ]));
+
     runtime.apply_instructions(&graph.lower())?;
 
-    let mut rendered = 0usize;
-    let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; channels];
-    let mut queue = VecDeque::with_capacity(total_frames * channels);
+    let ring = AudioRingBuffer::new(process_channels, sample_rate as usize, sample_rate)?;
+    let producer_ring = ring.clone();
 
-    while rendered < total_frames {
-        let frames = buffer_size.min(total_frames - rendered);
-        let mut outputs: Vec<&mut [f64]> = outputs_storage
-            .iter_mut()
-            .map(|buffer| &mut buffer[..frames])
-            .collect();
+    let producer = thread::spawn(
+        move || -> std::result::Result<(), Box<dyn Error + Send + Sync>> {
+            let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; process_channels];
 
-        runtime.process(frames, &[], &mut outputs)?;
+            loop {
+                let free = producer_ring.free_frames();
+                if free == 0 {
+                    thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
 
-        for frame in 0..frames {
-            for channel in 0..channels {
-                queue.push_back(outputs_storage[channel][frame] as f32);
+                let frames = buffer_size.min(free);
+                let mut outputs: Vec<&mut [f64]> = outputs_storage
+                    .iter_mut()
+                    .map(|buffer| &mut buffer[..frames])
+                    .collect();
+
+                runtime.process(frames, &[], &mut outputs)?;
+
+                let channel_refs: Vec<&[f64]> = outputs_storage
+                    .iter()
+                    .map(|buffer| &buffer[..frames])
+                    .collect();
+                let _ = producer_ring.push_planar_f64(&channel_refs, frames);
             }
-        }
+        },
+    );
 
-        rendered += frames;
+    // a startup gate, waits until the producer has prefilled some audio
+    while ring.available_frames() < buffer_size * 4 {
+        thread::sleep(Duration::from_millis(5));
     }
 
-    let shared = Arc::new(Mutex::new(queue));
-    let err_fn = |error| eprintln!("cpal stream error: {error}");
-
     let stream = audio_support::build_stream(
         &device,
         &stream_config,
         supported.sample_format(),
-        shared.clone(),
-        channels,
-        err_fn,
+        ring,
+        hardware_channels,
+        |error| eprintln!("cpal stream error: {error}"),
     )?;
 
     stream.play().expect("failed to start audio stream");
-    thread::sleep(Duration::from_secs_f64(seconds));
-
-    Ok(())
-}
-
-#[test]
-#[ignore]
-fn play_windowed_sine_with_fast_path_frequency() -> std::result::Result<(), Box<dyn Error>> {
-    let (device, supported) = audio_support::default_output_setup()?;
-
-    let stream_config = supported.config();
-    let sample_rate = stream_config.sample_rate.0 as f64;
-    let channels = stream_config.channels as usize;
-    let buffer_size = 128usize;
-
-    let runtime = Runtime::new()
-        .sample_rate(sample_rate)
-        .buffer_size(buffer_size)
-        .call()?;
-
-    ///////////////////////////
-    // Graph definition     //
-    let graph = Graph::new().root(el::mul([
-        el::hann(el::phasor(el::const_with_key(
-            Option::from("hann_rate"),
-            0.2,
-        ))),
-        el::cycle(el::const_with_key(Option::from("freq"), 220.0)),
-    ]));
-    ///////////////////////////
-
-    let mounted = graph.mount();
-
-    runtime.apply_instructions(mounted.batch())?;
-
-    let queue = Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(buffer_size * 32)));
-    let err_fn = |error| eprintln!("cpal stream error: {error}");
-
-    audio_support::prefill_queue(&runtime, &queue, buffer_size, 16)?;
-
-    let stream = audio_support::build_stream(
-        &device,
-        &stream_config,
-        supported.sample_format(),
-        queue.clone(),
-        channels,
-        err_fn,
-    )?;
-
-    stream.play().expect("failed to start audio stream");
-
-    let sweep = [110.0, 165.0, 320.0, 330.0, 440.0, 660.0];
-    let rate = [0.1, 0.5, 0.3];
-    let mut index = 0usize;
+    let _ = producer; // keep producer thread alive for the lifetime of the demo
 
     loop {
-        let next_freq = sweep[index % sweep.len()];
-        let next_rate = rate[index % rate.len()];
-        index += 1;
-        runtime.apply_instructions(
-            &mounted
-                .set_const_value("hann_rate", next_rate)
-                .expect("hann_rate should be keyed const"),
-        )?;
-        runtime.apply_instructions(
-            &mounted
-                .set_const_value("freq", next_freq)
-                .expect("freq should be keyed const"),
-        )?;
-        audio_support::prefill_queue(&runtime, &queue, buffer_size, 4)?;
+        thread::park();
     }
 }

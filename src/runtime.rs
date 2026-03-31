@@ -5,12 +5,12 @@ use crate::ffi;
 use crate::resource::{AudioBuffer, Resource, ResourceManager};
 use bon::bon;
 use serde_json::Value as JsonValue;
+use std::cell::Cell;
 use std::cell::{Ref, RefCell};
 use std::convert::TryFrom;
 use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::rc::Rc;
 use std::sync::Arc;
 
 /// Runtime node identifier used by instruction batches and GC results.
@@ -125,8 +125,10 @@ pub struct Runtime {
     resources: RefCell<ResourceManager>,
     retired_resources: RefCell<Vec<Resource>>,
     buffer_size: usize,
-    _not_send_or_sync: PhantomData<Rc<()>>, // help the compiler enforce non-thread safe resource
+    _not_send_or_sync: PhantomData<Cell<()>>, // keep Runtime movable but not shareable
 }
+
+unsafe impl Send for Runtime {}
 
 #[bon]
 impl Runtime {
