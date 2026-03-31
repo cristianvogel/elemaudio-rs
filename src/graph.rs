@@ -296,6 +296,7 @@ pub mod mc {
 /// constructor for custom node kinds.
 pub mod el {
     use super::{Node, Value};
+    use crate::core::{resolve, ElemNode};
 
     fn empty_props() -> Value {
         Value::Object(Default::default())
@@ -305,44 +306,93 @@ pub mod el {
         Node::new(kind, Value::Null, vec![])
     }
 
-    fn node1(kind: &str, child: Node) -> Node {
-        Node::new(kind, Value::Null, vec![child])
+    fn node1(kind: &str, child: impl Into<ElemNode>) -> Node {
+        Node::new(kind, Value::Null, vec![resolve(child)])
     }
 
-    fn node2(kind: &str, left: Node, right: Node) -> Node {
-        Node::new(kind, Value::Null, vec![left, right])
+    fn node2(kind: &str, left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        Node::new(kind, Value::Null, vec![resolve(left), resolve(right)])
     }
 
-    fn node3(kind: &str, a: Node, b: Node, c: Node) -> Node {
-        Node::new(kind, Value::Null, vec![a, b, c])
+    fn node3(
+        kind: &str,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(kind, Value::Null, vec![resolve(a), resolve(b), resolve(c)])
     }
 
-    fn node6(kind: &str, a: Node, b: Node, c: Node, d: Node, e: Node, f: Node) -> Node {
-        Node::new(kind, Value::Null, vec![a, b, c, d, e, f])
+    fn node6(
+        kind: &str,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+        d: impl Into<ElemNode>,
+        e: impl Into<ElemNode>,
+        f: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(
+            kind,
+            Value::Null,
+            vec![
+                resolve(a),
+                resolve(b),
+                resolve(c),
+                resolve(d),
+                resolve(e),
+                resolve(f),
+            ],
+        )
     }
 
     fn node_props0(kind: &str, props: Value) -> Node {
         Node::new(kind, props, vec![])
     }
 
-    fn node_props1(kind: &str, props: Value, child: Node) -> Node {
-        Node::new(kind, props, vec![child])
+    fn node_props1(kind: &str, props: Value, child: impl Into<ElemNode>) -> Node {
+        Node::new(kind, props, vec![resolve(child)])
     }
 
-    fn node_props2(kind: &str, props: Value, a: Node, b: Node) -> Node {
-        Node::new(kind, props, vec![a, b])
+    fn node_props2(
+        kind: &str,
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(kind, props, vec![resolve(a), resolve(b)])
     }
 
-    fn node_props3(kind: &str, props: Value, a: Node, b: Node, c: Node) -> Node {
-        Node::new(kind, props, vec![a, b, c])
+    fn node_props3(
+        kind: &str,
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(kind, props, vec![resolve(a), resolve(b), resolve(c)])
     }
 
-    fn node_props4(kind: &str, props: Value, a: Node, b: Node, c: Node, d: Node) -> Node {
-        Node::new(kind, props, vec![a, b, c, d])
+    fn node_props4(
+        kind: &str,
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+        d: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(
+            kind,
+            props,
+            vec![resolve(a), resolve(b), resolve(c), resolve(d)],
+        )
     }
 
-    fn node_props_variadic(kind: &str, props: Value, args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new(kind, props, args.into_iter().collect())
+    fn node_props_variadic<T>(kind: &str, props: Value, args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new(kind, props, args.into_iter().map(resolve).collect())
     }
 
     /// Constant signal node.
@@ -369,12 +419,15 @@ pub mod el {
     }
 
     /// Creates a custom node kind with explicit props and children.
-    pub fn custom(
+    pub fn custom<T>(
         kind: impl Into<String>,
         props: Value,
-        children: impl IntoIterator<Item = Node>,
-    ) -> Node {
-        Node::new(kind, props, children.into_iter().collect())
+        children: impl IntoIterator<Item = T>,
+    ) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new(kind, props, children.into_iter().map(resolve).collect())
     }
 
     pub fn sr() -> Node {
@@ -383,25 +436,29 @@ pub mod el {
     pub fn time() -> Node {
         node0("time")
     }
-    pub fn counter(child: Node) -> Node {
+    pub fn counter(child: impl Into<ElemNode>) -> Node {
         node1("counter", child)
     }
-    pub fn accum(left: Node, right: Node) -> Node {
+    pub fn accum(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("accum", left, right)
     }
-    pub fn phasor(child: Node) -> Node {
+    pub fn phasor(child: impl Into<ElemNode>) -> Node {
         node1("phasor", child)
     }
-    pub fn syncphasor(left: Node, right: Node) -> Node {
+    pub fn syncphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("sphasor", left, right)
     }
-    pub fn latch(left: Node, right: Node) -> Node {
+    /// Alias for the upstream `sphasor` helper.
+    pub fn sphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        syncphasor(left, right)
+    }
+    pub fn latch(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("latch", left, right)
     }
-    pub fn maxhold(props: Value, a: Node, b: Node) -> Node {
+    pub fn maxhold(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
         node_props2("maxhold", props, a, b)
     }
-    pub fn once(props: Value, child: Node) -> Node {
+    pub fn once(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("once", props, child)
     }
     pub fn rand(props: Option<Value>) -> Node {
@@ -414,222 +471,266 @@ pub mod el {
     pub fn tap_in(props: Value) -> Node {
         node_props0("tapIn", props)
     }
-    pub fn tap_out(props: Value, child: Node) -> Node {
+    pub fn tap_out(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("tapOut", props, child)
     }
-    pub fn meter(props: Value, child: Node) -> Node {
+    pub fn meter(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("meter", props, child)
     }
-    pub fn snapshot(props: Value, a: Node, b: Node) -> Node {
+    pub fn snapshot(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
         node_props2("snapshot", props, a, b)
     }
-    pub fn scope(props: Value, args: impl IntoIterator<Item = Node>) -> Node {
+    pub fn scope<T>(props: Value, args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
         node_props_variadic("scope", props, args)
     }
-    pub fn fft(props: Value, child: Node) -> Node {
+    pub fn fft(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("fft", props, child)
     }
-    pub fn capture(props: Value, a: Node, b: Node) -> Node {
+    pub fn capture(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
         node_props2("capture", props, a, b)
     }
-    pub fn table(props: Value, child: Node) -> Node {
+    pub fn table(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("table", props, child)
     }
-    pub fn convolve(props: Value, child: Node) -> Node {
+    pub fn convolve(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("convolve", props, child)
     }
-    pub fn seq(props: Value, a: Node, b: Node, c: Node) -> Node {
-        node_props3("seq", props, a, b, c)
+    pub fn seq(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
+        node_props2("seq", props, trigger, reset)
     }
-    pub fn seq2(props: Value, a: Node, b: Node, c: Node) -> Node {
-        node_props3("seq2", props, a, b, c)
+    pub fn seq2(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
+        node_props2("seq2", props, trigger, reset)
     }
-    pub fn sparseq(props: Value, a: Node, b: Node, c: Node) -> Node {
-        node_props3("sparseq", props, a, b, c)
+    pub fn sparseq(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
+        node_props2("sparseq", props, trigger, reset)
     }
-    pub fn sparseq2(props: Value, child: Node) -> Node {
+    pub fn sparseq2(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sparseq2", props, child)
     }
-    pub fn sampleseq(props: Value, child: Node) -> Node {
+    pub fn sampleseq(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sampleseq", props, child)
     }
-    pub fn sampleseq2(props: Value, child: Node) -> Node {
+    pub fn sampleseq2(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sampleseq2", props, child)
     }
-    pub fn pole(left: Node, right: Node) -> Node {
+    pub fn pole(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("pole", left, right)
     }
-    pub fn env(a: Node, b: Node, c: Node) -> Node {
+    pub fn env(a: impl Into<ElemNode>, b: impl Into<ElemNode>, c: impl Into<ElemNode>) -> Node {
         node3("env", a, b, c)
     }
-    pub fn z(child: Node) -> Node {
+    pub fn z(child: impl Into<ElemNode>) -> Node {
         node1("z", child)
     }
-    pub fn delay(props: Value, a: Node, b: Node, c: Node) -> Node {
+    pub fn delay(
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+    ) -> Node {
         node_props3("delay", props, a, b, c)
     }
-    pub fn sdelay(props: Value, child: Node) -> Node {
+    pub fn sdelay(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sdelay", props, child)
     }
-    pub fn prewarp(child: Node) -> Node {
+    pub fn prewarp(child: impl Into<ElemNode>) -> Node {
         node1("prewarp", child)
     }
-    pub fn mm1p(props: Value, fc: Node, x: Node) -> Node {
+    pub fn mm1p(props: Value, fc: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
         node_props2("mm1p", props, fc, x)
     }
-    pub fn svf(props: Value, fc: Node, q: Node, x: Node) -> Node {
+    pub fn svf(
+        props: Value,
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
         node_props3("svf", props, fc, q, x)
     }
-    pub fn svfshelf(props: Value, fc: Node, q: Node, gain: Node, x: Node) -> Node {
+    pub fn svfshelf(
+        props: Value,
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
         node_props4("svfshelf", props, fc, q, gain, x)
     }
-    pub fn biquad(b0: Node, b1: Node, b2: Node, a1: Node, a2: Node, x: Node) -> Node {
+    pub fn biquad(
+        b0: impl Into<ElemNode>,
+        b1: impl Into<ElemNode>,
+        b2: impl Into<ElemNode>,
+        a1: impl Into<ElemNode>,
+        a2: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
         node6("biquad", b0, b1, b2, a1, a2, x)
     }
 
     /// Sine oscillator.
-    pub fn sin(x: Node) -> Node {
-        Node::new("sin", Value::Null, vec![x])
+    pub fn sin(x: impl Into<ElemNode>) -> Node {
+        node1("sin", x)
     }
 
     /// Cosine helper.
-    pub fn cos(x: Node) -> Node {
-        Node::new("cos", Value::Null, vec![x])
+    pub fn cos(x: impl Into<ElemNode>) -> Node {
+        node1("cos", x)
     }
 
     /// Tangent helper.
-    pub fn tan(x: Node) -> Node {
-        Node::new("tan", Value::Null, vec![x])
+    pub fn tan(x: impl Into<ElemNode>) -> Node {
+        node1("tan", x)
     }
 
     /// Hyperbolic tangent helper.
-    pub fn tanh(x: Node) -> Node {
-        Node::new("tanh", Value::Null, vec![x])
+    pub fn tanh(x: impl Into<ElemNode>) -> Node {
+        node1("tanh", x)
     }
 
     /// Inverse hyperbolic sine helper.
-    pub fn asinh(x: Node) -> Node {
-        Node::new("asinh", Value::Null, vec![x])
+    pub fn asinh(x: impl Into<ElemNode>) -> Node {
+        node1("asinh", x)
     }
 
     /// Natural log helper.
-    pub fn ln(x: Node) -> Node {
-        Node::new("ln", Value::Null, vec![x])
+    pub fn ln(x: impl Into<ElemNode>) -> Node {
+        node1("ln", x)
     }
 
     /// Log helper.
-    pub fn log(x: Node) -> Node {
-        Node::new("log", Value::Null, vec![x])
+    pub fn log(x: impl Into<ElemNode>) -> Node {
+        node1("log", x)
     }
 
     /// Base-2 log helper.
-    pub fn log2(x: Node) -> Node {
-        Node::new("log2", Value::Null, vec![x])
+    pub fn log2(x: impl Into<ElemNode>) -> Node {
+        node1("log2", x)
     }
 
     /// Ceiling helper.
-    pub fn ceil(x: Node) -> Node {
-        Node::new("ceil", Value::Null, vec![x])
+    pub fn ceil(x: impl Into<ElemNode>) -> Node {
+        node1("ceil", x)
     }
 
     /// Floor helper.
-    pub fn floor(x: Node) -> Node {
-        Node::new("floor", Value::Null, vec![x])
+    pub fn floor(x: impl Into<ElemNode>) -> Node {
+        node1("floor", x)
     }
 
     /// Round helper.
-    pub fn round(x: Node) -> Node {
-        Node::new("round", Value::Null, vec![x])
+    pub fn round(x: impl Into<ElemNode>) -> Node {
+        node1("round", x)
     }
 
     /// Square root helper.
-    pub fn sqrt(x: Node) -> Node {
-        Node::new("sqrt", Value::Null, vec![x])
+    pub fn sqrt(x: impl Into<ElemNode>) -> Node {
+        node1("sqrt", x)
     }
 
     /// Exponential helper.
-    pub fn exp(x: Node) -> Node {
-        Node::new("exp", Value::Null, vec![x])
+    pub fn exp(x: impl Into<ElemNode>) -> Node {
+        node1("exp", x)
     }
 
     /// Absolute value helper.
-    pub fn abs(x: Node) -> Node {
-        Node::new("abs", Value::Null, vec![x])
+    pub fn abs(x: impl Into<ElemNode>) -> Node {
+        node1("abs", x)
     }
 
     /// Less-than helper.
-    pub fn le(left: Node, right: Node) -> Node {
-        Node::new("le", Value::Null, vec![left, right])
+    pub fn le(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("le", left, right)
     }
 
     /// Less-than-or-equal helper.
-    pub fn leq(left: Node, right: Node) -> Node {
-        Node::new("leq", Value::Null, vec![left, right])
+    pub fn leq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("leq", left, right)
     }
 
     /// Greater-than helper.
-    pub fn ge(left: Node, right: Node) -> Node {
-        Node::new("ge", Value::Null, vec![left, right])
+    pub fn ge(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("ge", left, right)
     }
 
     /// Greater-than-or-equal helper.
-    pub fn geq(left: Node, right: Node) -> Node {
-        Node::new("geq", Value::Null, vec![left, right])
+    pub fn geq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("geq", left, right)
     }
 
     /// Power helper.
-    pub fn pow(left: Node, right: Node) -> Node {
-        Node::new("pow", Value::Null, vec![left, right])
+    pub fn pow(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("pow", left, right)
     }
 
     /// Equality helper.
-    pub fn eq(left: Node, right: Node) -> Node {
-        Node::new("eq", Value::Null, vec![left, right])
+    pub fn eq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("eq", left, right)
     }
 
     /// Logical and helper.
-    pub fn and(left: Node, right: Node) -> Node {
-        Node::new("and", Value::Null, vec![left, right])
+    pub fn and(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("and", left, right)
     }
 
     /// Logical or helper.
-    pub fn or(left: Node, right: Node) -> Node {
-        Node::new("or", Value::Null, vec![left, right])
+    pub fn or(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("or", left, right)
     }
 
     /// Addition helper.
-    pub fn add(args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new("add", Value::Null, args.into_iter().collect())
+    pub fn add<T>(args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new("add", Value::Null, args.into_iter().map(resolve).collect())
     }
 
     /// Subtraction helper.
-    pub fn sub(args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new("sub", Value::Null, args.into_iter().collect())
+    pub fn sub<T>(args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new("sub", Value::Null, args.into_iter().map(resolve).collect())
     }
 
     /// Multiplication helper.
-    pub fn mul(args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new("mul", Value::Null, args.into_iter().collect())
+    pub fn mul<T>(args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new("mul", Value::Null, args.into_iter().map(resolve).collect())
     }
 
     /// Division helper.
-    pub fn div(args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new("div", Value::Null, args.into_iter().collect())
+    pub fn div(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        Node::new("div", Value::Null, vec![resolve(left), resolve(right)])
     }
 
     /// Modulo helper.
-    pub fn r#mod(args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new("mod", Value::Null, args.into_iter().collect())
+    pub fn r#mod<T>(args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new("mod", Value::Null, args.into_iter().map(resolve).collect())
     }
 
     /// Minimum helper.
-    pub fn min(args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new("min", Value::Null, args.into_iter().collect())
+    pub fn min<T>(args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new("min", Value::Null, args.into_iter().map(resolve).collect())
     }
 
     /// Maximum helper.
-    pub fn max(args: impl IntoIterator<Item = Node>) -> Node {
-        Node::new("max", Value::Null, args.into_iter().collect())
+    pub fn max<T>(args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new("max", Value::Null, args.into_iter().map(resolve).collect())
     }
 
     /// Alias for the upstream `in` helper.
@@ -646,43 +747,43 @@ pub mod el {
     }
 
     /// Band-limited cycle oscillator helper.
-    pub fn cycle(rate: Node) -> Node {
+    pub fn cycle(rate: impl Into<ElemNode>) -> Node {
         sin(mul([const_(2.0 * std::f64::consts::PI), phasor(rate)]))
     }
 
     /// Pulse train helper.
-    pub fn train(rate: Node) -> Node {
+    pub fn train(rate: impl Into<ElemNode>) -> Node {
         le(phasor(rate), const_(0.5))
     }
 
     /// Saw oscillator helper.
-    pub fn saw(rate: Node) -> Node {
+    pub fn saw(rate: impl Into<ElemNode>) -> Node {
         sub([mul([const_(2.0), phasor(rate)]), const_(1.0)])
     }
 
     /// Square oscillator helper.
-    pub fn square(rate: Node) -> Node {
+    pub fn square(rate: impl Into<ElemNode>) -> Node {
         sub([mul([const_(2.0), train(rate)]), const_(1.0)])
     }
 
     /// Triangle oscillator helper.
-    pub fn triangle(rate: Node) -> Node {
+    pub fn triangle(rate: impl Into<ElemNode>) -> Node {
         mul([const_(2.0), sub([const_(0.5), abs(saw(rate))])])
     }
 
     /// Band-limited polyBLEP saw oscillator.
-    pub fn blepsaw(rate: Node) -> Node {
-        Node::new("blepsaw", Value::Null, vec![rate])
+    pub fn blepsaw(rate: impl Into<ElemNode>) -> Node {
+        node1("blepsaw", rate)
     }
 
     /// Band-limited polyBLEP square oscillator.
-    pub fn blepsquare(rate: Node) -> Node {
-        Node::new("blepsquare", Value::Null, vec![rate])
+    pub fn blepsquare(rate: impl Into<ElemNode>) -> Node {
+        node1("blepsquare", rate)
     }
 
     /// Band-limited polyBLEP triangle oscillator.
-    pub fn bleptriangle(rate: Node) -> Node {
-        Node::new("bleptriangle", Value::Null, vec![rate])
+    pub fn bleptriangle(rate: impl Into<ElemNode>) -> Node {
+        node1("bleptriangle", rate)
     }
 
     /// White noise helper.
@@ -696,22 +797,26 @@ pub mod el {
     }
 
     /// Milliseconds to samples.
-    pub fn ms2samps(t: Node) -> Node {
-        mul([sr(), div([t, const_(1000.0)])])
+    pub fn ms2samps(t: impl Into<ElemNode>) -> Node {
+        let t = resolve(t);
+        mul([sr(), div(t, const_(1000.0))])
     }
 
     /// Time constant to pole.
-    pub fn tau2pole(t: Node) -> Node {
-        exp(div([const_(-1.0), mul([t, sr()])]))
+    pub fn tau2pole(t: impl Into<ElemNode>) -> Node {
+        let t = resolve(t);
+        exp(div(const_(-1.0), mul([t, sr()])))
     }
 
     /// Decibels to gain.
-    pub fn db2gain(db: Node) -> Node {
+    pub fn db2gain(db: impl Into<ElemNode>) -> Node {
+        let db = resolve(db);
         pow(const_(10.0), mul([db, const_(1.0 / 20.0)]))
     }
 
     /// Gain to decibels.
-    pub fn gain2db(gain: Node) -> Node {
+    pub fn gain2db(gain: impl Into<ElemNode>) -> Node {
+        let gain = resolve(gain);
         select(
             ge(gain.clone(), const_(0.0)),
             max([const_(-120.0), mul([const_(20.0), log(gain)])]),
@@ -720,12 +825,16 @@ pub mod el {
     }
 
     /// Linear select helper.
-    pub fn select(g: Node, a: Node, b: Node) -> Node {
+    pub fn select(g: impl Into<ElemNode>, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
+        let g = resolve(g);
+        let a = resolve(a);
+        let b = resolve(b);
         add([mul([g.clone(), a]), mul([sub([const_(1.0), g]), b])])
     }
 
     /// Hann window helper.
-    pub fn hann(t: Node) -> Node {
+    pub fn hann(t: impl Into<ElemNode>) -> Node {
+        let t = resolve(t);
         mul([
             const_(0.5),
             sub([
@@ -736,57 +845,112 @@ pub mod el {
     }
 
     /// One-pole smoothing.
-    pub fn smooth(p: Node, x: Node) -> Node {
+    pub fn smooth(p: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        let p = resolve(p);
+        let x = resolve(x);
         pole(p.clone(), mul([sub([const_(1.0), p]), x]))
     }
 
     /// 20ms smoothing helper.
-    pub fn sm(x: Node) -> Node {
+    pub fn sm(x: impl Into<ElemNode>) -> Node {
         smooth(tau2pole(const_(0.02)), x)
     }
 
     /// Simple one-zero filter.
-    pub fn zero(b0: Node, b1: Node, x: Node) -> Node {
+    pub fn zero(b0: impl Into<ElemNode>, b1: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        let b0 = resolve(b0);
+        let b1 = resolve(b1);
+        let x = resolve(x);
         sub([mul([b0, x.clone()]), mul([b1, z(x)])])
     }
 
     /// DC blocking filter.
-    pub fn dcblock(x: Node) -> Node {
+    pub fn dcblock(x: impl Into<ElemNode>) -> Node {
+        let x = resolve(x);
         pole(const_(0.995), zero(const_(1.0), const_(1.0), x))
     }
 
     /// Direct form 1 helper.
-    pub fn df11(b0: Node, b1: Node, a1: Node, x: Node) -> Node {
+    pub fn df11(
+        b0: impl Into<ElemNode>,
+        b1: impl Into<ElemNode>,
+        a1: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let b0 = resolve(b0);
+        let b1 = resolve(b1);
+        let a1 = resolve(a1);
+        let x = resolve(x);
         pole(a1, zero(b0, b1, x))
     }
 
     /// Lowpass filter.
-    pub fn lowpass(fc: Node, q: Node, x: Node) -> Node {
+    pub fn lowpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
         svf(serde_json::json!({ "mode": "lowpass" }), fc, q, x)
     }
 
     /// Highpass filter.
-    pub fn highpass(fc: Node, q: Node, x: Node) -> Node {
+    pub fn highpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
         svf(serde_json::json!({ "mode": "highpass" }), fc, q, x)
     }
 
     /// Bandpass filter.
-    pub fn bandpass(fc: Node, q: Node, x: Node) -> Node {
+    pub fn bandpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
         svf(serde_json::json!({ "mode": "bandpass" }), fc, q, x)
     }
 
     /// Notch filter.
-    pub fn notch(fc: Node, q: Node, x: Node) -> Node {
+    pub fn notch(fc: impl Into<ElemNode>, q: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
         svf(serde_json::json!({ "mode": "notch" }), fc, q, x)
     }
 
     /// Allpass filter.
-    pub fn allpass(fc: Node, q: Node, x: Node) -> Node {
+    pub fn allpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
         svf(serde_json::json!({ "mode": "allpass" }), fc, q, x)
     }
 
     /// Peak EQ filter.
-    pub fn peak(fc: Node, q: Node, gain_decibels: Node, x: Node) -> Node {
+    pub fn peak(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain_decibels: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let gain_decibels = resolve(gain_decibels);
+        let x = resolve(x);
         svfshelf(
             serde_json::json!({ "mode": "peak" }),
             fc,
@@ -797,7 +961,16 @@ pub mod el {
     }
 
     /// Low shelf filter.
-    pub fn lowshelf(fc: Node, q: Node, gain_decibels: Node, x: Node) -> Node {
+    pub fn lowshelf(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain_decibels: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let gain_decibels = resolve(gain_decibels);
+        let x = resolve(x);
         svfshelf(
             serde_json::json!({ "mode": "lowshelf" }),
             fc,
@@ -808,7 +981,16 @@ pub mod el {
     }
 
     /// High shelf filter.
-    pub fn highshelf(fc: Node, q: Node, gain_decibels: Node, x: Node) -> Node {
+    pub fn highshelf(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain_decibels: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let gain_decibels = resolve(gain_decibels);
+        let x = resolve(x);
         svfshelf(
             serde_json::json!({ "mode": "highshelf" }),
             fc,
@@ -819,7 +1001,8 @@ pub mod el {
     }
 
     /// Pinking filter.
-    pub fn pink(x: Node) -> Node {
+    pub fn pink(x: impl Into<ElemNode>) -> Node {
+        let x = resolve(x);
         let clip = |lower: Node, upper: Node, x: Node| min([upper, max([lower, x])]);
 
         clip(
@@ -839,12 +1022,17 @@ pub mod el {
 
     /// Exponential ADSR envelope.
     pub fn adsr(
-        attack_sec: Node,
-        decay_sec: Node,
-        sustain: Node,
-        release_sec: Node,
-        gate: Node,
+        attack_sec: impl Into<ElemNode>,
+        decay_sec: impl Into<ElemNode>,
+        sustain: impl Into<ElemNode>,
+        release_sec: impl Into<ElemNode>,
+        gate: impl Into<ElemNode>,
     ) -> Node {
+        let attack_sec = resolve(attack_sec);
+        let decay_sec = resolve(decay_sec);
+        let sustain = resolve(sustain);
+        let release_sec = resolve(release_sec);
+        let gate = resolve(gate);
         let atk_samps = mul([attack_sec.clone(), sr()]);
         let atk_gate = le(counter(gate.clone()), atk_samps);
         let target_value = select(
@@ -860,7 +1048,7 @@ pub mod el {
                 release_sec,
             ),
         ]);
-        let p = tau2pole(div([t60, const_(6.91)]));
+        let p = tau2pole(div(t60, const_(6.91)));
 
         smooth(p, target_value)
     }
@@ -881,7 +1069,7 @@ pub mod el {
         );
 
         let env_decibels = gain2db(env);
-        let adjusted_ratio = sub([const_(1.0), div([const_(1.0), ratio])]);
+        let adjusted_ratio = sub([const_(1.0), div(const_(1.0), ratio)]);
         let gain = mul([adjusted_ratio, sub([threshold, env_decibels])]);
         let clean_gain = min([const_(0.0), gain]);
         let compressed_gain = db2gain(clean_gain);
@@ -906,22 +1094,22 @@ pub mod el {
         );
 
         let env_decibels = gain2db(env);
-        let lower_knee_bound = sub([threshold.clone(), div([knee_width.clone(), const_(2.0)])]);
-        let upper_knee_bound = add([threshold.clone(), div([knee_width.clone(), const_(2.0)])]);
+        let lower_knee_bound = sub([threshold.clone(), div(knee_width.clone(), const_(2.0))]);
+        let upper_knee_bound = add([threshold.clone(), div(knee_width.clone(), const_(2.0))]);
         let is_in_soft_knee_range = and(
             geq(env_decibels.clone(), lower_knee_bound.clone()),
             leq(env_decibels.clone(), upper_knee_bound.clone()),
         );
-        let adjusted_ratio = sub([const_(1.0), div([const_(1.0), ratio])]);
+        let adjusted_ratio = sub([const_(1.0), div(const_(1.0), ratio)]);
         let gain = select(
             is_in_soft_knee_range,
             mul([
-                div([adjusted_ratio.clone(), const_(2.0)]),
+                div(adjusted_ratio.clone(), const_(2.0)),
                 mul([
-                    div([
+                    div(
                         sub([env_decibels.clone(), lower_knee_bound.clone()]),
                         knee_width.clone(),
-                    ]),
+                    ),
                     sub([lower_knee_bound.clone(), env_decibels.clone()]),
                 ]),
             ]),
@@ -934,8 +1122,8 @@ pub mod el {
     }
 
     /// Sample playback node.
-    pub fn sample(props: Value, trigger: Node, rate: Node) -> Node {
-        Node::new("sample", props, vec![trigger, rate])
+    pub fn sample(props: Value, trigger: impl Into<ElemNode>, rate: impl Into<ElemNode>) -> Node {
+        Node::new("sample", props, vec![resolve(trigger), resolve(rate)])
     }
 }
 
@@ -1221,7 +1409,7 @@ mod tests {
             ),
             (
                 "div",
-                el::div([node(1.0), node(2.0)]),
+                el::div(node(1.0), node(2.0)),
                 "div",
                 serde_json::Value::Null,
                 2,
@@ -1496,6 +1684,17 @@ mod tests {
     }
 
     #[test]
+    fn numeric_literals_coerce_through_helpers() {
+        let div = el::div(4.0, 2.0);
+        let phasor = el::phasor(220.0);
+        let cycle = el::cycle(110.0);
+
+        assert_node(&div, "div", serde_json::Value::Null, 2);
+        assert_node(&phasor, "phasor", serde_json::Value::Null, 1);
+        assert_node(&cycle, "sin", serde_json::Value::Null, 1);
+    }
+
+    #[test]
     fn covers_props_and_custom_helpers() {
         let cases = [
             (
@@ -1629,27 +1828,17 @@ mod tests {
             ),
             (
                 "seq",
-                el::seq(
-                    serde_json::json!({"seq": [1.0, 2.0]}),
-                    node(1.0),
-                    node(0.0),
-                    node(0.0),
-                ),
+                el::seq(serde_json::json!({"seq": [1.0, 2.0]}), node(1.0), node(0.0)),
                 "seq",
                 serde_json::json!({"seq": [1.0, 2.0]}),
-                3,
+                2,
             ),
             (
                 "seq2",
-                el::seq2(
-                    serde_json::json!({"seq": [1.0, 2.0]}),
-                    node(1.0),
-                    node(0.0),
-                    node(0.0),
-                ),
+                el::seq2(serde_json::json!({"seq": [1.0, 2.0]}), node(1.0), node(0.0)),
                 "seq2",
                 serde_json::json!({"seq": [1.0, 2.0]}),
-                3,
+                2,
             ),
             (
                 "sparseq",
@@ -1657,11 +1846,10 @@ mod tests {
                     serde_json::json!({"seq": [{"value":1.0,"tickTime":0.0}]}),
                     node(1.0),
                     node(0.0),
-                    node(0.0),
                 ),
                 "sparseq",
                 serde_json::json!({"seq": [{"value":1.0,"tickTime":0.0}]}),
-                3,
+                2,
             ),
             (
                 "sparseq2",
