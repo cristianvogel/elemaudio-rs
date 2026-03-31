@@ -8,6 +8,77 @@ pub struct Graph {
     roots: Vec<Node>,
 }
 
+/// Handle for a node that has already been mounted into a runtime graph.
+///
+/// This is the Rust-native fast path: keep the handle around and update the
+/// mounted node directly instead of rebuilding and reconciling a new graph.
+#[derive(Debug, Clone)]
+pub struct MountedNode {
+    node_id: NodeId,
+    kind: String,
+}
+
+impl MountedNode {
+    /// Returns the runtime node id.
+    pub fn id(&self) -> NodeId {
+        self.node_id
+    }
+
+    /// Returns the node kind.
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    /// Creates a direct property update batch for this mounted node.
+    pub fn set_property(
+        &self,
+        property: impl Into<String>,
+        value: serde_json::Value,
+    ) -> InstructionBatch {
+        let mut batch = InstructionBatch::new();
+        batch.push(Instruction::SetProperty {
+            node_id: self.node_id,
+            property: property.into(),
+            value,
+        });
+        batch.push(Instruction::CommitUpdates);
+        batch
+    }
+}
+
+/// Lowered graph plus mounted-node handles for direct updates.
+#[derive(Debug, Clone, Default)]
+pub struct MountedGraph {
+    batch: InstructionBatch,
+    roots: Vec<MountedNode>,
+    nodes: Vec<(Vec<usize>, MountedNode)>,
+}
+
+impl MountedGraph {
+    /// Returns the full instruction batch for the mounted graph.
+    pub fn batch(&self) -> &InstructionBatch {
+        &self.batch
+    }
+
+    /// Consumes the mounted graph and returns its instruction batch.
+    pub fn into_batch(self) -> InstructionBatch {
+        self.batch
+    }
+
+    /// Returns the mounted root nodes in channel order.
+    pub fn roots(&self) -> &[MountedNode] {
+        &self.roots
+    }
+
+    /// Returns a mounted node by structural path.
+    pub fn node_at(&self, path: &[usize]) -> Option<MountedNode> {
+        self.nodes
+            .iter()
+            .find(|(node_path, _)| node_path.as_slice() == path)
+            .map(|(_, node)| node.clone())
+    }
+}
+
 impl Graph {
     /// Creates an empty graph.
     pub fn new() -> Self {
@@ -25,19 +96,10 @@ impl Graph {
         self.root(node)
     }
 
-    /// Adds one root node.
-    pub fn push_root(&mut self, node: Node) {
-        self.roots.push(node);
-    }
-
-    /// Returns the graph roots.
-    pub fn roots(&self) -> &[Node] {
-        &self.roots
-    }
-
-    /// Lowers the graph into a runtime instruction batch.
-    pub fn lower(&self) -> InstructionBatch {
+    /// Lowers the graph and keeps mounted-node handles for direct updates.
+    pub fn mount(&self) -> MountedGraph {
         let mut batch = InstructionBatch::new();
+        let mut mounted = MountedGraph::default();
         let mut next_id: NodeId = 1;
 
         let mut lowered_roots = Vec::with_capacity(self.roots.len());
@@ -58,7 +120,15 @@ impl Graph {
 
             let child_id = next_id;
             next_id += 1;
-            lower_node(root, child_id, &mut next_id, &mut batch);
+            let path = vec![channel];
+            let mounted_root = lower_node(
+                root,
+                child_id,
+                &path,
+                &mut next_id,
+                &mut batch,
+                &mut mounted.nodes,
+            );
 
             batch.push(Instruction::AppendChild {
                 parent_id: root_id,
@@ -66,6 +136,7 @@ impl Graph {
                 child_output_channel: 0,
             });
             lowered_roots.push(root_id);
+            mounted.roots.push(mounted_root);
         }
 
         batch.push(Instruction::ActivateRoots {
@@ -73,7 +144,23 @@ impl Graph {
         });
         batch.push(Instruction::CommitUpdates);
 
-        batch
+        mounted.batch = batch;
+        mounted
+    }
+
+    /// Adds one root node.
+    pub fn push_root(&mut self, node: Node) {
+        self.roots.push(node);
+    }
+
+    /// Returns the graph roots.
+    pub fn roots(&self) -> &[Node] {
+        &self.roots
+    }
+
+    /// Lowers the graph into a runtime instruction batch.
+    pub fn lower(&self) -> InstructionBatch {
+        self.mount().into_batch()
     }
 }
 
@@ -117,7 +204,7 @@ impl Node {
 /// Multichannel helpers mirroring Elementary's `el.mc.*` surface.
 pub mod mc {
     use super::Node;
-    use crate::{create_node, unpack, ElemNode};
+    use crate::{ElemNode, create_node, unpack};
 
     fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value) {
         let channels = props
@@ -822,7 +909,14 @@ pub mod el {
 
 type Value = serde_json::Value;
 
-fn lower_node(node: &Node, node_id: NodeId, next_id: &mut NodeId, batch: &mut InstructionBatch) {
+fn lower_node(
+    node: &Node,
+    node_id: NodeId,
+    path: &[usize],
+    next_id: &mut NodeId,
+    batch: &mut InstructionBatch,
+    mounted_nodes: &mut Vec<(Vec<usize>, MountedNode)>,
+) -> MountedNode {
     batch.push(Instruction::CreateNode {
         node_id,
         node_type: node.kind.clone(),
@@ -838,17 +932,27 @@ fn lower_node(node: &Node, node_id: NodeId, next_id: &mut NodeId, batch: &mut In
         }
     }
 
-    for child in &node.children {
+    for (child_index, child) in node.children.iter().enumerate() {
         let child_id = *next_id;
         *next_id += 1;
 
-        lower_node(child, child_id, next_id, batch);
+        let mut child_path = path.to_vec();
+        child_path.push(child_index);
+
+        lower_node(child, child_id, &child_path, next_id, batch, mounted_nodes);
         batch.push(Instruction::AppendChild {
             parent_id: node_id,
             child_id,
             child_output_channel: 0,
         });
     }
+
+    let mounted_node = MountedNode {
+        node_id,
+        kind: node.kind.clone(),
+    };
+    mounted_nodes.push((path.to_vec(), mounted_node.clone()));
+    mounted_node
 }
 
 #[cfg(test)]
@@ -1687,5 +1791,20 @@ mod tests {
         assert!(batch.to_json_string().contains("phasor"));
         assert!(batch.to_json_string().contains("pole"));
         assert!(batch.to_json_string().contains("root"));
+    }
+
+    #[test]
+    fn mounted_graph_exposes_direct_update_handle() {
+        let graph = Graph::new().root(el::const_(220.0));
+
+        let mounted = graph.mount();
+        let root = mounted.node_at(&[0]).expect("mounted root node");
+
+        assert_eq!(root.kind(), "const");
+        assert_eq!(root.id(), 2);
+        assert_eq!(mounted.roots()[0].id(), 2);
+
+        let update = root.set_property("value", serde_json::json!(330.0));
+        assert_eq!(update.to_json_string(), r#"[[3,2,"value",330.0],[5]]"#);
     }
 }
