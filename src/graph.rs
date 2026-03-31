@@ -16,6 +16,7 @@ pub struct Graph {
 pub struct MountedNode {
     node_id: NodeId,
     kind: String,
+    key: Option<String>,
 }
 
 impl MountedNode {
@@ -27,6 +28,11 @@ impl MountedNode {
     /// Returns the node kind.
     pub fn kind(&self) -> &str {
         &self.kind
+    }
+
+    /// Returns the author-supplied key, if present.
+    pub fn key(&self) -> Option<&str> {
+        self.key.as_deref()
     }
 
     /// Creates a direct property update batch for this mounted node.
@@ -44,6 +50,11 @@ impl MountedNode {
         batch.push(Instruction::CommitUpdates);
         batch
     }
+
+    /// Convenience for updating a mounted `const` node's numeric value.
+    pub fn set_const_value(&self, value: f64) -> InstructionBatch {
+        self.set_property("value", serde_json::json!(value))
+    }
 }
 
 /// Lowered graph plus mounted-node handles for direct updates.
@@ -52,6 +63,7 @@ pub struct MountedGraph {
     batch: InstructionBatch,
     roots: Vec<MountedNode>,
     nodes: Vec<(Vec<usize>, MountedNode)>,
+    keyed_nodes: Vec<(String, MountedNode)>,
 }
 
 impl MountedGraph {
@@ -76,6 +88,25 @@ impl MountedGraph {
             .iter()
             .find(|(node_path, _)| node_path.as_slice() == path)
             .map(|(_, node)| node.clone())
+    }
+
+    /// Returns a mounted node by author-supplied key.
+    pub fn node_with_key(&self, key: &str) -> Option<MountedNode> {
+        self.keyed_nodes
+            .iter()
+            .find(|(node_key, _)| node_key == key)
+            .map(|(_, node)| node.clone())
+    }
+
+    /// Convenience for updating a keyed `const` node's numeric value.
+    pub fn set_const_value(&self, key: &str, value: f64) -> Option<InstructionBatch> {
+        let node = self.node_with_key(key)?;
+
+        if node.kind() != "const" {
+            return None;
+        }
+
+        Some(node.set_const_value(value))
     }
 }
 
@@ -128,6 +159,7 @@ impl Graph {
                 &mut next_id,
                 &mut batch,
                 &mut mounted.nodes,
+                &mut mounted.keyed_nodes,
             );
 
             batch.push(Instruction::AppendChild {
@@ -916,6 +948,7 @@ fn lower_node(
     next_id: &mut NodeId,
     batch: &mut InstructionBatch,
     mounted_nodes: &mut Vec<(Vec<usize>, MountedNode)>,
+    keyed_nodes: &mut Vec<(String, MountedNode)>,
 ) -> MountedNode {
     batch.push(Instruction::CreateNode {
         node_id,
@@ -939,7 +972,15 @@ fn lower_node(
         let mut child_path = path.to_vec();
         child_path.push(child_index);
 
-        lower_node(child, child_id, &child_path, next_id, batch, mounted_nodes);
+        lower_node(
+            child,
+            child_id,
+            &child_path,
+            next_id,
+            batch,
+            mounted_nodes,
+            keyed_nodes,
+        );
         batch.push(Instruction::AppendChild {
             parent_id: node_id,
             child_id,
@@ -950,9 +991,29 @@ fn lower_node(
     let mounted_node = MountedNode {
         node_id,
         kind: node.kind.clone(),
+        key: key_from_props(&node.props),
     };
     mounted_nodes.push((path.to_vec(), mounted_node.clone()));
+    if let Some(key) = mounted_node.key.clone() {
+        if keyed_nodes
+            .iter()
+            .any(|(existing_key, _)| existing_key == &key)
+        {
+            panic!("duplicate mounted node key: {key}");
+        }
+        keyed_nodes.push((key, mounted_node.clone()));
+    }
     mounted_node
+}
+
+fn key_from_props(props: &Value) -> Option<String> {
+    match props {
+        Value::Object(map) => map
+            .get("key")
+            .and_then(|value| value.as_str())
+            .map(|key| key.to_string()),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

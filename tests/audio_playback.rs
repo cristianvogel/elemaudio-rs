@@ -4,20 +4,16 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::SampleFormat;
+use cpal::traits::StreamTrait;
 use elemaudio_rs::{el, Graph, Runtime};
+
+#[path = "audio_support.rs"]
+mod audio_support;
 
 #[test]
 #[ignore]
 fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Error>> {
-    let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .expect("no default output device available");
-    let supported = device
-        .default_output_config()
-        .expect("could not read default output config");
+    let (device, supported) = audio_support::default_output_setup()?;
 
     let stream_config = supported.config();
     let sample_rate = stream_config.sample_rate.0 as f64;
@@ -34,11 +30,12 @@ fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Er
     let graph = (0..channels).fold(Graph::new(), |graph, _| {
         graph.root(el::cycle(el::const_(220.0)))
     });
+    let process_channels = graph.roots().len();
     runtime.apply_instructions(&graph.lower())?;
 
     let mut rendered = 0usize;
-    let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; channels];
-    let mut queue = VecDeque::with_capacity(total_frames * channels);
+    let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; process_channels];
+    let mut queue = VecDeque::with_capacity(total_frames * process_channels);
 
     while rendered < total_frames {
         let frames = buffer_size.min(total_frames - rendered);
@@ -50,7 +47,7 @@ fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Er
         runtime.process(frames, &[], &mut outputs)?;
 
         for frame in 0..frames {
-            for channel in 0..channels {
+            for channel in 0..process_channels {
                 queue.push_back(outputs_storage[channel][frame] as f32);
             }
         }
@@ -61,18 +58,15 @@ fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Er
     let shared = Arc::new(Mutex::new(queue));
     let err_fn = |error| eprintln!("cpal stream error: {error}");
 
-    let stream = match supported.sample_format() {
-        SampleFormat::F32 => {
-            build_stream_f32(&device, &stream_config, shared.clone(), channels, err_fn)?
-        }
-        SampleFormat::I16 => {
-            build_stream_i16(&device, &stream_config, shared.clone(), channels, err_fn)?
-        }
-        SampleFormat::U16 => {
-            build_stream_u16(&device, &stream_config, shared.clone(), channels, err_fn)?
-        }
-        other => panic!("unsupported output sample format: {other:?}"),
-    };
+    let stream = audio_support::build_stream(
+        &device,
+        &stream_config,
+        supported.sample_format(),
+        shared.clone(),
+        process_channels,
+        channels,
+        err_fn,
+    )?;
 
     stream.play().expect("failed to start audio stream");
     thread::sleep(Duration::from_secs_f64(seconds));
@@ -80,74 +74,72 @@ fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Er
     Ok(())
 }
 
-fn build_stream_f32(
-    device: &cpal::Device,
-    config: &cpal::StreamConfig,
-    queue: Arc<Mutex<VecDeque<f32>>>,
-    channels: usize,
-    err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
-) -> std::result::Result<cpal::Stream, cpal::BuildStreamError> {
-    device.build_output_stream(
-        config,
-        move |output: &mut [f32], _| write_audio(output, &queue, channels, |sample| sample),
+#[test]
+#[ignore]
+fn play_windowed_sine_with_fast_path_frequency() -> std::result::Result<(), Box<dyn Error>> {
+    let (device, supported) = audio_support::default_output_setup()?;
+
+    let stream_config = supported.config();
+    let sample_rate = stream_config.sample_rate.0 as f64;
+    let channels = stream_config.channels as usize;
+    let buffer_size = 128usize;
+    let process_channels = 1usize;
+
+    let runtime = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()?;
+
+    ///////////////////////////
+    // Graph definition     //
+    let graph = Graph::new().root(el::mul([
+        el::hann(el::phasor(el::const_with_key(
+            Option::from("hann_rate"),
+            0.2,
+        ))),
+        el::cycle(el::const_with_key(Option::from("freq"), 220.0)),
+    ]));
+    ///////////////////////////
+
+    let mounted = graph.mount();
+
+    runtime.apply_instructions(mounted.batch())?;
+
+    let queue = Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(buffer_size * 32)));
+    let err_fn = |error| eprintln!("cpal stream error: {error}");
+
+    audio_support::prefill_queue(&runtime, &queue, buffer_size, 16, process_channels)?;
+
+    let stream = audio_support::build_stream(
+        &device,
+        &stream_config,
+        supported.sample_format(),
+        queue.clone(),
+        process_channels,
+        channels,
         err_fn,
-        None,
-    )
-}
+    )?;
 
-fn build_stream_i16(
-    device: &cpal::Device,
-    config: &cpal::StreamConfig,
-    queue: Arc<Mutex<VecDeque<f32>>>,
-    channels: usize,
-    err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
-) -> std::result::Result<cpal::Stream, cpal::BuildStreamError> {
-    device.build_output_stream(
-        config,
-        move |output: &mut [i16], _| {
-            write_audio(output, &queue, channels, |sample| {
-                let clamped = sample.clamp(-1.0, 1.0);
-                (clamped * i16::MAX as f32) as i16
-            })
-        },
-        err_fn,
-        None,
-    )
-}
+    stream.play().expect("failed to start audio stream");
 
-fn build_stream_u16(
-    device: &cpal::Device,
-    config: &cpal::StreamConfig,
-    queue: Arc<Mutex<VecDeque<f32>>>,
-    channels: usize,
-    err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
-) -> std::result::Result<cpal::Stream, cpal::BuildStreamError> {
-    device.build_output_stream(
-        config,
-        move |output: &mut [u16], _| {
-            write_audio(output, &queue, channels, |sample| {
-                let clamped = sample.clamp(-1.0, 1.0);
-                (((clamped + 1.0) * 0.5) * u16::MAX as f32) as u16
-            })
-        },
-        err_fn,
-        None,
-    )
-}
+    let sweep = [110.0, 165.0, 320.0, 330.0, 440.0, 660.0];
+    let rate = [0.1, 0.5, 0.3];
+    let mut index = 0usize;
 
-fn write_audio<T>(
-    output: &mut [T],
-    queue: &Arc<Mutex<VecDeque<f32>>>,
-    channels: usize,
-    convert: impl Fn(f32) -> T,
-) where
-    T: Copy + Default,
-{
-    let mut queue = queue.lock().expect("audio queue poisoned");
-
-    for frame in output.chunks_mut(channels) {
-        for sample in frame {
-            *sample = queue.pop_front().map(&convert).unwrap_or_default();
-        }
+    loop {
+        let next_freq = sweep[index % sweep.len()];
+        let next_rate = rate[index % rate.len()];
+        index += 1;
+        runtime.apply_instructions(
+            &mounted
+                .set_const_value("hann_rate", next_rate)
+                .expect("hann_rate should be keyed const"),
+        )?;
+        runtime.apply_instructions(
+            &mounted
+                .set_const_value("freq", next_freq)
+                .expect("freq should be keyed const"),
+        )?;
+        audio_support::prefill_queue(&runtime, &queue, buffer_size, 4, process_channels)?;
     }
 }

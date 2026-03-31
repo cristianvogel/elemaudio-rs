@@ -1,4 +1,4 @@
-use elemaudio_rs::{el, Graph};
+use elemaudio_rs::{el, Graph, Runtime};
 
 #[test]
 fn mounted_graph_exposes_direct_update_handle() {
@@ -42,4 +42,56 @@ fn mounted_graph_can_find_nested_nodes_by_path() {
     assert_eq!(left.id(), 3);
     assert_eq!(nested.kind(), "const");
     assert_eq!(nested.id(), 5);
+}
+
+#[test]
+fn mounted_node_updates_audio_without_remounting() {
+    let runtime = Runtime::new()
+        .sample_rate(48_000.0)
+        .buffer_size(64)
+        .call()
+        .expect("runtime should construct");
+
+    let graph = Graph::new().root(el::cycle(el::const_with_key(Some("freq"), 220.0)));
+    let mounted = graph.mount();
+    let frequency = mounted
+        .node_with_key("freq")
+        .expect("mounted frequency node");
+
+    assert_eq!(frequency.kind(), "const");
+    assert_eq!(frequency.key(), Some("freq"));
+    assert_eq!(
+        mounted
+            .set_const_value("freq", 440.0)
+            .expect("keyed const should update")
+            .to_json_string(),
+        format!(r#"[[3,{},"value",440.0],[5]]"#, frequency.id())
+    );
+
+    runtime
+        .apply_instructions(mounted.batch())
+        .expect("initial mount should apply");
+
+    let mut before = vec![0.0_f64; 64];
+    let mut before_outputs = [&mut before[..]];
+    runtime
+        .process(64, &[], &mut before_outputs)
+        .expect("should render initial block");
+
+    runtime
+        .apply_instructions(
+            &mounted
+                .set_const_value("freq", 440.0)
+                .expect("keyed const should update"),
+        )
+        .expect("fast-path update should apply");
+
+    let mut after = vec![0.0_f64; 64];
+    let mut after_outputs = [&mut after[..]];
+    runtime
+        .process(64, &[], &mut after_outputs)
+        .expect("should render updated block");
+
+    assert_ne!(before, after);
+    assert_ne!(before[0], after[0]);
 }
