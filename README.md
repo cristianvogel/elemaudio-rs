@@ -6,6 +6,17 @@ For detailed documentation and examples please visit the original website by Nic
 👀 You might also want to take a look at the sister repo, a Rust resource server for the Elem VFS https://github.com/cristianvogel/elemaudio-resources 
 
 
+## Authoring Surfaces
+
+This repository exposes two composition surfaces:
+
+- Rust helpers in `src/graph.rs` for native examples and lower-level control
+- `@elem-rs/core` in `packages/core` for the JS/TS authoring layer
+
+The Rust runtime executes lowered instruction batches through the FFI bridge. The JS/TS package provides the higher-level authoring API used by the browser demos.
+The Rust graph helpers also include `el.custom(...)` for custom node kinds and `mc.*` for multichannel wrappers.
+The Rust `core` module exposes `create_node`, `resolve`, `is_node`, and `unpack`.
+
 ## Elementary Graph Style
 
 Elementary uses a functional graph style built around the `el.*` helpers.

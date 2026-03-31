@@ -125,7 +125,7 @@ pub struct Runtime {
     resources: RefCell<ResourceManager>,
     retired_resources: RefCell<Vec<Resource>>,
     buffer_size: usize,
-    _not_send_or_sync: PhantomData<Rc<()>> // help the compiler enforce non-thread safe resource
+    _not_send_or_sync: PhantomData<Rc<()>>, // help the compiler enforce non-thread safe resource
 }
 
 #[bon]

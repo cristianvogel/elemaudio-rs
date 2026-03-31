@@ -1,5 +1,4 @@
-use elemaudio_rs::{Graph, Result, Runtime, el};
-use std::f64::consts::PI;
+use elemaudio_rs::{el, Graph, Result, Runtime};
 
 fn main() -> Result<()> {
     let runtime = Runtime::new()
@@ -7,10 +6,7 @@ fn main() -> Result<()> {
         .buffer_size(128)
         .call()?;
 
-    let graph = Graph::new().with_root(el::sin(el::mul(
-        el::const_(2.0 * PI),
-        el::phasor(el::const_(220.0)),
-    )));
+    let graph = Graph::new().root(el::cycle(el::const_(220.0)));
     runtime.apply_instructions(&graph.lower())?;
 
     let mut output = vec![0.0_f64; 128];

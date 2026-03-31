@@ -4,16 +4,19 @@
 //! JSON instruction batches, a Rust-native resource manager, and audio
 //! processing entrypoints.
 
+pub mod core;
 mod error;
 mod ffi;
 mod graph;
 mod resource;
 mod runtime;
 
+/// Core node utilities mirroring the upstream package surface.
+pub use core::{create_node, is_node, resolve, unpack, ElemNode};
 /// Error types and helpers used by the public API.
 pub use error::{Error, Result};
 /// Rust-native graph primitives.
-pub use graph::{el, Graph, Node};
+pub use graph::{el, mc, Graph, Node};
 /// Rust-native resource registry and resource values.
 pub use resource::{AudioBuffer, Resource, ResourceId, ResourceManager};
 /// Instruction types and the runtime wrapper.
