@@ -23,30 +23,40 @@ fn play_sparseq_sequence_through_ring_buffer() -> std::result::Result<(), Box<dy
         .buffer_size(buffer_size)
         .call()?;
 
-    let trigger = el::train(el::const_(2.0));
+
+    fn trigger() -> elemaudio_rs::Node {
+        el::train(el::const_(2.0))
+    };
+
+    fn freq_sequence() -> elemaudio_rs::Node {
+        el::sparseq(
+            serde_json::json!({
+            "seq": [
+                { "value": 110.0, "tickTime": 0.0 },
+                { "value": 165.0, "tickTime": 1.0 },
+                { "value": 220.0, "tickTime": 2.0 },
+                { "value": 330.0, "tickTime": 3.0 },
+                { "value": 440.0, "tickTime": 4.0 },
+                { "value": 660.0, "tickTime": 5.0 }
+            ],
+            "loop": [0, 5]
+        }),
+            trigger(),
+            el::const_(0.0),
+            el::const_(0.0),
+        )
+    }
+
+    let seq = freq_sequence();
+
     let graph = Graph::new().root(el::mul([
-        el::hann(el::phasor(el::const_(50.0))),
+        el::hann(el::phasor(seq.clone())),
         el::env(
             el::tau2pole(el::const_(0.01)),
             el::tau2pole(el::const_(0.1)),
-            trigger.clone(),
+            el::train(el::const_(2.0)),
         ),
-        el::cycle(el::sparseq(
-            serde_json::json!({
-                "seq": [
-                    { "value": 110.0, "tickTime": 0.0 },
-                    { "value": 165.0, "tickTime": 1.0 },
-                    { "value": 220.0, "tickTime": 2.0 },
-                    { "value": 330.0, "tickTime": 3.0 },
-                    { "value": 440.0, "tickTime": 4.0 },
-                    { "value": 660.0, "tickTime": 5.0 }
-                ],
-                "loop": [0, 5]
-            }),
-            trigger,
-            el::const_(0.0),
-            el::const_(0.0),
-        )),
+        el::cycle(seq),
     ]));
 
     runtime.apply_instructions(&graph.lower())?;
