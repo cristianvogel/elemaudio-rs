@@ -13,6 +13,8 @@ app.innerHTML = `
   <div class="panel">
     <h1>elemaudio-rs demo</h1>
     <p>Click start to open the browser audio engine, build a JS graph, and stream it into the runtime.</p>
+    <p class="demo-link"><a href="/sample.html">Open the sample-file demo</a></p>
+    <p class="demo-link"><a href="/resource-manager.html">Open the Rust resource manager demo</a></p>
     <div class="controls">
       <div class="row">
         <label for="frequency">
@@ -39,23 +41,22 @@ if (!startButton || !frequencySlider || !frequencyValue || !status) {
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 
-
 /// Here we define nodes in the graph, using the `el` utilities.
 const smoothedCycle = (key: string, value: number): NodeRepr_t => {
-    return el.cycle(el.sm(el.const({ key, value })));
-}
+  return el.cycle(el.sm(el.const({ key, value })));
+};
 
 /// This is an example of a node that takes a single input and produces a single output.
 /// It multiplies the input with a Hann window, which in turn is read by a phasor with a low frequency
-const hann_LFO_VCA = (  input: NodeRepr_t , value: number = 1.0) => {
-    return el.mul( el.hann( el.phasor( el.const( { value } ) ) ), input  )
-}
+const hann_LFO_VCA = (input: NodeRepr_t, value: number = 1.0) => {
+  return el.mul(el.hann(el.phasor(el.const({ value }))), input);
+};
 
 /// Now we wire up the "modules" defined above to form a graph.
 function buildGraph(frequency: number): NodeRepr_t[] {
   return [
-      hann_LFO_VCA( smoothedCycle("freqL", frequency) ),
-      hann_LFO_VCA( smoothedCycle("freqR", frequency * 1.618), 1.618)
+    hann_LFO_VCA(smoothedCycle("freqL", frequency)),
+    hann_LFO_VCA(smoothedCycle("freqR", frequency * 1.618), 1.618),
   ];
 }
 
@@ -83,7 +84,6 @@ async function renderCurrentGraph() {
   status.textContent = `Running.`;
 
   await renderer?.render(...buildGraph(frequency));
-
 }
 
 startButton.addEventListener("click", async () => {

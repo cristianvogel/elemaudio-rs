@@ -31,6 +31,20 @@ function virtualVendorAssets() {
 
 export default defineConfig({
   plugins: [virtualVendorAssets()],
+  server: {
+    fs: {
+      allow: [resolve(__dirname, "..", "..")],
+    },
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, "index.html"),
+        sample: resolve(__dirname, "sample.html"),
+        resource: resolve(__dirname, "resource-manager.html"),
+      },
+    },
+  },
   resolve: {
     alias: [
       {
@@ -65,5 +79,6 @@ export default defineConfig({
   },
   define: {
     "process.env.PKG_VERSION": JSON.stringify("dev"),
+    "import.meta.env.VITE_ELEMAUDIO_RESOURCES": JSON.stringify(process.env.VITE_ELEMAUDIO_RESOURCES ?? "0"),
   },
 });

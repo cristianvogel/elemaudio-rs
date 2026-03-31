@@ -39,14 +39,39 @@ p {
   line-height: 1.5;
 }
 
+.demo-link {
+  margin-top: -10px;
+}
+
+.demo-link a {
+  color: #9fc0ff;
+  text-decoration: none;
+}
+
+.demo-link a:hover {
+  text-decoration: underline;
+}
+
 .controls {
   display: grid;
   gap: 16px;
 }
 
+.buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .row {
   display: grid;
   gap: 8px;
+}
+
+.resource-row {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 label {
@@ -72,6 +97,10 @@ button {
   cursor: pointer;
 }
 
+button.secondary {
+  background: linear-gradient(135deg, #283447, #3a4a66);
+}
+
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -81,4 +110,44 @@ button:disabled {
   min-height: 1.5em;
   font-size: 14px;
   color: #9fd3a8;
+}
+
+.resource-status {
+  font-size: 13px;
+  color: #c8d4e0;
+}
+
+.resource-list {
+  display: grid;
+  gap: 12px;
+}
+
+.resource-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.resource-table th,
+.resource-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.resource-table th {
+  color: #9fb0c3;
+  font-weight: 600;
+}
+
+.resource-table tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.empty-state {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #9fb0c3;
+  font-size: 13px;
 }

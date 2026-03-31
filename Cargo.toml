@@ -8,9 +8,13 @@ build = "build.rs"
 name = "elemaudio_rs"
 path = "src/lib.rs"
 
+[features]
+default = []
+resources = ["dep:elemaudio-resources"]
+
 [dependencies]
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+elemaudio-resources = { git = "https://github.com/cristianvogel/elemaudio-resources", package = "elemaudio-resources", optional = true }
 
 [build-dependencies]
 cc = "1"

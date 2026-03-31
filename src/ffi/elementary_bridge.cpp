@@ -62,6 +62,13 @@ void elementary_runtime_reset(elementary_runtime_handle* handle)
     }
 }
 
+void elementary_runtime_prune_shared_resources(elementary_runtime_handle* handle)
+{
+    if (handle != nullptr) {
+        handle->runtime->pruneSharedResources();
+    }
+}
+
 void elementary_runtime_set_current_time_samples(elementary_runtime_handle* handle, std::int64_t sample_time)
 {
     if (handle != nullptr) {
