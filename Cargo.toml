@@ -19,3 +19,6 @@ elemaudio-resources = { git = "https://github.com/cristianvogel/elemaudio-resour
 
 [build-dependencies]
 cc = "1"
+
+[dev-dependencies]
+cpal = "0.15"
