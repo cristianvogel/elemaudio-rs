@@ -30,12 +30,11 @@ fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Er
     let graph = (0..channels).fold(Graph::new(), |graph, _| {
         graph.root(el::cycle(el::const_(220.0)))
     });
-    let process_channels = graph.roots().len();
     runtime.apply_instructions(&graph.lower())?;
 
     let mut rendered = 0usize;
-    let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; process_channels];
-    let mut queue = VecDeque::with_capacity(total_frames * process_channels);
+    let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; channels];
+    let mut queue = VecDeque::with_capacity(total_frames * channels);
 
     while rendered < total_frames {
         let frames = buffer_size.min(total_frames - rendered);
@@ -47,7 +46,7 @@ fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Er
         runtime.process(frames, &[], &mut outputs)?;
 
         for frame in 0..frames {
-            for channel in 0..process_channels {
+            for channel in 0..channels {
                 queue.push_back(outputs_storage[channel][frame] as f32);
             }
         }
@@ -63,7 +62,6 @@ fn play_rust_authored_graph_through_cpal() -> std::result::Result<(), Box<dyn Er
         &stream_config,
         supported.sample_format(),
         shared.clone(),
-        process_channels,
         channels,
         err_fn,
     )?;
@@ -83,7 +81,6 @@ fn play_windowed_sine_with_fast_path_frequency() -> std::result::Result<(), Box<
     let sample_rate = stream_config.sample_rate.0 as f64;
     let channels = stream_config.channels as usize;
     let buffer_size = 128usize;
-    let process_channels = 1usize;
 
     let runtime = Runtime::new()
         .sample_rate(sample_rate)
@@ -108,14 +105,13 @@ fn play_windowed_sine_with_fast_path_frequency() -> std::result::Result<(), Box<
     let queue = Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(buffer_size * 32)));
     let err_fn = |error| eprintln!("cpal stream error: {error}");
 
-    audio_support::prefill_queue(&runtime, &queue, buffer_size, 16, process_channels)?;
+    audio_support::prefill_queue(&runtime, &queue, buffer_size, 16)?;
 
     let stream = audio_support::build_stream(
         &device,
         &stream_config,
         supported.sample_format(),
         queue.clone(),
-        process_channels,
         channels,
         err_fn,
     )?;
@@ -140,6 +136,6 @@ fn play_windowed_sine_with_fast_path_frequency() -> std::result::Result<(), Box<
                 .set_const_value("freq", next_freq)
                 .expect("freq should be keyed const"),
         )?;
-        audio_support::prefill_queue(&runtime, &queue, buffer_size, 4, process_channels)?;
+        audio_support::prefill_queue(&runtime, &queue, buffer_size, 4)?;
     }
 }

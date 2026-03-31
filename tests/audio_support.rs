@@ -21,38 +21,23 @@ pub fn build_stream(
     config: &cpal::StreamConfig,
     format: SampleFormat,
     queue: Arc<Mutex<VecDeque<f32>>>,
-    process_channels: usize,
-    hardware_channels: usize,
+    channels: usize,
     err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
 ) -> Result<cpal::Stream, cpal::BuildStreamError> {
     match format {
         SampleFormat::F32 => device.build_output_stream(
             config,
-            move |output: &mut [f32], _| {
-                write_audio(
-                    output,
-                    &queue,
-                    process_channels,
-                    hardware_channels,
-                    |sample| sample,
-                )
-            },
+            move |output: &mut [f32], _| write_audio(output, &queue, channels, |sample| sample),
             err_fn,
             None,
         ),
         SampleFormat::I16 => device.build_output_stream(
             config,
             move |output: &mut [i16], _| {
-                write_audio(
-                    output,
-                    &queue,
-                    process_channels,
-                    hardware_channels,
-                    |sample| {
-                        let clamped = sample.clamp(-1.0, 1.0);
-                        (clamped * i16::MAX as f32) as i16
-                    },
-                )
+                write_audio(output, &queue, channels, |sample| {
+                    let clamped = sample.clamp(-1.0, 1.0);
+                    (clamped * i16::MAX as f32) as i16
+                })
             },
             err_fn,
             None,
@@ -60,16 +45,10 @@ pub fn build_stream(
         SampleFormat::U16 => device.build_output_stream(
             config,
             move |output: &mut [u16], _| {
-                write_audio(
-                    output,
-                    &queue,
-                    process_channels,
-                    hardware_channels,
-                    |sample| {
-                        let clamped = sample.clamp(-1.0, 1.0);
-                        (((clamped + 1.0) * 0.5) * u16::MAX as f32) as u16
-                    },
-                )
+                write_audio(output, &queue, channels, |sample| {
+                    let clamped = sample.clamp(-1.0, 1.0);
+                    (((clamped + 1.0) * 0.5) * u16::MAX as f32) as u16
+                })
             },
             err_fn,
             None,
@@ -83,22 +62,14 @@ pub fn prefill_queue(
     queue: &Arc<Mutex<VecDeque<f32>>>,
     frames: usize,
     blocks: usize,
-    output_channels: usize,
 ) -> Result<(), Box<dyn Error>> {
     for _ in 0..blocks {
-        let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; frames]; output_channels];
-        let mut outputs: Vec<&mut [f64]> = outputs_storage
-            .iter_mut()
-            .map(|buffer| &mut buffer[..])
-            .collect();
+        let mut output = vec![0.0_f64; frames];
+        let mut outputs = [&mut output[..]];
         runtime.process(frames, &[], &mut outputs)?;
 
         let mut queue = queue.lock().expect("audio queue poisoned");
-        for frame in 0..frames {
-            for channel in 0..output_channels {
-                queue.push_back(outputs_storage[channel][frame] as f32);
-            }
-        }
+        queue.extend(output.into_iter().map(|sample| sample as f32));
     }
 
     Ok(())
@@ -107,23 +78,16 @@ pub fn prefill_queue(
 fn write_audio<T>(
     output: &mut [T],
     queue: &Arc<Mutex<VecDeque<f32>>>,
-    process_channels: usize,
-    hardware_channels: usize,
+    channels: usize,
     convert: impl Fn(f32) -> T,
 ) where
     T: Copy + Default,
 {
     let mut queue = queue.lock().expect("audio queue poisoned");
 
-    for frame in output.chunks_mut(hardware_channels) {
-        let active = process_channels.min(frame.len());
-
-        for sample in frame.iter_mut().take(active) {
+    for frame in output.chunks_mut(channels) {
+        for sample in frame {
             *sample = queue.pop_front().map(&convert).unwrap_or_default();
-        }
-
-        for sample in frame.iter_mut().skip(active) {
-            *sample = T::default();
         }
     }
 }
