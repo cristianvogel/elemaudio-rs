@@ -13,6 +13,7 @@ default = []
 resources = ["dep:elemaudio-resources"]
 
 [dependencies]
+bon = "3.9"
 serde_json = "1"
 elemaudio-resources = { git = "https://github.com/cristianvogel/elemaudio-resources", package = "elemaudio-resources", optional = true }
 

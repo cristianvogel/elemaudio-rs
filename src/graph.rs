@@ -135,6 +135,11 @@ pub mod el {
         Node::new("le", Value::Null, vec![left, right])
     }
 
+    /// Multiply helper.
+    pub fn mul(left: Node, right: Node) -> Node {
+        Node::new("mul", Value::Null, vec![left, right])
+    }
+
     /// Pulse train helper.
     pub fn train(rate: Node) -> Node {
         le(phasor(rate), const_(0.5))

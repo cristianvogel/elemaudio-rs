@@ -1,0 +1,22 @@
+use elemaudio_rs::{Graph, Result, Runtime, el};
+use std::f64::consts::PI;
+
+fn main() -> Result<()> {
+    let runtime = Runtime::new()
+        .sample_rate(48_000.0)
+        .buffer_size(128)
+        .call()?;
+
+    let graph = Graph::new().with_root(el::sin(el::mul(
+        el::const_(2.0 * PI),
+        el::phasor(el::const_(220.0)),
+    )));
+    runtime.apply_instructions(&graph.lower())?;
+
+    let mut output = vec![0.0_f64; 128];
+    let mut outputs = [&mut output[..]];
+    runtime.process(128, &[], &mut outputs)?;
+
+    println!("first samples: {:?}", &output[..8]);
+    Ok(())
+}

@@ -115,7 +115,10 @@ cargo run
 use elemaudio_rs::{Result, Runtime};
 
 fn main() -> Result<()> {
-    let runtime = Runtime::new(48_000.0, 128)?;
+    let runtime = Runtime::new()
+        .sample_rate(48_000.0)
+        .buffer_size(128)
+        .call()?;
     runtime.reset();
     Ok(())
 }

@@ -3,8 +3,10 @@
 use crate::error::{describe_return_code, Error, Result};
 use crate::ffi;
 use crate::resource::{AudioBuffer, Resource, ResourceManager};
+use bon::bon;
 use serde_json::Value as JsonValue;
 use std::cell::{Ref, RefCell};
+use std::convert::TryFrom;
 use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -122,19 +124,30 @@ pub struct Runtime {
     handle: NonNull<ffi::ElementaryRuntimeHandle>,
     resources: RefCell<ResourceManager>,
     retired_resources: RefCell<Vec<Resource>>,
-    _not_send_or_sync: PhantomData<Rc<()>>,
+    buffer_size: usize,
+    _not_send_or_sync: PhantomData<Rc<()>> // help the compiler enforce non-thread safe resource
 }
 
+#[bon]
 impl Runtime {
-    /// Creates a runtime for the given sample rate and block size.
-    pub fn new(sample_rate: f64, block_size: usize) -> Result<Self> {
-        let handle = unsafe { ffi::elementary_runtime_new(sample_rate, block_size as i32) };
+    /// Starts building a runtime.
+    pub fn new() -> RuntimeConstructBuilder {
+        Self::create()
+    }
+
+    /// Creates a runtime for the given sample rate and buffer size.
+    #[builder(start_fn(name = create, vis = ""))]
+    pub fn construct(sample_rate: f64, buffer_size: usize) -> Result<Self> {
+        let block_size = i32::try_from(buffer_size)
+            .map_err(|_| Error::InvalidArgument("buffer_size must fit in i32"))?;
+        let handle = unsafe { ffi::elementary_runtime_new(sample_rate, block_size) };
         let handle = NonNull::new(handle).ok_or(Error::NullHandle)?;
 
         Ok(Self {
             handle,
             resources: RefCell::new(ResourceManager::new()),
             retired_resources: RefCell::new(Vec::new()),
+            buffer_size,
             _not_send_or_sync: PhantomData,
         })
     }
@@ -283,6 +296,12 @@ impl Runtime {
         inputs: &[&[f64]],
         outputs: &mut [&mut [f64]],
     ) -> Result<()> {
+        if num_samples > self.buffer_size {
+            return Err(Error::InvalidArgument(
+                "num_samples exceeds the configured buffer_size",
+            ));
+        }
+
         if inputs.iter().any(|channel| channel.len() < num_samples) {
             return Err(Error::InvalidArgument(
                 "an input channel is shorter than num_samples",
