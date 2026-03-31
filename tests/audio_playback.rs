@@ -48,7 +48,7 @@ fn play_sparseq_sequence_through_ring_buffer() -> std::result::Result<(), Box<dy
     let seq = freq_sequence();
 
     let graph = Graph::new().root(el::mul([
-        el::hann(el::phasor(el::div(seq.clone(), el::const_(2.0)))),
+        el::hann(el::phasor(el::div(seq.clone(), 4.0))),
         el::env(
             el::tau2pole(el::const_(0.01)),
             el::tau2pole(el::const_(0.1)),
