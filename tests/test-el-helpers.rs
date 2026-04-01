@@ -162,28 +162,28 @@ fn covers_el_helper_surface() {
         ),
         (
             "add",
-            el::add([node(1.0), node(2.0)]),
+            el::add((node(1.0), node(2.0))),
             "add",
             serde_json::Value::Null,
             2,
         ),
         (
             "sub",
-            el::sub([node(1.0), node(2.0)]),
+            el::sub((node(1.0), node(2.0))),
             "sub",
             serde_json::Value::Null,
             2,
         ),
         (
             "mul",
-            el::mul([node(1.0), node(2.0)]),
+            el::mul((node(1.0), node(2.0))),
             "mul",
             serde_json::Value::Null,
             2,
         ),
         (
             "div",
-            el::div([node(1.0), node(2.0)]),
+            el::div((node(1.0), node(2.0))),
             "div",
             serde_json::Value::Null,
             2,
@@ -459,7 +459,7 @@ fn covers_el_helper_surface() {
 
 #[test]
 fn numeric_literals_coerce_through_helpers() {
-    let div = el::div([4.0, 2.0]);
+    let div = el::div((4.0, 2.0));
     let phasor = el::phasor(220.0);
     let cycle = el::cycle(110.0);
 
@@ -821,8 +821,8 @@ fn covers_mc_helpers() {
 #[test]
 fn lowers_multichannel_graph_to_batch() {
     let graph = Graph::new()
-        .root(el::cycle(el::sm(el::const_(220.0))))
-        .root(el::cycle(el::sm(el::const_(220.0 * 1.618))));
+        .render(el::cycle(el::sm(el::const_(220.0))))
+        .render(el::cycle(el::sm(el::const_(220.0 * 1.618))));
 
     let batch = graph.lower();
     assert!(batch.to_json_string().contains("sin"));

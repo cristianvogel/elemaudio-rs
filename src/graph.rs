@@ -8,6 +8,33 @@ pub struct Graph {
     roots: Vec<Node>,
 }
 
+/// Input accepted by `Graph::render(...)`.
+#[derive(Debug, Clone)]
+pub enum GraphRoots {
+    /// A single root node.
+    Single(Node),
+    /// Multiple root nodes, one per output channel.
+    Many(Vec<Node>),
+}
+
+impl From<Node> for GraphRoots {
+    fn from(node: Node) -> Self {
+        Self::Single(node)
+    }
+}
+
+impl From<Vec<Node>> for GraphRoots {
+    fn from(roots: Vec<Node>) -> Self {
+        Self::Many(roots)
+    }
+}
+
+impl<const N: usize> From<[Node; N]> for GraphRoots {
+    fn from(roots: [Node; N]) -> Self {
+        Self::Many(roots.into_iter().collect())
+    }
+}
+
 /// Handle for a node that has already been mounted into a runtime graph.
 ///
 /// This is the Rust-native fast path: keep the handle around and update the
@@ -116,15 +143,32 @@ impl Graph {
         Self::default()
     }
 
-    /// Adds one root node and returns the graph.
-    pub fn root(mut self, node: Node) -> Self {
-        self.roots.push(node);
+    /// Adds one or more output roots and returns the graph.
+    pub fn render<R>(mut self, roots: R) -> Self
+    where
+        R: Into<GraphRoots>,
+    {
+        match roots.into() {
+            GraphRoots::Single(node) => self.roots.push(node),
+            GraphRoots::Many(roots) => self.roots.extend(roots),
+        }
         self
     }
 
-    /// Backward-compatible alias for `root`.
-    pub fn with_root(self, node: Node) -> Self {
-        self.root(node)
+    /// Backward-compatible alias for `render`.
+    pub fn root<R>(self, roots: R) -> Self
+    where
+        R: Into<GraphRoots>,
+    {
+        self.render(roots)
+    }
+
+    /// Backward-compatible alias for `render`.
+    pub fn with_root<R>(self, roots: R) -> Self
+    where
+        R: Into<GraphRoots>,
+    {
+        self.render(roots)
     }
 
     /// Lowers the graph and keeps mounted-node handles for direct updates.
@@ -292,13 +336,87 @@ pub mod mc {
 /// Functional helpers mirroring Elementary's `el.*` style.
 ///
 /// Rust keeps the helper surface function-based; fold-style math accepts
-/// bracketed inputs like `el::mul([a, b, c])` and `el::div([a, b])`.
+/// tuple inputs like `el::mul((a, b, c))` and `el::div((a, b))`.
 pub mod el {
     use super::{Node, Value};
     use crate::core::{resolve, ElemNode};
 
     fn empty_props() -> Value {
         Value::Object(Default::default())
+    }
+
+    /// Helper accepted by the variadic math fold helpers.
+    ///
+    /// Arrays work for homogeneous inputs, while tuples are the ergonomic
+    /// escape hatch for mixed `Node`/numeric arguments.
+    pub trait IntoNodeList {
+        fn into_nodes(self) -> Vec<ElemNode>;
+    }
+
+    impl<T> IntoNodeList for [T; 1]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
+        }
+    }
+
+    impl<T> IntoNodeList for [T; 2]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
+        }
+    }
+
+    impl<T> IntoNodeList for [T; 3]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
+        }
+    }
+
+    impl<T> IntoNodeList for [T; 4]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
+        }
+    }
+
+    macro_rules! impl_tuple_nodes {
+        ($($ty:ident => $var:ident),+) => {
+            impl<$($ty),+> IntoNodeList for ($($ty,)+)
+            where
+                $($ty: Into<ElemNode>,)+
+            {
+                fn into_nodes(self) -> Vec<ElemNode> {
+                    let ($($var,)+) = self;
+                    vec![$($var.into(),)+]
+                }
+            }
+        };
+    }
+
+    impl_tuple_nodes!(A => a, B => b);
+    impl_tuple_nodes!(A => a, B => b, C => c);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e, F => f);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e, F => f, G => g);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e, F => f, G => g, H => h);
+
+    fn fold_node(items: impl IntoNodeList, kind: &str) -> Node {
+        Node::new(
+            kind,
+            Value::Null,
+            items.into_nodes().into_iter().map(resolve).collect(),
+        )
     }
 
     fn node0(kind: &str) -> Node {
@@ -678,35 +796,23 @@ pub mod el {
     }
 
     /// Addition helper.
-    pub fn add<T>(args: impl IntoIterator<Item = T>) -> Node
-    where
-        T: Into<ElemNode>,
-    {
-        Node::new("add", Value::Null, args.into_iter().map(resolve).collect())
+    pub fn add(items: impl IntoNodeList) -> Node {
+        fold_node(items, "add")
     }
 
     /// Subtraction helper.
-    pub fn sub<T>(args: impl IntoIterator<Item = T>) -> Node
-    where
-        T: Into<ElemNode>,
-    {
-        Node::new("sub", Value::Null, args.into_iter().map(resolve).collect())
+    pub fn sub(items: impl IntoNodeList) -> Node {
+        fold_node(items, "sub")
     }
 
     /// Multiplication helper.
-    pub fn mul<T>(args: impl IntoIterator<Item = T>) -> Node
-    where
-        T: Into<ElemNode>,
-    {
-        Node::new("mul", Value::Null, args.into_iter().map(resolve).collect())
+    pub fn mul(items: impl IntoNodeList) -> Node {
+        fold_node(items, "mul")
     }
 
     /// Division helper.
-    pub fn div<T>(args: impl IntoIterator<Item = T>) -> Node
-    where
-        T: Into<ElemNode>,
-    {
-        Node::new("div", Value::Null, args.into_iter().map(resolve).collect())
+    pub fn div(items: impl IntoNodeList) -> Node {
+        fold_node(items, "div")
     }
 
     /// Modulo helper.

@@ -52,18 +52,30 @@ fn play_graph_through_ring_buffer_with_fast_path_setter() -> Result<(), Box<dyn 
                 };
                 tick += 1;
 
-                // Update the keyed const via the mounted-node fast path.
+                // Update the keyed consts via the mounted-node fast path.
                 runtime.apply_instructions(
                     &mounted
-                        .set_const_value("train", train_value)
-                        .expect("train const should be keyed"),
+                        .set_const_value("left_train", train_value)
+                        .expect("left_train const should be keyed"),
                 )?;
 
-                // Keep the companion timing const in sync with the same tick.
                 runtime.apply_instructions(
                     &mounted
-                        .set_const_value("train_short", train_value)
-                        .expect("train_short const should be keyed"),
+                        .set_const_value("right_train", train_value)
+                        .expect("right_train const should be keyed"),
+                )?;
+
+                // Keep the companion timing consts in sync with the same tick.
+                runtime.apply_instructions(
+                    &mounted
+                        .set_const_value("left_train_short", train_value)
+                        .expect("left_train_short const should be keyed"),
+                )?;
+
+                runtime.apply_instructions(
+                    &mounted
+                        .set_const_value("right_train_short", train_value)
+                        .expect("right_train_short const should be keyed"),
                 )?;
                 next_tick += tick_interval;
             }
