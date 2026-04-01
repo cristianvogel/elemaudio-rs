@@ -703,32 +703,26 @@ pub mod el {
     }
 
     /// Division helper.
-    pub fn div(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
-        Node::new("div", Value::Null, vec![resolve(left), resolve(right)])
+    pub fn div<T>(args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new("div", Value::Null, args.into_iter().map(resolve).collect())
     }
 
     /// Modulo helper.
-    pub fn r#mod<T>(args: impl IntoIterator<Item = T>) -> Node
-    where
-        T: Into<ElemNode>,
-    {
-        Node::new("mod", Value::Null, args.into_iter().map(resolve).collect())
+    pub fn r#mod(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("mod", left, right)
     }
 
     /// Minimum helper.
-    pub fn min<T>(args: impl IntoIterator<Item = T>) -> Node
-    where
-        T: Into<ElemNode>,
-    {
-        Node::new("min", Value::Null, args.into_iter().map(resolve).collect())
+    pub fn min(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("min", left, right)
     }
 
     /// Maximum helper.
-    pub fn max<T>(args: impl IntoIterator<Item = T>) -> Node
-    where
-        T: Into<ElemNode>,
-    {
-        Node::new("max", Value::Null, args.into_iter().map(resolve).collect())
+    pub fn max(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("max", left, right)
     }
 
     /// Alias for the upstream `in` helper.
@@ -797,13 +791,13 @@ pub mod el {
     /// Milliseconds to samples.
     pub fn ms2samps(t: impl Into<ElemNode>) -> Node {
         let t = resolve(t);
-        mul([sr(), div(t, const_(1000.0))])
+        mul([sr(), div([t, const_(1000.0)])])
     }
 
     /// Time constant to pole.
     pub fn tau2pole(t: impl Into<ElemNode>) -> Node {
         let t = resolve(t);
-        exp(div(const_(-1.0), mul([t, sr()])))
+        exp(div([const_(-1.0), mul([t, sr()])]))
     }
 
     /// Decibels to gain.
@@ -817,7 +811,7 @@ pub mod el {
         let gain = resolve(gain);
         select(
             ge(gain.clone(), const_(0.0)),
-            max([const_(-120.0), mul([const_(20.0), log(gain)])]),
+            max(const_(-120.0), mul([const_(20.0), log(gain)])),
             const_(-120.0),
         )
     }
@@ -1001,7 +995,7 @@ pub mod el {
     /// Pinking filter.
     pub fn pink(x: impl Into<ElemNode>) -> Node {
         let x = resolve(x);
-        let clip = |lower: Node, upper: Node, x: Node| min([upper, max([lower, x])]);
+        let clip = |lower: Node, upper: Node, x: Node| min(upper, max(lower, x));
 
         clip(
             const_(-1.0),
@@ -1038,15 +1032,15 @@ pub mod el {
             select(atk_gate.clone(), const_(1.0), sustain.clone()),
             const_(0.0),
         );
-        let t60 = max([
+        let t60 = max(
             const_(0.0001),
             select(
                 gate.clone(),
                 select(atk_gate, attack_sec, decay_sec),
                 release_sec,
             ),
-        ]);
-        let p = tau2pole(div(t60, const_(6.91)));
+        );
+        let p = tau2pole(div([t60, const_(6.91)]));
 
         smooth(p, target_value)
     }
@@ -1067,9 +1061,9 @@ pub mod el {
         );
 
         let env_decibels = gain2db(env);
-        let adjusted_ratio = sub([const_(1.0), div(const_(1.0), ratio)]);
+        let adjusted_ratio = sub([const_(1.0), div([const_(1.0), ratio])]);
         let gain = mul([adjusted_ratio, sub([threshold, env_decibels])]);
-        let clean_gain = min([const_(0.0), gain]);
+        let clean_gain = min(const_(0.0), gain);
         let compressed_gain = db2gain(clean_gain);
 
         mul([xn, compressed_gain])
@@ -1092,28 +1086,28 @@ pub mod el {
         );
 
         let env_decibels = gain2db(env);
-        let lower_knee_bound = sub([threshold.clone(), div(knee_width.clone(), const_(2.0))]);
-        let upper_knee_bound = add([threshold.clone(), div(knee_width.clone(), const_(2.0))]);
+        let lower_knee_bound = sub([threshold.clone(), div([knee_width.clone(), const_(2.0)])]);
+        let upper_knee_bound = add([threshold.clone(), div([knee_width.clone(), const_(2.0)])]);
         let is_in_soft_knee_range = and(
             geq(env_decibels.clone(), lower_knee_bound.clone()),
             leq(env_decibels.clone(), upper_knee_bound.clone()),
         );
-        let adjusted_ratio = sub([const_(1.0), div(const_(1.0), ratio)]);
+        let adjusted_ratio = sub([const_(1.0), div([const_(1.0), ratio])]);
         let gain = select(
             is_in_soft_knee_range,
             mul([
-                div(adjusted_ratio.clone(), const_(2.0)),
+                div([adjusted_ratio.clone(), const_(2.0)]),
                 mul([
-                    div(
+                    div([
                         sub([env_decibels.clone(), lower_knee_bound.clone()]),
                         knee_width.clone(),
-                    ),
+                    ]),
                     sub([lower_knee_bound.clone(), env_decibels.clone()]),
                 ]),
             ]),
             mul([adjusted_ratio, sub([threshold, env_decibels])]),
         );
-        let clean_gain = min([const_(0.0), gain]);
+        let clean_gain = min(const_(0.0), gain);
         let compressed_gain = db2gain(clean_gain);
 
         mul([xn, compressed_gain])

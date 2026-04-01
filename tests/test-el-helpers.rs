@@ -183,28 +183,28 @@ fn covers_el_helper_surface() {
         ),
         (
             "div",
-            el::div(node(1.0), node(2.0)),
+            el::div([node(1.0), node(2.0)]),
             "div",
             serde_json::Value::Null,
             2,
         ),
         (
             "mod",
-            el::r#mod([node(1.0), node(2.0)]),
+            el::r#mod(node(1.0), node(2.0)),
             "mod",
             serde_json::Value::Null,
             2,
         ),
         (
             "min",
-            el::min([node(1.0), node(2.0)]),
+            el::min(node(1.0), node(2.0)),
             "min",
             serde_json::Value::Null,
             2,
         ),
         (
             "max",
-            el::max([node(1.0), node(2.0)]),
+            el::max(node(1.0), node(2.0)),
             "max",
             serde_json::Value::Null,
             2,
@@ -459,7 +459,7 @@ fn covers_el_helper_surface() {
 
 #[test]
 fn numeric_literals_coerce_through_helpers() {
-    let div = el::div(4.0, 2.0);
+    let div = el::div([4.0, 2.0]);
     let phasor = el::phasor(220.0);
     let cycle = el::cycle(110.0);
 
