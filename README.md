@@ -16,6 +16,7 @@ This repository exposes two composition surfaces:
 The Rust runtime executes lowered instruction batches through the FFI bridge. The JS/TS package provides the higher-level authoring API used by the browser demos.
 The Rust graph helpers also include `el.custom(...)` for custom node kinds and `mc.*` for multichannel wrappers.
 The Rust `core` module exposes `create_node`, `resolve`, `is_node`, and `unpack`.
+The Rust helper surface stays function-based: the fold-style math helpers use bracketed inputs like `el::mul([a, b, c])` and `el::div([a, b])` rather than a macro DSL.
 
 ## Elementary Graph Style
 
@@ -23,6 +24,7 @@ Elementary uses a functional graph style built around the `el.*` helpers.
 
 - Each call returns a node, not an imperative side effect.
 - Nodes are composed by nesting them: `el.cycle(el.sm(el.const(...)))`.
+- In Rust, variadic math helpers take bracketed inputs, for example `el::mul([a, b, c])`.
 - Multichannel graphs are expressed as an array of roots, then rendered with `render(...graph)`.
 - The browser POC in `examples/web-ui` shows this pattern end to end.
 
