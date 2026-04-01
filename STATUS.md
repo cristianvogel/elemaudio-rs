@@ -41,7 +41,8 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - [x] Added `src/core.rs` with `create_node`, `resolve`, `is_node`, and `unpack`
 - [x] Added multichannel `mc.*` helpers on the Rust side
 - [x] Confirmed the Rust graph authoring surface remains function-based, with bracketed variadic math helpers
-- [x] Added `Graph::root(...)` as the preferred root API
+- [x] Added `Graph::render(...)` as the preferred graph composition API
+- [x] Documented `key`-driven composition guidance using the upstream keys guide
 - [x] Added unit tests for the new Rust core utilities
 - [x] Documented the Rust and JS/TS authoring split in the repo README files
 
