@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include <elem/AudioBufferResource.h>
 #include <elem/JSON.h>
 #include <elem/Runtime.h>
 
@@ -83,6 +82,7 @@ void elementary_runtime_set_current_time_ms(elementary_runtime_handle* handle, d
     }
 }
 
+#if defined(ELEM_RS_ENABLE_RESOURCES)
 int elementary_runtime_add_shared_resource_f32(
     elementary_runtime_handle* handle,
     char const* name,
@@ -102,6 +102,7 @@ int elementary_runtime_add_shared_resource_f32(
         return elem::ReturnCode::InvariantViolation();
     }
 }
+#endif
 
 int elementary_runtime_process(
     elementary_runtime_handle* handle,
