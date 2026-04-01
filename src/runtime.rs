@@ -1,6 +1,6 @@
 //! Safe wrapper around the Elementary runtime handle and instruction batches.
 
-use crate::error::{Error, Result, describe_return_code};
+use crate::error::{describe_return_code, Error, Result};
 use crate::ffi;
 use crate::resource::{AudioBuffer, Resource, ResourceManager};
 use bon::bon;
@@ -8,7 +8,7 @@ use serde_json::Value as JsonValue;
 use std::cell::Cell;
 use std::cell::{Ref, RefCell};
 use std::convert::TryFrom;
-use std::ffi::{CString, c_void};
+use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::Arc;

@@ -1,6 +1,6 @@
 use crate::{Error, Result};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// Lock-free SPSC ring buffer for interleaved audio samples.
 #[derive(Debug, Clone)]

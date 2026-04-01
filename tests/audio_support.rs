@@ -1,7 +1,7 @@
 use std::error::Error;
 
-use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::SampleFormat;
 use elemaudio_rs::AudioRingBuffer;
 pub fn default_output_setup() -> Result<(cpal::Device, cpal::SupportedStreamConfig), Box<dyn Error>>
 {
