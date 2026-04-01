@@ -30,6 +30,8 @@ jobs:
 
       - name: Build docs
         run: cargo doc --no-deps --locked
+        env:
+          ELEM_AUDIO_DOCS_ONLY: "1"
 
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
