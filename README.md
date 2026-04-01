@@ -184,12 +184,10 @@ fn render(runtime: &Runtime) -> Result<()> {
     let mounted = graph.mount();
     runtime.apply_instructions(mounted.batch())?;
 
-    let input_l = vec![0.0_f64; 128];
-    let input_r = vec![0.0_f64; 128];
     let mut output_l = vec![0.0_f64; 128];
     let mut output_r = vec![0.0_f64; 128];
 
-    let inputs = [&input_l[..], &input_r[..]];
+    let inputs: [&[f64]; 0] = [];
     let mut outputs = [&mut output_l[..], &mut output_r[..]];
 
     runtime.process(128, &inputs, &mut outputs)
