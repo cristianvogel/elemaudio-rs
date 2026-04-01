@@ -487,7 +487,7 @@ fn covers_props_and_custom_helpers() {
         ),
         (
             "const_with_key",
-            el::const_with_key(Some("a"), 1.0),
+            el::const_with_key("a", 1.0),
             "const",
             serde_json::json!({"key":"a","value":1.0}),
             0,

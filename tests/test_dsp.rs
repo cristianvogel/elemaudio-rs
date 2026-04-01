@@ -1,41 +1,35 @@
-use elemaudio_rs::{Graph, Node};
+use elemaudio_rs::{el, Graph, Node};
 use serde_json::json;
 
-pub fn freq_sequence() -> Node {
-    elemaudio_rs::el!(sparseq(
-        json!({
-            "seq": [
-                { "value": 110.0, "tickTime": 0.0 },
-                { "value": 165.0, "tickTime": 1.0 },
-                { "value": 220.0, "tickTime": 2.0 },
-                { "value": 330.0, "tickTime": 4.0 },
-                { "value": 440.0, "tickTime": 6.0 },
-                { "value": 660.0, "tickTime": 8.0 }
-            ],
-            "loop": [0, 12]
-        }),
-        train(const_(2.0)),
-        const_(0.0),
-    ))
+pub fn freq_sequence(tempo_hz: f64) -> Node {
+    let seed = json!({"seed": 123.0});
+
+    el::add([
+        el::mul([
+            el::latch(
+                el::train(el::const_with_key("train", tempo_hz)),
+                el::rand(Some(seed)),
+            ),
+            el::const_(400.0),
+        ]),
+        el::const_(100.0),
+    ])
 }
 
 pub fn demo_graph() -> Graph {
-    let seq = freq_sequence();
+    let tempo_hz = 1.0;
+    let seq: Node = freq_sequence(tempo_hz);
+    let train_short = el::le(el::phasor(el::const_with_key("train_short", tempo_hz)), 0.1);
 
-    Graph::new().root(elemaudio_rs::el!(mul(
-        hann(phasor(div(seq.clone(), 16.0))),
-        env(
-            tau2pole(const_(0.01)),
-            tau2pole(const_(0.1)),
-            train(const_(6.0))
-        ),
-        cycle(seq),
-    )))
+    Graph::new().root(el::mul([
+        el::env(el::tau2pole(0.01), el::tau2pole(0.05), train_short),
+        el::cycle(seq),
+    ]))
 }
 
 #[test]
 fn builds_demo_graph() {
     let batch = demo_graph().lower();
-    assert!(batch.to_json_string().contains("sparseq"));
+    assert!(batch.to_json_string().contains("add"));
     assert!(batch.to_json_string().contains("env"));
 }

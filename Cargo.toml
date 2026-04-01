@@ -15,7 +15,6 @@ resources = ["dep:elemaudio-resources"]
 [dependencies]
 bon = "3.9"
 serde_json = "1"
-elemaudio-rs-macros = { path = "elemaudio-rs-macros" }
 elemaudio-resources = { git = "https://github.com/cristianvogel/elemaudio-resources", package = "elemaudio-resources", optional = true }
 
 [build-dependencies]

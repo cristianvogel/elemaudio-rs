@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 use cpal::traits::StreamTrait;
 use elemaudio_rs::{AudioRingBuffer, Runtime};
@@ -12,12 +13,12 @@ mod test_dsp;
 
 #[test]
 #[ignore]
-fn play_sparseq_sequence_through_ring_buffer() -> Result<(), Box<dyn Error>> {
+fn play_graph_through_ring_buffer_with_fast_path_setter() -> Result<(), Box<dyn Error>> {
     let (device, supported) = audio_support::default_output_setup()?;
     let stream_config = supported.config();
     let sample_rate = stream_config.sample_rate.0 as f64;
     let hardware_channels = stream_config.channels as usize;
-    let process_channels = hardware_channels.max(1);
+    let process_channels = hardware_channels.max(2);
     let buffer_size = 128usize;
 
     let runtime = Runtime::new()
@@ -26,45 +27,74 @@ fn play_sparseq_sequence_through_ring_buffer() -> Result<(), Box<dyn Error>> {
         .call()?;
 
     let graph = test_dsp::demo_graph();
+    let mounted = graph.mount();
 
-    runtime.apply_instructions(&graph.lower())?;
+    runtime.apply_instructions(mounted.batch())?;
 
     let ring = AudioRingBuffer::new(process_channels, sample_rate as usize, sample_rate)?;
     let producer_ring = ring.clone();
 
-    let producer = thread::spawn(
-        move || -> Result<(), Box<dyn Error + Send + Sync>> {
-            let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; process_channels];
+    let producer = thread::spawn(move || -> Result<(), Box<dyn Error + Send + Sync>> {
+        let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; process_channels];
+        let tick_interval = Duration::from_millis(250);
+        let mut next_tick = Instant::now() + tick_interval;
+        let mut tick = 0u32;
 
-            loop {
-                let free = producer_ring.free_frames();
-                // backpressure check to see if
-                // the consumer side is full enough that
-                // the producer should pause
-                if free == 0 {
-                    thread::sleep(Duration::from_millis(1));
-                    continue;
-                }
+        loop {
+            let now = Instant::now();
 
-                let frames = buffer_size.min(free);
-                let mut outputs: Vec<&mut [f64]> = outputs_storage
-                    .iter_mut()
-                    .map(|buffer| &mut buffer[..frames])
-                    .collect();
+            if now >= next_tick {
+                let block = (tick / 4) % 2;
+                let train_value = if block == 0 {
+                    (tick % 20) as f64 + 2.0
+                } else {
+                    (tick % 10) as f64 + 2.0
+                };
+                tick += 1;
 
-                // A glitch would happen only if the producer falls behind
-                // and the ring buffer runs dry, causing the audio callback
-                // to read silence or underrun.
-                runtime.process(frames, &[], &mut outputs)?;
+                // Update the keyed const via the mounted-node fast path.
+                runtime.apply_instructions(
+                    &mounted
+                        .set_const_value("train", train_value)
+                        .expect("train const should be keyed"),
+                )?;
 
-                let channel_refs: Vec<&[f64]> = outputs_storage
-                    .iter()
-                    .map(|buffer| &buffer[..frames])
-                    .collect();
-                let _ = producer_ring.push_planar_f64(&channel_refs, frames);
+                // Keep the companion timing const in sync with the same tick.
+                runtime.apply_instructions(
+                    &mounted
+                        .set_const_value("train_short", train_value)
+                        .expect("train_short const should be keyed"),
+                )?;
+                next_tick += tick_interval;
             }
-        },
-    );
+
+            let free = producer_ring.free_frames();
+            // backpressure check to see if
+            // the consumer side is full enough that
+            // the producer should pause
+            if free == 0 {
+                thread::sleep(Duration::from_millis(1));
+                continue;
+            }
+
+            let frames = buffer_size.min(free);
+            let mut outputs: Vec<&mut [f64]> = outputs_storage
+                .iter_mut()
+                .map(|buffer| &mut buffer[..frames])
+                .collect();
+
+            // A glitch would happen only if the producer falls behind
+            // and the ring buffer runs dry, causing the audio callback
+            // to read silence or underrun.
+            runtime.process(frames, &[], &mut outputs)?;
+
+            let channel_refs: Vec<&[f64]> = outputs_storage
+                .iter()
+                .map(|buffer| &buffer[..frames])
+                .collect();
+            let _ = producer_ring.push_planar_f64(&channel_refs, frames);
+        }
+    });
 
     // a startup gate, waits until the producer has prefilled some audio
     while ring.available_frames() < buffer_size * 4 {

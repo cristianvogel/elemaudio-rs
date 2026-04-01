@@ -289,8 +289,10 @@ pub mod mc {
     }
 }
 
-/// Functional helpers mirroring Elementary's `el.*` style, plus a generic
-/// constructor for custom node kinds.
+/// Functional helpers mirroring Elementary's `el.*` style.
+///
+/// Rust keeps the helper surface function-based; fold-style math accepts
+/// bracketed inputs like `el::mul([a, b, c])` and `el::div([a, b])`.
 pub mod el {
     use super::{Node, Value};
     use crate::core::{resolve, ElemNode};
@@ -403,12 +405,9 @@ pub mod el {
         constant(serde_json::json!({ "value": value }))
     }
 
-    /// Constant signal node with an optional key.
-    pub fn const_with_key(key: Option<&str>, value: f64) -> Node {
-        match key {
-            Some(key) => constant(serde_json::json!({ "key": key, "value": value })),
-            None => constant(serde_json::json!({ "value": value })),
-        }
+    /// Constant signal node with an author-supplied key.
+    pub fn const_with_key(key: &str, value: f64) -> Node {
+        constant(serde_json::json!({ "key": key, "value": value }))
     }
 
     /// Alias for the upstream `const` helper.
@@ -1119,7 +1118,7 @@ pub mod el {
     }
 }
 
-type Value = serde_json::Value;
+pub type Value = serde_json::Value;
 
 fn lower_node(
     node: &Node,

@@ -8,18 +8,14 @@ mod audio_ring_buffer;
 pub mod core;
 mod error;
 mod ffi;
-mod graph;
+pub mod graph;
 mod resource;
 mod runtime;
-
-pub extern crate self as elemaudio_rs;
 
 /// Lock-free audio transport for producer/consumer playback.
 pub use audio_ring_buffer::AudioRingBuffer;
 /// Core node utilities mirroring the upstream package surface.
 pub use core::{create_node, is_node, resolve, unpack, ElemNode};
-/// Expression DSL proc macro for authoring graphs.
-pub use elemaudio_rs_macros::el;
 /// Error types and helpers used by the public API.
 pub use error::{Error, Result};
 /// Rust-native graph primitives.

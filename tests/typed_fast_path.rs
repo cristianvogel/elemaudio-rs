@@ -1,4 +1,4 @@
-use elemaudio_rs::{Graph, Runtime, el};
+use elemaudio_rs::{el, Graph, Runtime};
 
 #[test]
 fn mounted_graph_exposes_direct_update_handle() {
@@ -52,7 +52,7 @@ fn mounted_node_updates_audio_without_remounting() {
         .call()
         .expect("runtime should construct");
 
-    let graph = Graph::new().root(el::cycle(el::const_with_key(Some("freq"), 220.0)));
+    let graph = Graph::new().root(el::cycle(el::const_with_key("freq", 220.0)));
     let mounted = graph.mount();
     let frequency = mounted
         .node_with_key("freq")
