@@ -302,17 +302,31 @@ pub mod mc {
         unpack(create_node(kind, props, children), channels)
     }
 
-    /// Multichannel sample playback.
+    /// Loads a sample from the virtual file system and triggers its playback
+    /// on the rising edge of an incoming pulse train. Expects a props arg and
+    /// then one child, `t`, the pulse train to trigger playback.
+    ///
+    /// This node is nearly identical to `el.sample`, except that `mc.sample`
+    /// supports multi-channel buffers through the virtual file system and
+    /// produces multi-channel output. The return value is an array containing
+    /// the individual channel signals you want to address.
     pub fn sample(props: serde_json::Value, gate: impl Into<ElemNode>) -> Vec<Node> {
         unpack_mc("mc.sample", props, [gate.into()])
     }
 
-    /// Multichannel sample sequence playback.
+    /// The multichannel variant of `sampleseq`.
+    ///
+    /// Loads a sequence-driven sample from the virtual file system and
+    /// produces multi-channel output. Expects a props arg and then one child,
+    /// `t`, the current time or trigger signal.
     pub fn sampleseq(props: serde_json::Value, time: impl Into<ElemNode>) -> Vec<Node> {
         unpack_mc("mc.sampleseq", props, [time.into()])
     }
 
-    /// Multichannel sample sequence playback with stretch/shift.
+    /// The multichannel variant of `sampleseq2`.
+    ///
+    /// Equivalent to `mc.sampleseq`, except that it adds pitch shifting and
+    /// time stretching support for the source sample.
     pub fn sampleseq2(props: serde_json::Value, time: impl Into<ElemNode>) -> Vec<Node> {
         unpack_mc("mc.sampleseq2", props, [time.into()])
     }
@@ -566,17 +580,32 @@ pub mod el {
     pub fn time() -> Node {
         node0("time")
     }
-    /// Monotonic counter driven by the input signal. Expects 1 child.
-    pub fn counter(child: impl Into<ElemNode>) -> Node {
-        node1("counter", child)
+    /// el.counter(g)
+    ///
+    /// Outputs a continuous count of elapsed samples. Expects one child, `g`,
+    /// a pulse train alternating between `0` and `1`. When `g` is high, the
+    /// counter will run. When `g` is low, the counter will reset and output `0`
+    /// until `g` is high again.
+    pub fn counter(g: impl Into<ElemNode>) -> Node {
+        node1("counter", g)
     }
-    /// Running accumulator. Expects 2 children: signal and reset.
-    pub fn accum(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
-        node2("accum", left, right)
+    /// el.accum(xn, reset)
+    ///
+    /// Outputs a continuous and running sum over the samples in the input signal
+    /// `xn`. This value can grow very large, very quickly, so use with care.
+    /// The second argument `reset` is a pulse train signal which resets the
+    /// running sum to `0` on each rising edge.
+    pub fn accum(xn: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
+        node2("accum", xn, reset)
     }
-    /// Phase accumulator / oscillator driver. Expects 1 child: frequency or rate.
-    pub fn phasor(child: impl Into<ElemNode>) -> Node {
-        node1("phasor", child)
+    /// el.phasor(rate)
+    ///
+    /// Outputs a ramp from `0` to `1` at the given rate. Expects one child
+    /// signal providing the ramp rate in `hz`.
+    ///
+    /// For the same signal with phase reset behavior, see `sphasor`.
+    pub fn phasor(rate: impl Into<ElemNode>) -> Node {
+        node1("phasor", rate)
     }
     /// Synchronous phase accumulator. Expects 2 children: rate and sync/reset.
     pub fn syncphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
@@ -586,9 +615,17 @@ pub mod el {
     pub fn sphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         syncphasor(left, right)
     }
-    /// Sample-and-hold latch. Expects 2 children: value and trigger/reset.
-    pub fn latch(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
-        node2("latch", left, right)
+    /// el.latch(t, x)
+    ///
+    /// A sample and hold node. Samples a new value from `x` on a rising edge
+    /// of a pulse train `t`, then holds and emits that value until the next
+    /// rising edge of `t`.
+    ///
+    /// Expected children:
+    /// 1. The control signal, `t`, a pulse train
+    /// 2. The input signal to sample
+    pub fn latch(t: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        node2("latch", t, x)
     }
     /// Peak-hold helper. `props` typically carries `hold` time metadata.
     /// Expects 2 children: input signal and hold/reset control.
@@ -600,12 +637,31 @@ pub mod el {
     pub fn once(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("once", props, child)
     }
-    /// Random signal source. Optional `props` are forwarded unchanged.
+    /// el.rand(\[props\])
+    ///
+    /// Generates a stream of random numbers uniformly distributed on the
+    /// range `[0, 1]`.
+    ///
+    /// Props:
+    /// - `seed`: seeds the random number generator
     pub fn rand(props: Option<Value>) -> Node {
         Node::new("rand", props.unwrap_or_else(empty_props), vec![])
     }
 
-    /// Metronome / pulse train source. Optional `props` are forwarded unchanged.
+    /// el.metro(props)
+    ///
+    /// Only available in the WASM-based renderers. You may extend the runtime
+    /// in your own integration with a similar processor if you like, but it is
+    /// not provided by default.
+    ///
+    /// Emits a pulse train signal much like `el.train`, alternating from `0`
+    /// to `1` at a given rate. Importantly, the `el.metro` node is used for
+    /// synchronized train signals, and will emit an event through the core
+    /// renderer's interface on each rising edge of its output signal.
+    ///
+    /// Props:
+    /// - `name`: identifies a metro node by name
+    /// - `interval`: metronome period in milliseconds
     pub fn metro(props: Option<Value>) -> Node {
         Node::new("metro", props.unwrap_or_else(empty_props), vec![])
     }
@@ -686,13 +742,25 @@ pub mod el {
     pub fn sampleseq2(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sampleseq2", props, child)
     }
-    /// One-pole filter primitive. Expects 2 children.
-    pub fn pole(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
-        node2("pole", left, right)
+    /// el.pole(p, x)
+    ///
+    /// Implements a simple one-pole filter, also sometimes called a leaky
+    /// integrator. Expects two children: the first is the pole position `p`,
+    /// the second is the signal `x` to filter.
+    pub fn pole(p: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        node2("pole", p, x)
     }
-    /// Exponential envelope helper. Expects 3 children.
-    pub fn env(a: impl Into<ElemNode>, b: impl Into<ElemNode>, c: impl Into<ElemNode>) -> Node {
-        node3("env", a, b, c)
+    /// el.env(atkPole, relPole, x)
+    ///
+    /// A one-pole envelope follower with different attack and release times.
+    /// This is similar to `el.pole(p, el.abs(x))` in implementation. Expects
+    /// three children: attack pole, release pole, and the signal to monitor.
+    pub fn env(
+        atk_pole: impl Into<ElemNode>,
+        rel_pole: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        node3("env", atk_pole, rel_pole, x)
     }
     /// Unit delay / z^-1 helper. Expects 1 child.
     pub fn z(child: impl Into<ElemNode>) -> Node {
@@ -1195,20 +1263,30 @@ pub mod el {
         )
     }
 
-    /// Exponential ADSR envelope.
-    /// Expects 5 children: attack, decay, sustain, release, and gate.
+    /// el.adsr(a, d, s, r, g)
+    ///
+    /// An exponential ADSR envelope generator, triggered by the gate signal
+    /// `g`. When the gate is high (`1`), this generates the ADS phase. When
+    /// the gate is low, the R phase.
+    ///
+    /// Expected children:
+    /// - Attack time in seconds (number or signal)
+    /// - Decay time in seconds (number or signal)
+    /// - Sustain amplitude between `0` and `1` (number or signal)
+    /// - Release time in seconds (number or signal)
+    /// - Gate signal; a pulse train alternating between `0` and `1`
     pub fn adsr(
-        attack_sec: impl Into<ElemNode>,
-        decay_sec: impl Into<ElemNode>,
-        sustain: impl Into<ElemNode>,
-        release_sec: impl Into<ElemNode>,
-        gate: impl Into<ElemNode>,
+        a: impl Into<ElemNode>,
+        d: impl Into<ElemNode>,
+        s: impl Into<ElemNode>,
+        r: impl Into<ElemNode>,
+        g: impl Into<ElemNode>,
     ) -> Node {
-        let attack_sec = resolve(attack_sec);
-        let decay_sec = resolve(decay_sec);
-        let sustain = resolve(sustain);
-        let release_sec = resolve(release_sec);
-        let gate = resolve(gate);
+        let attack_sec = resolve(a);
+        let decay_sec = resolve(d);
+        let sustain = resolve(s);
+        let release_sec = resolve(r);
+        let gate = resolve(g);
         let atk_samps = mul([attack_sec.clone(), sr()]);
         let atk_gate = le(counter(gate.clone()), atk_samps);
         let target_value = select(
@@ -1299,8 +1377,10 @@ pub mod el {
         mul([xn, compressed_gain])
     }
 
-    /// Sample playback node. `props` should carry sample metadata such as `path`.
-    /// Expects 2 children: trigger and playback rate.
+    /// Loads a sample from the virtual file system and triggers its playback
+    /// on the rising edge of an incoming pulse train. Expects a props arg and
+    /// then two children: first the pulse train to trigger playback, and
+    /// second a signal which continuously directs the sample's playback rate.
     pub fn sample(props: Value, trigger: impl Into<ElemNode>, rate: impl Into<ElemNode>) -> Node {
         Node::new("sample", props, vec![resolve(trigger), resolve(rate)])
     }

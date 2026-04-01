@@ -5,6 +5,14 @@ For detailed documentation and examples please visit the original website by Nic
 
 👀 You might also want to take a look at the sister repo, a Rust resource server for the Elem VFS https://github.com/cristianvogel/elemaudio-resources 
 
+## API Docs
+
+Published Rust API docs live on GitHub Pages after the `Publish docs` workflow runs:
+
+- `https://cristianvogel.github.io/elemaudio-rs/`
+
+The workflow builds `cargo doc --no-deps` and publishes `target/doc` to the `gh-pages` branch.
+
 
 ## Authoring Surfaces
 
