@@ -54,7 +54,7 @@ The intended composition workflow is JS/TS-first:
 2. Use normal language features like variables, arrays, helpers, and functions.
 3. Use `render(...)` to describe the current graph.
 4. Use `key` to compose stable identity into the graph structure.
-5. Use refs for direct property updates on mounted nodes.
+5. Use refs for direct property updates on mounted nodes _(not fully implemented yet for JS layer!)_
 6. Lower the graph to instruction batches.
 7. Inspect or transport the batch with tooling.
 8. Keep iteration fast with file watch / reload.
