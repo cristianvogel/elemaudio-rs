@@ -1,0 +1,12 @@
+This repository contains code and documentation inspired by Elementary Audio.
+
+Upstream reference:
+- https://github.com/elemaudio/elementary
+- https://www.elementary.audio/
+
+Upstream license:
+- MIT License
+- Copyright (c) 2023 Nick Thompson
+
+Vendored or adapted upstream files should retain their original license headers
+and attribution notices where present.
