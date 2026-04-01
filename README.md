@@ -6,13 +6,29 @@ For detailed documentation and examples please visit the original website by Nic
 👀 You might also want to take a look at the sister repo, a Rust resource server for the Elem VFS https://github.com/cristianvogel/elemaudio-resources 
 
 
+## Authoring Surfaces
+
+This repository exposes two composition surfaces:
+
+- Rust helpers in `src/graph.rs` for native examples and lower-level control
+- `@elem-rs/core` in `packages/core` for the JS/TS authoring layer
+
+The Rust runtime executes lowered instruction batches through the FFI bridge. The JS/TS package provides the higher-level authoring API used by the browser demos.
+The Rust graph helpers also include `el.custom(...)` for custom node kinds and `mc.*` for multichannel wrappers.
+The Rust `core` module exposes `create_node`, `resolve`, `is_node`, and `unpack`.
+The Rust helper surface stays function-based: the fold-style math helpers use tuple inputs, rather than a macro DSL.
+
+For key-driven composition guidance, see Elementary's guide on understanding keys:
+https://www.elementary.audio/docs/guides/Understanding_Keys
+
 ## Elementary Graph Style
 
 Elementary uses a functional graph style built around the `el.*` helpers.
 
 - Each call returns a node, not an imperative side effect.
 - Nodes are composed by nesting them: `el.cycle(el.sm(el.const(...)))`.
-- Multichannel graphs are expressed as an array of roots, then rendered with `render(...graph)`.
+- In Rust, variadic math helpers take tuple inputs, for example `el::mul((a, b, c))` and `el::div((node, 0.5))`.
+- Multichannel graphs are expressed as an ordered array of channel graphs, then rendered with `render(...)`.
 - The browser POC in `examples/web-ui` shows this pattern end to end.
 
 Example:
@@ -34,20 +50,22 @@ The intended composition workflow is JS/TS-first:
 
 1. Write `el.*` graphs in modern JS/TS.
 2. Use normal language features like variables, arrays, helpers, and functions.
-3. Use `render(...roots)` to describe the current graph.
-4. Use `key` for stable leaf identity when graphs change over time.
+3. Use `render(...)` to describe the current graph.
+4. Use `key` to compose stable identity into the graph structure.
 5. Use refs for direct property updates on mounted nodes.
 6. Lower the graph to instruction batches.
 7. Inspect or transport the batch with tooling.
 8. Keep iteration fast with file watch / reload.
+
+Keys are part of composition, not an afterthought. They let the renderer preserve node identity across successive `render(...)` calls while the surrounding graph shape changes. That is the recommended pattern for stable leaf nodes and direct updates.
 
 Authoring example:
 
 ```ts
 const base = 220;
 const graph = [
-  el.cycle(el.sm(el.const({ value: base }))),
-  el.cycle(el.sm(el.const({ value: base * 1.618 }))),
+  el.cycle(el.sm(el.const({ value: base, key: "left" }))),
+  el.cycle(el.sm(el.const({ value: base * 1.618, key: "right" }))),
 ];
 
 render(...graph);
@@ -115,7 +133,10 @@ cargo run
 use elemaudio_rs::{Result, Runtime};
 
 fn main() -> Result<()> {
-    let runtime = Runtime::new(48_000.0, 128)?;
+    let runtime = Runtime::new()
+        .sample_rate(48_000.0)
+        .buffer_size(128)
+        .call()?;
     runtime.reset();
     Ok(())
 }

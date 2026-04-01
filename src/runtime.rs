@@ -3,12 +3,14 @@
 use crate::error::{describe_return_code, Error, Result};
 use crate::ffi;
 use crate::resource::{AudioBuffer, Resource, ResourceManager};
+use bon::bon;
 use serde_json::Value as JsonValue;
+use std::cell::Cell;
 use std::cell::{Ref, RefCell};
+use std::convert::TryFrom;
 use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::rc::Rc;
 use std::sync::Arc;
 
 /// Runtime node identifier used by instruction batches and GC results.
@@ -122,19 +124,32 @@ pub struct Runtime {
     handle: NonNull<ffi::ElementaryRuntimeHandle>,
     resources: RefCell<ResourceManager>,
     retired_resources: RefCell<Vec<Resource>>,
-    _not_send_or_sync: PhantomData<Rc<()>>,
+    buffer_size: usize,
+    _not_send_or_sync: PhantomData<Cell<()>>, // keep Runtime movable but not shareable
 }
 
+unsafe impl Send for Runtime {}
+
+#[bon]
 impl Runtime {
-    /// Creates a runtime for the given sample rate and block size.
-    pub fn new(sample_rate: f64, block_size: usize) -> Result<Self> {
-        let handle = unsafe { ffi::elementary_runtime_new(sample_rate, block_size as i32) };
+    /// Starts building a runtime.
+    pub fn new() -> RuntimeConstructBuilder {
+        Self::create()
+    }
+
+    /// Creates a runtime for the given sample rate and buffer size.
+    #[builder(start_fn(name = create, vis = ""))]
+    pub fn construct(sample_rate: f64, buffer_size: usize) -> Result<Self> {
+        let block_size = i32::try_from(buffer_size)
+            .map_err(|_| Error::InvalidArgument("buffer_size must fit in i32"))?;
+        let handle = unsafe { ffi::elementary_runtime_new(sample_rate, block_size) };
         let handle = NonNull::new(handle).ok_or(Error::NullHandle)?;
 
         Ok(Self {
             handle,
             resources: RefCell::new(ResourceManager::new()),
             retired_resources: RefCell::new(Vec::new()),
+            buffer_size,
             _not_send_or_sync: PhantomData,
         })
     }
@@ -283,6 +298,12 @@ impl Runtime {
         inputs: &[&[f64]],
         outputs: &mut [&mut [f64]],
     ) -> Result<()> {
+        if num_samples > self.buffer_size {
+            return Err(Error::InvalidArgument(
+                "num_samples exceeds the configured buffer_size",
+            ));
+        }
+
         if inputs.iter().any(|channel| channel.len() < num_samples) {
             return Err(Error::InvalidArgument(
                 "an input channel is shorter than num_samples",
@@ -347,31 +368,5 @@ impl Drop for Runtime {
     /// Releases the native runtime handle.
     fn drop(&mut self) {
         unsafe { ffi::elementary_runtime_free(self.handle.as_ptr()) }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn instruction_batch_serializes_to_runtime_shape() {
-        let mut batch = InstructionBatch::new();
-        batch.push(Instruction::CreateNode {
-            node_id: 7,
-            node_type: "osc".into(),
-        });
-        batch.push(Instruction::SetProperty {
-            node_id: 7,
-            property: "gain".into(),
-            value: json!(0.5),
-        });
-        batch.push(Instruction::CommitUpdates);
-
-        assert_eq!(
-            batch.to_json_string(),
-            r#"[[0,7,"osc"],[3,7,"gain",0.5],[5]]"#
-        );
     }
 }

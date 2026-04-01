@@ -7,10 +7,10 @@ LAST_SYNC: 2026-03-30
 PURPOSE: Track project progress, status, and metrics across development sessions
 -->
 
-**Last Updated:** 2026-03-30
+**Last Updated:** 2026-04-01
 **Project Phase:** DEVELOPMENT
-**Completion:** 60% (authoring surface and Rust-native resource manager in place)
-**Next Phase:** Integrate resource handles into the runtime-facing API where needed
+**Completion:** 70% (Rust graph authoring surface expanded and JS/TS authoring surface in place)
+**Next Phase:** Tighten parity between Rust graph helpers, multichannel wrappers, and native runtime integration
 
 ---
 
@@ -37,6 +37,14 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - [x] Added optional `resources` Cargo feature backed by the public `elemaudio-resources` repo
 - [x] Removed local native resource binaries from the core crate
 - [x] Verified `cargo build`, `cargo build --features resources`, and `npm --prefix examples/web-ui run build`
+- [x] Added Rust graph authoring helpers for the upstream `el.*` surface
+- [x] Added `src/core.rs` with `create_node`, `resolve`, `is_node`, and `unpack`
+- [x] Added multichannel `mc.*` helpers on the Rust side
+- [x] Confirmed the Rust graph authoring surface remains function-based, with bracketed variadic math helpers
+- [x] Added `Graph::render(...)` as the preferred graph composition API
+- [x] Documented `key`-driven composition guidance using the upstream keys guide
+- [x] Added unit tests for the new Rust core utilities
+- [x] Documented the Rust and JS/TS authoring split in the repo README files
 
 ### Blockers
 - None currently identified.
@@ -50,10 +58,13 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - ✅ `Renderer` exposed from `@elem-rs/core`
 - ✅ Rust-native `ResourceManager` added
 - ✅ Public optional resource extension split into `elemaudio-resources`
+- ✅ Rust graph authoring surface now covers the upstream `el.*` core, math, filters, oscillators, envelopes, dynamics, and multichannel helpers
 
 ### In Progress
 - 🔄 Connect resource management to runtime-facing usage patterns
+- 🔄 Continue parity work between Rust graph helpers and upstream Elementary core utilities
 
 ### Upcoming
 - ⚪ Add handle-based resource lookups for Elementary integrations if needed
 - ⚪ Extend integration tests around resource lifecycle operations
+- ⚪ Review remaining upstream surface gaps against `@elemaudio/core`

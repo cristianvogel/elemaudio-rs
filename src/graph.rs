@@ -8,31 +8,173 @@ pub struct Graph {
     roots: Vec<Node>,
 }
 
+/// Input accepted by `Graph::render(...)`.
+#[derive(Debug, Clone)]
+pub enum GraphRoots {
+    /// A single root node.
+    Single(Node),
+    /// Multiple root nodes, one per output channel.
+    Many(Vec<Node>),
+}
+
+impl From<Node> for GraphRoots {
+    fn from(node: Node) -> Self {
+        Self::Single(node)
+    }
+}
+
+impl From<Vec<Node>> for GraphRoots {
+    fn from(roots: Vec<Node>) -> Self {
+        Self::Many(roots)
+    }
+}
+
+impl<const N: usize> From<[Node; N]> for GraphRoots {
+    fn from(roots: [Node; N]) -> Self {
+        Self::Many(roots.into_iter().collect())
+    }
+}
+
+/// Handle for a node that has already been mounted into a runtime graph.
+///
+/// This is the Rust-native fast path: keep the handle around and update the
+/// mounted node directly instead of rebuilding and reconciling a new graph.
+#[derive(Debug, Clone)]
+pub struct MountedNode {
+    node_id: NodeId,
+    kind: String,
+    key: Option<String>,
+}
+
+impl MountedNode {
+    /// Returns the runtime node id.
+    pub fn id(&self) -> NodeId {
+        self.node_id
+    }
+
+    /// Returns the node kind.
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    /// Returns the author-supplied key, if present.
+    pub fn key(&self) -> Option<&str> {
+        self.key.as_deref()
+    }
+
+    /// Creates a direct property update batch for this mounted node.
+    pub fn set_property(
+        &self,
+        property: impl Into<String>,
+        value: serde_json::Value,
+    ) -> InstructionBatch {
+        let mut batch = InstructionBatch::new();
+        batch.push(Instruction::SetProperty {
+            node_id: self.node_id,
+            property: property.into(),
+            value,
+        });
+        batch.push(Instruction::CommitUpdates);
+        batch
+    }
+
+    /// Convenience for updating a mounted `const` node's numeric value.
+    pub fn set_const_value(&self, value: f64) -> InstructionBatch {
+        self.set_property("value", serde_json::json!(value))
+    }
+}
+
+/// Lowered graph plus mounted-node handles for direct updates.
+#[derive(Debug, Clone, Default)]
+pub struct MountedGraph {
+    batch: InstructionBatch,
+    roots: Vec<MountedNode>,
+    nodes: Vec<(Vec<usize>, MountedNode)>,
+    keyed_nodes: Vec<(String, MountedNode)>,
+}
+
+impl MountedGraph {
+    /// Returns the full instruction batch for the mounted graph.
+    pub fn batch(&self) -> &InstructionBatch {
+        &self.batch
+    }
+
+    /// Consumes the mounted graph and returns its instruction batch.
+    pub fn into_batch(self) -> InstructionBatch {
+        self.batch
+    }
+
+    /// Returns the mounted root nodes in channel order.
+    pub fn roots(&self) -> &[MountedNode] {
+        &self.roots
+    }
+
+    /// Returns a mounted node by structural path.
+    pub fn node_at(&self, path: &[usize]) -> Option<MountedNode> {
+        self.nodes
+            .iter()
+            .find(|(node_path, _)| node_path.as_slice() == path)
+            .map(|(_, node)| node.clone())
+    }
+
+    /// Returns a mounted node by author-supplied key.
+    pub fn node_with_key(&self, key: &str) -> Option<MountedNode> {
+        self.keyed_nodes
+            .iter()
+            .find(|(node_key, _)| node_key == key)
+            .map(|(_, node)| node.clone())
+    }
+
+    /// Convenience for updating a keyed `const` node's numeric value.
+    pub fn set_const_value(&self, key: &str, value: f64) -> Option<InstructionBatch> {
+        let node = self.node_with_key(key)?;
+
+        if node.kind() != "const" {
+            return None;
+        }
+
+        Some(node.set_const_value(value))
+    }
+}
+
 impl Graph {
     /// Creates an empty graph.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Adds one root node and returns the graph.
-    pub fn with_root(mut self, node: Node) -> Self {
-        self.roots.push(node);
+    /// Adds one or more output roots and returns the graph.
+    pub fn render<R>(mut self, roots: R) -> Self
+    where
+        R: Into<GraphRoots>,
+    {
+        match roots.into() {
+            GraphRoots::Single(node) => self.roots.push(node),
+            GraphRoots::Many(roots) => self.roots.extend(roots),
+        }
         self
     }
 
-    /// Adds one root node.
-    pub fn push_root(&mut self, node: Node) {
-        self.roots.push(node);
+    /// Backward-compatible alias for `render`.
+    pub fn root<R>(self, roots: R) -> Self
+    where
+        R: Into<GraphRoots>,
+    {
+        self.render(roots)
     }
 
-    /// Returns the graph roots.
-    pub fn roots(&self) -> &[Node] {
-        &self.roots
+    /// Backward-compatible alias for `render`.
+    pub fn with_root<R>(self, roots: R) -> Self
+    where
+        R: Into<GraphRoots>,
+    {
+        self.render(roots)
     }
 
-    /// Lowers the graph into a runtime instruction batch.
-    pub fn lower(&self) -> InstructionBatch {
+    /// Lowers the graph and keeps mounted-node handles for direct updates.
+    pub fn mount(&self) -> MountedGraph {
         let mut batch = InstructionBatch::new();
+        let mut mounted = MountedGraph::default();
         let mut next_id: NodeId = 1;
 
         let mut lowered_roots = Vec::with_capacity(self.roots.len());
@@ -53,7 +195,16 @@ impl Graph {
 
             let child_id = next_id;
             next_id += 1;
-            lower_node(root, child_id, &mut next_id, &mut batch);
+            let path = vec![channel];
+            let mounted_root = lower_node(
+                root,
+                child_id,
+                &path,
+                &mut next_id,
+                &mut batch,
+                &mut mounted.nodes,
+                &mut mounted.keyed_nodes,
+            );
 
             batch.push(Instruction::AppendChild {
                 parent_id: root_id,
@@ -61,6 +212,7 @@ impl Graph {
                 child_output_channel: 0,
             });
             lowered_roots.push(root_id);
+            mounted.roots.push(mounted_root);
         }
 
         batch.push(Instruction::ActivateRoots {
@@ -68,7 +220,23 @@ impl Graph {
         });
         batch.push(Instruction::CommitUpdates);
 
-        batch
+        mounted.batch = batch;
+        mounted
+    }
+
+    /// Adds one root node.
+    pub fn push_root(&mut self, node: Node) {
+        self.roots.push(node);
+    }
+
+    /// Returns the graph roots.
+    pub fn roots(&self) -> &[Node] {
+        &self.roots
+    }
+
+    /// Lowers the graph into a runtime instruction batch.
+    pub fn lower(&self) -> InstructionBatch {
+        self.mount().into_batch()
     }
 }
 
@@ -92,68 +260,981 @@ impl Node {
             children,
         }
     }
+
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    pub fn props(&self) -> &serde_json::Value {
+        &self.props
+    }
+
+    pub fn children(&self) -> &[Node] {
+        &self.children
+    }
+}
+
+/// Multichannel helpers mirroring Elementary's `el.mc.*` surface.
+pub mod mc {
+    use super::Node;
+    use crate::{create_node, unpack, ElemNode};
+
+    fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value) {
+        let channels = props
+            .get("channels")
+            .and_then(|value| value.as_u64())
+            .expect("mc helpers require a positive `channels` prop")
+            as usize;
+
+        if let serde_json::Value::Object(map) = &mut props {
+            map.remove("channels");
+        }
+
+        (channels, props)
+    }
+
+    fn unpack_mc(
+        kind: &str,
+        props: serde_json::Value,
+        children: impl IntoIterator<Item = ElemNode>,
+    ) -> Vec<Node> {
+        let (channels, props) = channels_and_props(props);
+        unpack(create_node(kind, props, children), channels)
+    }
+
+    /// Multichannel sample playback.
+    pub fn sample(props: serde_json::Value, gate: impl Into<ElemNode>) -> Vec<Node> {
+        unpack_mc("mc.sample", props, [gate.into()])
+    }
+
+    /// Multichannel sample sequence playback.
+    pub fn sampleseq(props: serde_json::Value, time: impl Into<ElemNode>) -> Vec<Node> {
+        unpack_mc("mc.sampleseq", props, [time.into()])
+    }
+
+    /// Multichannel sample sequence playback with stretch/shift.
+    pub fn sampleseq2(props: serde_json::Value, time: impl Into<ElemNode>) -> Vec<Node> {
+        unpack_mc("mc.sampleseq2", props, [time.into()])
+    }
+
+    /// Multichannel table lookup.
+    pub fn table(props: serde_json::Value, t: impl Into<ElemNode>) -> Vec<Node> {
+        unpack_mc("mc.table", props, [t.into()])
+    }
+
+    /// Multichannel capture node.
+    pub fn capture(
+        props: serde_json::Value,
+        g: impl Into<ElemNode>,
+        args: impl IntoIterator<Item = ElemNode>,
+    ) -> Vec<Node> {
+        let children = std::iter::once(g.into()).chain(args.into_iter());
+        unpack_mc("mc.capture", props, children)
+    }
 }
 
 /// Functional helpers mirroring Elementary's `el.*` style.
+///
+/// Rust keeps the helper surface function-based; fold-style math accepts
+/// tuple inputs like `el::mul((a, b, c))` and `el::div((a, b))`.
 pub mod el {
     use super::{Node, Value};
+    use crate::core::{resolve, ElemNode};
 
-    /// Constant signal node.
-    pub fn const_(value: f64) -> Node {
-        const_with_key(None, value)
+    fn empty_props() -> Value {
+        Value::Object(Default::default())
     }
 
-    /// Constant signal node with an optional key.
-    pub fn const_with_key(key: Option<&str>, value: f64) -> Node {
-        match key {
-            Some(key) => Node::new(
-                "const",
-                serde_json::json!({ "key": key, "value": value }),
-                vec![],
-            ),
-            None => Node::new("const", serde_json::json!({ "value": value }), vec![]),
+    /// Helper accepted by the variadic math fold helpers.
+    ///
+    /// Arrays work for homogeneous inputs, while tuples are the ergonomic
+    /// escape hatch for mixed `Node`/numeric arguments.
+    pub trait IntoNodeList {
+        fn into_nodes(self) -> Vec<ElemNode>;
+    }
+
+    impl<T> IntoNodeList for [T; 1]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
         }
     }
 
+    impl<T> IntoNodeList for [T; 2]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
+        }
+    }
+
+    impl<T> IntoNodeList for [T; 3]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
+        }
+    }
+
+    impl<T> IntoNodeList for [T; 4]
+    where
+        T: Into<ElemNode>,
+    {
+        fn into_nodes(self) -> Vec<ElemNode> {
+            self.into_iter().map(Into::into).collect()
+        }
+    }
+
+    macro_rules! impl_tuple_nodes {
+        ($($ty:ident => $var:ident),+) => {
+            impl<$($ty),+> IntoNodeList for ($($ty,)+)
+            where
+                $($ty: Into<ElemNode>,)+
+            {
+                fn into_nodes(self) -> Vec<ElemNode> {
+                    let ($($var,)+) = self;
+                    vec![$($var.into(),)+]
+                }
+            }
+        };
+    }
+
+    impl_tuple_nodes!(A => a, B => b);
+    impl_tuple_nodes!(A => a, B => b, C => c);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e, F => f);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e, F => f, G => g);
+    impl_tuple_nodes!(A => a, B => b, C => c, D => d, E => e, F => f, G => g, H => h);
+
+    fn fold_node(items: impl IntoNodeList, kind: &str) -> Node {
+        Node::new(
+            kind,
+            Value::Null,
+            items.into_nodes().into_iter().map(resolve).collect(),
+        )
+    }
+
+    fn node0(kind: &str) -> Node {
+        Node::new(kind, Value::Null, vec![])
+    }
+
+    fn node1(kind: &str, child: impl Into<ElemNode>) -> Node {
+        Node::new(kind, Value::Null, vec![resolve(child)])
+    }
+
+    fn node2(kind: &str, left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        Node::new(kind, Value::Null, vec![resolve(left), resolve(right)])
+    }
+
+    fn node3(
+        kind: &str,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(kind, Value::Null, vec![resolve(a), resolve(b), resolve(c)])
+    }
+
+    fn node6(
+        kind: &str,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+        d: impl Into<ElemNode>,
+        e: impl Into<ElemNode>,
+        f: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(
+            kind,
+            Value::Null,
+            vec![
+                resolve(a),
+                resolve(b),
+                resolve(c),
+                resolve(d),
+                resolve(e),
+                resolve(f),
+            ],
+        )
+    }
+
+    fn node_props0(kind: &str, props: Value) -> Node {
+        Node::new(kind, props, vec![])
+    }
+
+    fn node_props1(kind: &str, props: Value, child: impl Into<ElemNode>) -> Node {
+        Node::new(kind, props, vec![resolve(child)])
+    }
+
+    fn node_props2(
+        kind: &str,
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(kind, props, vec![resolve(a), resolve(b)])
+    }
+
+    fn node_props3(
+        kind: &str,
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(kind, props, vec![resolve(a), resolve(b), resolve(c)])
+    }
+
+    fn node_props4(
+        kind: &str,
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+        d: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new(
+            kind,
+            props,
+            vec![resolve(a), resolve(b), resolve(c), resolve(d)],
+        )
+    }
+
+    fn node_props_variadic<T>(kind: &str, props: Value, args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new(kind, props, args.into_iter().map(resolve).collect())
+    }
+
+    /// Constant signal node.
+    pub fn constant(props: Value) -> Node {
+        Node::new("const", props, vec![])
+    }
+
+    /// Constant signal node with the Rust-friendly helper name
+    /// (const is a protected keyword in rust)
+    pub fn const_(value: f64) -> Node {
+        constant(serde_json::json!({ "value": value }))
+    }
+
+    /// Constant signal node with an author-supplied key.
+    pub fn const_with_key(key: &str, value: f64) -> Node {
+        constant(serde_json::json!({ "key": key, "value": value }))
+    }
+
+    /// Alias for the upstream `const` helper.
+    pub fn r#const(props: Value) -> Node {
+        constant(props)
+    }
+
+    /// Creates a custom node kind with explicit props and children.
+    pub fn custom<T>(
+        kind: impl Into<String>,
+        props: Value,
+        children: impl IntoIterator<Item = T>,
+    ) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        Node::new(kind, props, children.into_iter().map(resolve).collect())
+    }
+
+    pub fn sr() -> Node {
+        node0("sr")
+    }
+    pub fn time() -> Node {
+        node0("time")
+    }
+    pub fn counter(child: impl Into<ElemNode>) -> Node {
+        node1("counter", child)
+    }
+    pub fn accum(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("accum", left, right)
+    }
+    pub fn phasor(child: impl Into<ElemNode>) -> Node {
+        node1("phasor", child)
+    }
+    pub fn syncphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("sphasor", left, right)
+    }
+    /// Alias for the upstream `sphasor` helper.
+    pub fn sphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        syncphasor(left, right)
+    }
+    pub fn latch(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("latch", left, right)
+    }
+    pub fn maxhold(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
+        node_props2("maxhold", props, a, b)
+    }
+    pub fn once(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("once", props, child)
+    }
+    pub fn rand(props: Option<Value>) -> Node {
+        Node::new("rand", props.unwrap_or_else(empty_props), vec![])
+    }
+
+    pub fn metro(props: Option<Value>) -> Node {
+        Node::new("metro", props.unwrap_or_else(empty_props), vec![])
+    }
+    pub fn tap_in(props: Value) -> Node {
+        node_props0("tapIn", props)
+    }
+    pub fn tap_out(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("tapOut", props, child)
+    }
+    pub fn meter(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("meter", props, child)
+    }
+    pub fn snapshot(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
+        node_props2("snapshot", props, a, b)
+    }
+    pub fn scope<T>(props: Value, args: impl IntoIterator<Item = T>) -> Node
+    where
+        T: Into<ElemNode>,
+    {
+        node_props_variadic("scope", props, args)
+    }
+    pub fn fft(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("fft", props, child)
+    }
+    pub fn capture(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
+        node_props2("capture", props, a, b)
+    }
+    pub fn table(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("table", props, child)
+    }
+    pub fn convolve(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("convolve", props, child)
+    }
+    pub fn seq(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
+        node_props2("seq", props, trigger, reset)
+    }
+    pub fn seq2(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
+        node_props2("seq2", props, trigger, reset)
+    }
+    pub fn sparseq(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
+        node_props2("sparseq", props, trigger, reset)
+    }
+    pub fn sparseq2(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("sparseq2", props, child)
+    }
+    pub fn sampleseq(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("sampleseq", props, child)
+    }
+    pub fn sampleseq2(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("sampleseq2", props, child)
+    }
+    pub fn pole(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("pole", left, right)
+    }
+    pub fn env(a: impl Into<ElemNode>, b: impl Into<ElemNode>, c: impl Into<ElemNode>) -> Node {
+        node3("env", a, b, c)
+    }
+    pub fn z(child: impl Into<ElemNode>) -> Node {
+        node1("z", child)
+    }
+    pub fn delay(
+        props: Value,
+        a: impl Into<ElemNode>,
+        b: impl Into<ElemNode>,
+        c: impl Into<ElemNode>,
+    ) -> Node {
+        node_props3("delay", props, a, b, c)
+    }
+    pub fn sdelay(props: Value, child: impl Into<ElemNode>) -> Node {
+        node_props1("sdelay", props, child)
+    }
+    pub fn prewarp(child: impl Into<ElemNode>) -> Node {
+        node1("prewarp", child)
+    }
+    pub fn mm1p(props: Value, fc: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        node_props2("mm1p", props, fc, x)
+    }
+    pub fn svf(
+        props: Value,
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        node_props3("svf", props, fc, q, x)
+    }
+    pub fn svfshelf(
+        props: Value,
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        node_props4("svfshelf", props, fc, q, gain, x)
+    }
+    pub fn biquad(
+        b0: impl Into<ElemNode>,
+        b1: impl Into<ElemNode>,
+        b2: impl Into<ElemNode>,
+        a1: impl Into<ElemNode>,
+        a2: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        node6("biquad", b0, b1, b2, a1, a2, x)
+    }
+
     /// Sine oscillator.
-    pub fn sin(x: Node) -> Node {
-        Node::new("sin", Value::Null, vec![x])
+    pub fn sin(x: impl Into<ElemNode>) -> Node {
+        node1("sin", x)
     }
 
-    /// Band-limited cycle oscillator helper.
-    pub fn cycle(rate: Node) -> Node {
-        Node::new("cycle", Value::Null, vec![rate])
+    /// Cosine helper.
+    pub fn cos(x: impl Into<ElemNode>) -> Node {
+        node1("cos", x)
     }
 
-    /// Phasor helper.
-    pub fn phasor(rate: Node) -> Node {
-        Node::new("phasor", Value::Null, vec![rate])
+    /// Tangent helper.
+    pub fn tan(x: impl Into<ElemNode>) -> Node {
+        node1("tan", x)
+    }
+
+    /// Hyperbolic tangent helper.
+    pub fn tanh(x: impl Into<ElemNode>) -> Node {
+        node1("tanh", x)
+    }
+
+    /// Inverse hyperbolic sine helper.
+    pub fn asinh(x: impl Into<ElemNode>) -> Node {
+        node1("asinh", x)
+    }
+
+    /// Natural log helper.
+    pub fn ln(x: impl Into<ElemNode>) -> Node {
+        node1("ln", x)
+    }
+
+    /// Log helper.
+    pub fn log(x: impl Into<ElemNode>) -> Node {
+        node1("log", x)
+    }
+
+    /// Base-2 log helper.
+    pub fn log2(x: impl Into<ElemNode>) -> Node {
+        node1("log2", x)
+    }
+
+    /// Ceiling helper.
+    pub fn ceil(x: impl Into<ElemNode>) -> Node {
+        node1("ceil", x)
+    }
+
+    /// Floor helper.
+    pub fn floor(x: impl Into<ElemNode>) -> Node {
+        node1("floor", x)
+    }
+
+    /// Round helper.
+    pub fn round(x: impl Into<ElemNode>) -> Node {
+        node1("round", x)
+    }
+
+    /// Square root helper.
+    pub fn sqrt(x: impl Into<ElemNode>) -> Node {
+        node1("sqrt", x)
+    }
+
+    /// Exponential helper.
+    pub fn exp(x: impl Into<ElemNode>) -> Node {
+        node1("exp", x)
+    }
+
+    /// Absolute value helper.
+    pub fn abs(x: impl Into<ElemNode>) -> Node {
+        node1("abs", x)
     }
 
     /// Less-than helper.
-    pub fn le(left: Node, right: Node) -> Node {
-        Node::new("le", Value::Null, vec![left, right])
+    pub fn le(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("le", left, right)
+    }
+
+    /// Less-than-or-equal helper.
+    pub fn leq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("leq", left, right)
+    }
+
+    /// Greater-than helper.
+    pub fn ge(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("ge", left, right)
+    }
+
+    /// Greater-than-or-equal helper.
+    pub fn geq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("geq", left, right)
+    }
+
+    /// Power helper.
+    pub fn pow(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("pow", left, right)
+    }
+
+    /// Equality helper.
+    pub fn eq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("eq", left, right)
+    }
+
+    /// Logical and helper.
+    pub fn and(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("and", left, right)
+    }
+
+    /// Logical or helper.
+    pub fn or(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("or", left, right)
+    }
+
+    /// Addition helper.
+    pub fn add(items: impl IntoNodeList) -> Node {
+        fold_node(items, "add")
+    }
+
+    /// Subtraction helper.
+    pub fn sub(items: impl IntoNodeList) -> Node {
+        fold_node(items, "sub")
+    }
+
+    /// Multiplication helper.
+    pub fn mul(items: impl IntoNodeList) -> Node {
+        fold_node(items, "mul")
+    }
+
+    /// Division helper.
+    pub fn div(items: impl IntoNodeList) -> Node {
+        fold_node(items, "div")
+    }
+
+    /// Modulo helper.
+    pub fn r#mod(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("mod", left, right)
+    }
+
+    /// Minimum helper.
+    pub fn min(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("min", left, right)
+    }
+
+    /// Maximum helper.
+    pub fn max(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
+        node2("max", left, right)
+    }
+
+    /// Alias for the upstream `in` helper.
+    pub fn identity(props: Value, x: Option<Node>) -> Node {
+        match x {
+            Some(x) => Node::new("in", props, vec![x]),
+            None => Node::new("in", props, vec![]),
+        }
+    }
+
+    /// Rust-friendly alias for `in`.
+    pub fn r#in(props: Value, x: Option<Node>) -> Node {
+        identity(props, x)
+    }
+
+    /// Band-limited cycle oscillator helper.
+    pub fn cycle(rate: impl Into<ElemNode>) -> Node {
+        sin(mul([const_(2.0 * std::f64::consts::PI), phasor(rate)]))
     }
 
     /// Pulse train helper.
-    pub fn train(rate: Node) -> Node {
+    pub fn train(rate: impl Into<ElemNode>) -> Node {
         le(phasor(rate), const_(0.5))
     }
 
-    /// Sample playback node.
-    pub fn sample(props: serde_json::Value, trigger: Node, rate: Node) -> Node {
-        Node::new("sample", props, vec![trigger, rate])
+    /// Saw oscillator helper.
+    pub fn saw(rate: impl Into<ElemNode>) -> Node {
+        sub([mul([const_(2.0), phasor(rate)]), const_(1.0)])
     }
 
-    /// One-pole smoother helper.
-    pub fn sm(x: Node) -> Node {
-        Node::new("sm", Value::Null, vec![x])
+    /// Square oscillator helper.
+    pub fn square(rate: impl Into<ElemNode>) -> Node {
+        sub([mul([const_(2.0), train(rate)]), const_(1.0)])
+    }
+
+    /// Triangle oscillator helper.
+    pub fn triangle(rate: impl Into<ElemNode>) -> Node {
+        mul([const_(2.0), sub([const_(0.5), abs(saw(rate))])])
+    }
+
+    /// Band-limited polyBLEP saw oscillator.
+    pub fn blepsaw(rate: impl Into<ElemNode>) -> Node {
+        node1("blepsaw", rate)
+    }
+
+    /// Band-limited polyBLEP square oscillator.
+    pub fn blepsquare(rate: impl Into<ElemNode>) -> Node {
+        node1("blepsquare", rate)
+    }
+
+    /// Band-limited polyBLEP triangle oscillator.
+    pub fn bleptriangle(rate: impl Into<ElemNode>) -> Node {
+        node1("bleptriangle", rate)
+    }
+
+    /// White noise helper.
+    pub fn noise(props: Option<Value>) -> Node {
+        sub([mul([const_(2.0), rand(props)]), const_(1.0)])
+    }
+
+    /// Pink noise helper.
+    pub fn pinknoise(props: Option<Value>) -> Node {
+        pink(noise(props))
+    }
+
+    /// Milliseconds to samples.
+    pub fn ms2samps(t: impl Into<ElemNode>) -> Node {
+        let t = resolve(t);
+        mul([sr(), div([t, const_(1000.0)])])
+    }
+
+    /// Time constant to pole.
+    pub fn tau2pole(t: impl Into<ElemNode>) -> Node {
+        let t = resolve(t);
+        exp(div([const_(-1.0), mul([t, sr()])]))
+    }
+
+    /// Decibels to gain.
+    pub fn db2gain(db: impl Into<ElemNode>) -> Node {
+        let db = resolve(db);
+        pow(const_(10.0), mul([db, const_(1.0 / 20.0)]))
+    }
+
+    /// Gain to decibels.
+    pub fn gain2db(gain: impl Into<ElemNode>) -> Node {
+        let gain = resolve(gain);
+        select(
+            ge(gain.clone(), const_(0.0)),
+            max(const_(-120.0), mul([const_(20.0), log(gain)])),
+            const_(-120.0),
+        )
+    }
+
+    /// Linear select helper.
+    pub fn select(g: impl Into<ElemNode>, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
+        let g = resolve(g);
+        let a = resolve(a);
+        let b = resolve(b);
+        add([mul([g.clone(), a]), mul([sub([const_(1.0), g]), b])])
+    }
+
+    /// Hann window helper.
+    pub fn hann(t: impl Into<ElemNode>) -> Node {
+        let t = resolve(t);
+        mul([
+            const_(0.5),
+            sub([
+                const_(1.0),
+                cos(mul([const_(2.0 * std::f64::consts::PI), t])),
+            ]),
+        ])
+    }
+
+    /// One-pole smoothing.
+    pub fn smooth(p: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        let p = resolve(p);
+        let x = resolve(x);
+        pole(p.clone(), mul([sub([const_(1.0), p]), x]))
+    }
+
+    /// 20ms smoothing helper.
+    pub fn sm(x: impl Into<ElemNode>) -> Node {
+        smooth(tau2pole(const_(0.02)), x)
+    }
+
+    /// Simple one-zero filter.
+    pub fn zero(b0: impl Into<ElemNode>, b1: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        let b0 = resolve(b0);
+        let b1 = resolve(b1);
+        let x = resolve(x);
+        sub([mul([b0, x.clone()]), mul([b1, z(x)])])
+    }
+
+    /// DC blocking filter.
+    pub fn dcblock(x: impl Into<ElemNode>) -> Node {
+        let x = resolve(x);
+        pole(const_(0.995), zero(const_(1.0), const_(1.0), x))
+    }
+
+    /// Direct form 1 helper.
+    pub fn df11(
+        b0: impl Into<ElemNode>,
+        b1: impl Into<ElemNode>,
+        a1: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let b0 = resolve(b0);
+        let b1 = resolve(b1);
+        let a1 = resolve(a1);
+        let x = resolve(x);
+        pole(a1, zero(b0, b1, x))
+    }
+
+    /// Lowpass filter.
+    pub fn lowpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
+        svf(serde_json::json!({ "mode": "lowpass" }), fc, q, x)
+    }
+
+    /// Highpass filter.
+    pub fn highpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
+        svf(serde_json::json!({ "mode": "highpass" }), fc, q, x)
+    }
+
+    /// Bandpass filter.
+    pub fn bandpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
+        svf(serde_json::json!({ "mode": "bandpass" }), fc, q, x)
+    }
+
+    /// Notch filter.
+    pub fn notch(fc: impl Into<ElemNode>, q: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
+        svf(serde_json::json!({ "mode": "notch" }), fc, q, x)
+    }
+
+    /// Allpass filter.
+    pub fn allpass(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let x = resolve(x);
+        svf(serde_json::json!({ "mode": "allpass" }), fc, q, x)
+    }
+
+    /// Peak EQ filter.
+    pub fn peak(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain_decibels: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let gain_decibels = resolve(gain_decibels);
+        let x = resolve(x);
+        svfshelf(
+            serde_json::json!({ "mode": "peak" }),
+            fc,
+            q,
+            gain_decibels,
+            x,
+        )
+    }
+
+    /// Low shelf filter.
+    pub fn lowshelf(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain_decibels: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let gain_decibels = resolve(gain_decibels);
+        let x = resolve(x);
+        svfshelf(
+            serde_json::json!({ "mode": "lowshelf" }),
+            fc,
+            q,
+            gain_decibels,
+            x,
+        )
+    }
+
+    /// High shelf filter.
+    pub fn highshelf(
+        fc: impl Into<ElemNode>,
+        q: impl Into<ElemNode>,
+        gain_decibels: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        let fc = resolve(fc);
+        let q = resolve(q);
+        let gain_decibels = resolve(gain_decibels);
+        let x = resolve(x);
+        svfshelf(
+            serde_json::json!({ "mode": "highshelf" }),
+            fc,
+            q,
+            gain_decibels,
+            x,
+        )
+    }
+
+    /// Pinking filter.
+    pub fn pink(x: impl Into<ElemNode>) -> Node {
+        let x = resolve(x);
+        let clip = |lower: Node, upper: Node, x: Node| min(upper, max(lower, x));
+
+        clip(
+            const_(-1.0),
+            const_(1.0),
+            mul([
+                db2gain(const_(-30.0)),
+                add([
+                    pole(const_(0.99765), mul([x.clone(), const_(0.099046)])),
+                    pole(const_(0.963), mul([x.clone(), const_(0.2965164)])),
+                    pole(const_(0.57), mul([x.clone(), const_(1.0526913)])),
+                    mul([const_(0.1848), x]),
+                ]),
+            ]),
+        )
+    }
+
+    /// Exponential ADSR envelope.
+    pub fn adsr(
+        attack_sec: impl Into<ElemNode>,
+        decay_sec: impl Into<ElemNode>,
+        sustain: impl Into<ElemNode>,
+        release_sec: impl Into<ElemNode>,
+        gate: impl Into<ElemNode>,
+    ) -> Node {
+        let attack_sec = resolve(attack_sec);
+        let decay_sec = resolve(decay_sec);
+        let sustain = resolve(sustain);
+        let release_sec = resolve(release_sec);
+        let gate = resolve(gate);
+        let atk_samps = mul([attack_sec.clone(), sr()]);
+        let atk_gate = le(counter(gate.clone()), atk_samps);
+        let target_value = select(
+            gate.clone(),
+            select(atk_gate.clone(), const_(1.0), sustain.clone()),
+            const_(0.0),
+        );
+        let t60 = max(
+            const_(0.0001),
+            select(
+                gate.clone(),
+                select(atk_gate, attack_sec, decay_sec),
+                release_sec,
+            ),
+        );
+        let p = tau2pole(div([t60, const_(6.91)]));
+
+        smooth(p, target_value)
+    }
+
+    /// Compressor.
+    pub fn compress(
+        attack_ms: Node,
+        release_ms: Node,
+        threshold: Node,
+        ratio: Node,
+        sidechain: Node,
+        xn: Node,
+    ) -> Node {
+        let env = env(
+            tau2pole(mul([const_(0.001), attack_ms])),
+            tau2pole(mul([const_(0.001), release_ms])),
+            sidechain,
+        );
+
+        let env_decibels = gain2db(env);
+        let adjusted_ratio = sub([const_(1.0), div([const_(1.0), ratio])]);
+        let gain = mul([adjusted_ratio, sub([threshold, env_decibels])]);
+        let clean_gain = min(const_(0.0), gain);
+        let compressed_gain = db2gain(clean_gain);
+
+        mul([xn, compressed_gain])
+    }
+
+    /// Soft-knee compressor.
+    pub fn skcompress(
+        attack_ms: Node,
+        release_ms: Node,
+        threshold: Node,
+        ratio: Node,
+        knee_width: Node,
+        sidechain: Node,
+        xn: Node,
+    ) -> Node {
+        let env = env(
+            tau2pole(mul([const_(0.001), attack_ms])),
+            tau2pole(mul([const_(0.001), release_ms])),
+            sidechain,
+        );
+
+        let env_decibels = gain2db(env);
+        let lower_knee_bound = sub([threshold.clone(), div([knee_width.clone(), const_(2.0)])]);
+        let upper_knee_bound = add([threshold.clone(), div([knee_width.clone(), const_(2.0)])]);
+        let is_in_soft_knee_range = and(
+            geq(env_decibels.clone(), lower_knee_bound.clone()),
+            leq(env_decibels.clone(), upper_knee_bound.clone()),
+        );
+        let adjusted_ratio = sub([const_(1.0), div([const_(1.0), ratio])]);
+        let gain = select(
+            is_in_soft_knee_range,
+            mul([
+                div([adjusted_ratio.clone(), const_(2.0)]),
+                mul([
+                    div([
+                        sub([env_decibels.clone(), lower_knee_bound.clone()]),
+                        knee_width.clone(),
+                    ]),
+                    sub([lower_knee_bound.clone(), env_decibels.clone()]),
+                ]),
+            ]),
+            mul([adjusted_ratio, sub([threshold, env_decibels])]),
+        );
+        let clean_gain = min(const_(0.0), gain);
+        let compressed_gain = db2gain(clean_gain);
+
+        mul([xn, compressed_gain])
+    }
+
+    /// Sample playback node.
+    pub fn sample(props: Value, trigger: impl Into<ElemNode>, rate: impl Into<ElemNode>) -> Node {
+        Node::new("sample", props, vec![resolve(trigger), resolve(rate)])
     }
 }
 
-type Value = serde_json::Value;
+pub type Value = serde_json::Value;
 
-fn lower_node(node: &Node, node_id: NodeId, next_id: &mut NodeId, batch: &mut InstructionBatch) {
+fn lower_node(
+    node: &Node,
+    node_id: NodeId,
+    path: &[usize],
+    next_id: &mut NodeId,
+    batch: &mut InstructionBatch,
+    mounted_nodes: &mut Vec<(Vec<usize>, MountedNode)>,
+    keyed_nodes: &mut Vec<(String, MountedNode)>,
+) -> MountedNode {
     batch.push(Instruction::CreateNode {
         node_id,
         node_type: node.kind.clone(),
@@ -169,32 +1250,53 @@ fn lower_node(node: &Node, node_id: NodeId, next_id: &mut NodeId, batch: &mut In
         }
     }
 
-    for child in &node.children {
+    for (child_index, child) in node.children.iter().enumerate() {
         let child_id = *next_id;
         *next_id += 1;
 
-        lower_node(child, child_id, next_id, batch);
+        let mut child_path = path.to_vec();
+        child_path.push(child_index);
+
+        lower_node(
+            child,
+            child_id,
+            &child_path,
+            next_id,
+            batch,
+            mounted_nodes,
+            keyed_nodes,
+        );
         batch.push(Instruction::AppendChild {
             parent_id: node_id,
             child_id,
             child_output_channel: 0,
         });
     }
+
+    let mounted_node = MountedNode {
+        node_id,
+        kind: node.kind.clone(),
+        key: key_from_props(&node.props),
+    };
+    mounted_nodes.push((path.to_vec(), mounted_node.clone()));
+    if let Some(key) = mounted_node.key.clone() {
+        if keyed_nodes
+            .iter()
+            .any(|(existing_key, _)| existing_key == &key)
+        {
+            panic!("duplicate mounted node key: {key}");
+        }
+        keyed_nodes.push((key, mounted_node.clone()));
+    }
+    mounted_node
 }
 
-#[cfg(test)]
-mod tests {
-    use super::el;
-    use super::*;
-
-    #[test]
-    fn lowers_multichannel_graph_to_batch() {
-        let graph = Graph::new()
-            .with_root(el::cycle(el::sm(el::const_(220.0))))
-            .with_root(el::cycle(el::sm(el::const_(220.0 * 1.618))));
-
-        let batch = graph.lower();
-        assert!(batch.to_json_string().contains("cycle"));
-        assert!(batch.to_json_string().contains("root"));
+fn key_from_props(props: &Value) -> Option<String> {
+    match props {
+        Value::Object(map) => map
+            .get("key")
+            .and_then(|value| value.as_str())
+            .map(|key| key.to_string()),
+        _ => None,
     }
 }

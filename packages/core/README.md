@@ -2,6 +2,8 @@
 
 This package is the JS/TS authoring surface for Elementary-style graphs.
 
+The Rust crate in this repository owns the native runtime, FFI bridge, and DSP execution path. `@elem-rs/core` is the separate authoring surface for browser and application code.
+
 ## Design
 
 - `src/vendor/elementary` is the upstream vendor source of truth.
