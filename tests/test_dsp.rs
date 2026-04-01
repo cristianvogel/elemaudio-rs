@@ -21,17 +21,10 @@ pub fn demo_graph() -> Graph {
     let seq: Node = freq_sequence(tempo_hz);
     let train_short = el::le(el::phasor(el::const_with_key("train_short", tempo_hz)), 0.1);
 
-    Graph::new().root(
-        el::mul([
-            el::env(el::tau2pole(0.01), el::tau2pole(0.05), train_short),
-            el::cycle(seq),
-        ],
-                el::mul([
-                            el::env(el::tau2pole(0.01), el::tau2pole(0.05), train_short),
-                            el::cycle(seq),
-                        ]
-        
-        ))
+    Graph::new().root(el::mul([
+        el::env(el::tau2pole(0.01), el::tau2pole(0.05), train_short),
+        el::cycle(seq),
+    ]))
 }
 
 #[test]
