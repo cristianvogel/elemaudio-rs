@@ -1958,6 +1958,21 @@ mod tests {
                 serde_json::json!({"channel": 1}),
                 0,
             ),
+            (
+                "pole",
+                el::pole(node(0.5), node(1.0)),
+                "pole",
+                serde_json::Value::Null,
+                2,
+            ),
+            ("z", el::z(node(1.0)), "z", serde_json::Value::Null, 1),
+            (
+                "prewarp",
+                el::prewarp(node(440.0)),
+                "prewarp",
+                serde_json::Value::Null,
+                1,
+            ),
         ];
 
         for (_, node, kind, props, child_count) in cases {
