@@ -33,9 +33,30 @@ jobs:
         env:
           ELEM_AUDIO_DOCS_ONLY: "1"
 
+      - name: Prepare Pages site
+        run: |
+          rm -rf site
+          mkdir -p site/docs
+          cp -R target/doc/. site/docs/
+          cat > site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta http-equiv="refresh" content="0; url=./docs/elemaudio_rs/index.html">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>elemaudio-rs docs</title>
+            </head>
+            <body>
+              <p>Redirecting to the Rust API docs.</p>
+              <p><a href="./docs/elemaudio_rs/index.html">Open docs</a></p>
+            </body>
+          </html>
+          EOF
+
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: target/doc
+          publish_dir: site
           publish_branch: gh-pages
