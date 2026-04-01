@@ -131,50 +131,59 @@ cargo run
 
 ## Usage
 
-### Create a runtime
+### 1. Compose a graph
 
 ```rust
-use elemaudio_rs::{Result, Runtime};
+use elemaudio_rs::{el, Graph};
+
+let graph = Graph::new().render([
+    el::cycle(el::sm(el::const_with_key("left", 220.0))),
+    el::cycle(el::sm(el::const_with_key("right", 220.0 * 1.618))),
+]);
+```
+
+The Rust surface is `el::*`-first. Use `key` on stable leaf nodes so the mounted graph can preserve identity across successive `render(...)` calls.
+
+### 2. Create a runtime and mount the graph
+
+```rust
+use elemaudio_rs::{el, Graph, Result, Runtime};
 
 fn main() -> Result<()> {
     let runtime = Runtime::new()
         .sample_rate(48_000.0)
         .buffer_size(128)
         .call()?;
-    runtime.reset();
+
+    let graph = Graph::new().render([
+        el::cycle(el::sm(el::const_with_key("left", 220.0))),
+        el::cycle(el::sm(el::const_with_key("right", 220.0 * 1.618))),
+    ]);
+
+    let mounted = graph.mount();
+    runtime.apply_instructions(mounted.batch())?;
     Ok(())
 }
 ```
 
-### Apply instructions
+### 3. Produce sound through a host backend
+
+`elemaudio-rs` does not require CPAL specifically. Any audio host that can provide input and output buffers and call `Runtime::process(...)` works.
+
+CPAL is used in `tests/audio_playback.rs` as one working host bridge example.
 
 ```rust
-use elemaudio_rs::{Instruction, InstructionBatch, Result, Runtime};
-use serde_json::json;
-
-fn configure(runtime: &Runtime) -> Result<()> {
-    let mut batch = InstructionBatch::new();
-    batch.push(Instruction::CreateNode {
-        node_id: 1,
-        node_type: "osc".to_string(),
-    });
-    batch.push(Instruction::SetProperty {
-        node_id: 1,
-        property: "gain".to_string(),
-        value: json!(0.5),
-    });
-    batch.push(Instruction::CommitUpdates);
-
-    runtime.apply_instructions(&batch)
-}
-```
-
-### Process audio
-
-```rust
-use elemaudio_rs::{Result, Runtime};
+use elemaudio_rs::{el, Graph, Result, Runtime};
 
 fn render(runtime: &Runtime) -> Result<()> {
+    let graph = Graph::new().render([
+        el::cycle(el::sm(el::const_with_key("left", 220.0))),
+        el::cycle(el::sm(el::const_with_key("right", 330.0))),
+    ]);
+
+    let mounted = graph.mount();
+    runtime.apply_instructions(mounted.batch())?;
+
     let input_l = vec![0.0_f64; 128];
     let input_r = vec![0.0_f64; 128];
     let mut output_l = vec![0.0_f64; 128];
@@ -186,6 +195,29 @@ fn render(runtime: &Runtime) -> Result<()> {
     runtime.process(128, &inputs, &mut outputs)
 }
 ```
+
+### 4. Update keyed nodes without rebuilding
+
+```rust
+use elemaudio_rs::{el, Graph, Result, Runtime};
+
+fn update(runtime: &Runtime) -> Result<()> {
+    let graph = Graph::new().render([
+        el::cycle(el::sm(el::const_with_key("left", 220.0))),
+        el::cycle(el::sm(el::const_with_key("right", 330.0))),
+    ]);
+
+    let mounted = graph.mount();
+
+    if let Some(batch) = mounted.set_const_value("left", 330.0) {
+        runtime.apply_instructions(&batch)?;
+    }
+
+    Ok(())
+}
+```
+
+This updates the keyed node directly. The graph stays mounted; only the property batch changes. CPAL is not required; any host bridge that calls `Runtime::process(...)` can drive audio.
 
 ## Notes
 
