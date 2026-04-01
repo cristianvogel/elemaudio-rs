@@ -170,12 +170,19 @@ fn main() -> Result<()> {
 
 `elemaudio-rs` does not require CPAL specifically. Any audio host that can provide input and output buffers and call `Runtime::process(...)` works.
 
+`graph.mount()` prepares the graph once and returns mounted-node handles. `Runtime::process(...)` is what produces audio frames.
+
 CPAL is used in `tests/audio_playback.rs` as one working host bridge example.
 
 ```rust
 use elemaudio_rs::{el, Graph, Result, Runtime};
 
-fn render(runtime: &Runtime) -> Result<()> {
+fn main() -> Result<()> {
+    let runtime = Runtime::new()
+        .sample_rate(48_000.0)
+        .buffer_size(128)
+        .call()?;
+
     let graph = Graph::new().render([
         el::cycle(el::sm(el::const_with_key("left", 220.0))),
         el::cycle(el::sm(el::const_with_key("right", 330.0))),
@@ -190,7 +197,8 @@ fn render(runtime: &Runtime) -> Result<()> {
     let inputs: [&[f64]; 0] = [];
     let mut outputs = [&mut output_l[..], &mut output_r[..]];
 
-    runtime.process(128, &inputs, &mut outputs)
+    runtime.process(128, &inputs, &mut outputs)?;
+    Ok(())
 }
 ```
 
@@ -229,12 +237,5 @@ This updates the keyed node directly. The graph stays mounted; only the property
 
 ## Examples
 
-- `examples/web-ui` is the working browser POC.
-
-## Plan
-
-- `docs/JS-TS-AUTHORING-PLAN.md` describes the new authoring surface.
-
-## Whats Next
-
-- Improve the JS/TS authoring surface and reconciliation model.
+- `examples/web-ui` is the working browser demo.
+- `tests/audio_playback.rs` is a working host bridge example, using CPAL and a Rust el::*  dsp composition example.
