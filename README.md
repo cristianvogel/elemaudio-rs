@@ -28,20 +28,22 @@ Elementary uses a functional graph style built around the `el.*` helpers.
 - Each call returns a node, not an imperative side effect.
 - Nodes are composed by nesting them: `el.cycle(el.sm(el.const(...)))`.
 - In Rust, variadic math helpers take tuple inputs, for example `el::mul((a, b, c))` and `el::div((node, 0.5))`.
-- Multichannel graphs are expressed as an ordered array of channel graphs, then rendered with `render(...)`.
+- Multichannel graphs are expressed as an ordered array of channel graphs, then rendered with `Graph::render(...)`.
 - The browser POC in `examples/web-ui` shows this pattern end to end.
 
-Example:
+Rust example:
 
-```ts
-function buildGraph(frequency: number) {
-  return [
-    el.cycle(el.sm(el.const({ value: frequency }))),
-    el.cycle(el.sm(el.const({ value: frequency * 1.618 }))),
-  ];
+```rust
+use elemaudio_rs::{el, Graph};
+
+fn build_graph() -> Graph {
+    let left = el::cycle(el::sm(el::const_with_key("left", 220.0)));
+    let right = el::cycle(el::sm(el::const_with_key("right", 220.0 * 1.618)));
+
+    Graph::new().render([left, right])
 }
 
-await renderer.render(...buildGraph(220));
+let batch = build_graph().lower();
 ```
 
 ## JS/TS Authoring
@@ -59,7 +61,7 @@ The intended composition workflow is JS/TS-first:
 
 Keys are part of composition, not an afterthought. They let the renderer preserve node identity across successive `render(...)` calls while the surrounding graph shape changes. That is the recommended pattern for stable leaf nodes and direct updates.
 
-Authoring example:
+JS/TS example:
 
 ```ts
 const base = 220;
@@ -70,6 +72,8 @@ const graph = [
 
 render(...graph);
 ```
+
+For stable node updates during a live session, keep the `key` values fixed and change only the surrounding graph inputs or props. That lets the renderer reconcile the tree without replacing the keyed leaf nodes.
 
 See `docs/JS-TS-AUTHORING-PLAN.md` for the target surface.
 The current package entrypoint lives in `packages/core/src/index.ts`.
