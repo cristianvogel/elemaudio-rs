@@ -335,8 +335,21 @@ pub mod mc {
 
 /// Functional helpers mirroring Elementary's `el.*` style.
 ///
-/// Rust keeps the helper surface function-based; fold-style math accepts
-/// tuple inputs like `el::mul((a, b, c))` and `el::div((a, b))`.
+/// Rust keeps the helper surface function-based.
+///
+/// The `el` module follows the upstream Elementary reference layout:
+///
+/// - Math: `sin`, `cos`, `add`, `mul`, `div`, `min`, `max`, and related helpers
+/// - Core signals: `sr`, `time`, `counter`, `phasor`, `latch`, `train`
+/// - Props-based helpers: `seq`, `sparseq`, `delay`, `svf`, `adsr`, `compress`
+/// - Oscillators and filters: `cycle`, `saw`, `square`, `triangle`, `lowpass`, `peak`
+///
+/// Fold-style math accepts tuple inputs like `el::mul((a, b, c))` and
+/// `el::div((a, b))`. Numeric literals and existing nodes both coerce through
+/// the same `Into<ElemNode>` path.
+///
+/// For composition identity, prefer `key` on stable leaf nodes and refer to
+/// the upstream guide: <https://www.elementary.audio/docs/guides/Understanding_Keys>.
 pub mod el {
     use super::{Node, Value};
     use crate::core::{resolve, ElemNode};
@@ -545,21 +558,27 @@ pub mod el {
         Node::new(kind, props, children.into_iter().map(resolve).collect())
     }
 
+    /// Sample-rate signal. Expects no children.
     pub fn sr() -> Node {
         node0("sr")
     }
+    /// Current time signal in seconds. Expects no children.
     pub fn time() -> Node {
         node0("time")
     }
+    /// Monotonic counter driven by the input signal. Expects 1 child.
     pub fn counter(child: impl Into<ElemNode>) -> Node {
         node1("counter", child)
     }
+    /// Running accumulator. Expects 2 children: signal and reset.
     pub fn accum(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("accum", left, right)
     }
+    /// Phase accumulator / oscillator driver. Expects 1 child: frequency or rate.
     pub fn phasor(child: impl Into<ElemNode>) -> Node {
         node1("phasor", child)
     }
+    /// Synchronous phase accumulator. Expects 2 children: rate and sync/reset.
     pub fn syncphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("sphasor", left, right)
     }
@@ -567,31 +586,45 @@ pub mod el {
     pub fn sphasor(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         syncphasor(left, right)
     }
+    /// Sample-and-hold latch. Expects 2 children: value and trigger/reset.
     pub fn latch(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("latch", left, right)
     }
+    /// Peak-hold helper. `props` typically carries `hold` time metadata.
+    /// Expects 2 children: input signal and hold/reset control.
     pub fn maxhold(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
         node_props2("maxhold", props, a, b)
     }
+    /// One-shot helper. `props` typically carries an `arm` flag.
+    /// Expects 1 child: the signal to pass once when armed.
     pub fn once(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("once", props, child)
     }
+    /// Random signal source. Optional `props` are forwarded unchanged.
     pub fn rand(props: Option<Value>) -> Node {
         Node::new("rand", props.unwrap_or_else(empty_props), vec![])
     }
 
+    /// Metronome / pulse train source. Optional `props` are forwarded unchanged.
     pub fn metro(props: Option<Value>) -> Node {
         Node::new("metro", props.unwrap_or_else(empty_props), vec![])
     }
+    /// Named input tap. `props` should carry the tap name metadata.
     pub fn tap_in(props: Value) -> Node {
         node_props0("tapIn", props)
     }
+    /// Named output tap. `props` should carry the tap name metadata.
+    /// Expects 1 child: the signal to export.
     pub fn tap_out(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("tapOut", props, child)
     }
+    /// Meter / monitor node. `props` should carry the meter name metadata.
+    /// Expects 1 child: the signal to observe.
     pub fn meter(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("meter", props, child)
     }
+    /// Snapshot node. `props` should carry snapshot metadata.
+    /// Expects 2 children: the source signal and trigger/reset.
     pub fn snapshot(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
         node_props2("snapshot", props, a, b)
     }
@@ -601,45 +634,72 @@ pub mod el {
     {
         node_props_variadic("scope", props, args)
     }
+    /// FFT analyzer node. `props` should carry analyzer metadata.
+    /// Expects 1 child: the signal to analyze.
     pub fn fft(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("fft", props, child)
     }
+    /// Capture node. `props` should carry capture metadata.
+    /// Expects 2 children: the capture gate and the input signal.
     pub fn capture(props: Value, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
         node_props2("capture", props, a, b)
     }
+    /// Table lookup node. `props` should carry table metadata such as path.
+    /// Expects 1 child: the lookup coordinate.
     pub fn table(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("table", props, child)
     }
+    /// Convolution node. `props` should carry impulse-response metadata.
+    /// Expects 1 child: the source signal.
     pub fn convolve(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("convolve", props, child)
     }
+    /// Discrete sequence node. `props` should carry `seq` data and optional loop metadata.
+    /// Expects 2 children: trigger and reset.
     pub fn seq(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
         node_props2("seq", props, trigger, reset)
     }
+    /// Discrete sequence node with the `seq2` variant semantics.
+    /// `props` should carry `seq` data and optional loop metadata.
+    /// Expects 2 children: trigger and reset.
     pub fn seq2(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
         node_props2("seq2", props, trigger, reset)
     }
+    /// Sample-accurate discrete sequence node.
+    /// `props` should carry sparse `seq` entries and optional loop metadata.
+    /// Expects 2 children: trigger and reset.
     pub fn sparseq(props: Value, trigger: impl Into<ElemNode>, reset: impl Into<ElemNode>) -> Node {
         node_props2("sparseq", props, trigger, reset)
     }
+    /// Sparse sequence helper variant. `props` should carry sparse `seq` entries.
+    /// Expects 1 child: the time or trigger signal.
     pub fn sparseq2(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sparseq2", props, child)
     }
+    /// Sample sequence player. `props` should carry sample metadata such as path.
+    /// Expects 1 child: the playback trigger or time signal.
     pub fn sampleseq(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sampleseq", props, child)
     }
+    /// Sample sequence player variant. `props` should carry sample metadata such as path.
+    /// Expects 1 child: the playback trigger or time signal.
     pub fn sampleseq2(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sampleseq2", props, child)
     }
+    /// One-pole filter primitive. Expects 2 children.
     pub fn pole(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("pole", left, right)
     }
+    /// Exponential envelope helper. Expects 3 children.
     pub fn env(a: impl Into<ElemNode>, b: impl Into<ElemNode>, c: impl Into<ElemNode>) -> Node {
         node3("env", a, b, c)
     }
+    /// Unit delay / z^-1 helper. Expects 1 child.
     pub fn z(child: impl Into<ElemNode>) -> Node {
         node1("z", child)
     }
+    /// Multi-tap delay. `props` should carry delay buffer metadata such as `size`.
+    /// Expects 3 children: read, write, and feedback/control.
     pub fn delay(
         props: Value,
         a: impl Into<ElemNode>,
@@ -648,15 +708,22 @@ pub mod el {
     ) -> Node {
         node_props3("delay", props, a, b, c)
     }
+    /// Sample-accurate delay. `props` should carry buffer metadata such as `size`.
+    /// Expects 1 child: the signal to delay.
     pub fn sdelay(props: Value, child: impl Into<ElemNode>) -> Node {
         node_props1("sdelay", props, child)
     }
+    /// Prewarp helper. Expects 1 child.
     pub fn prewarp(child: impl Into<ElemNode>) -> Node {
         node1("prewarp", child)
     }
+    /// One-pole modulation helper. `props` should carry mode metadata.
+    /// Expects 2 children: cutoff and input signal.
     pub fn mm1p(props: Value, fc: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
         node_props2("mm1p", props, fc, x)
     }
+    /// State-variable filter. `props` should carry mode metadata.
+    /// Expects 3 children: cutoff, resonance/Q, and input signal.
     pub fn svf(
         props: Value,
         fc: impl Into<ElemNode>,
@@ -665,6 +732,8 @@ pub mod el {
     ) -> Node {
         node_props3("svf", props, fc, q, x)
     }
+    /// State-variable shelving filter. `props` should carry mode metadata.
+    /// Expects 4 children: cutoff, resonance/Q, gain, and input signal.
     pub fn svfshelf(
         props: Value,
         fc: impl Into<ElemNode>,
@@ -674,6 +743,7 @@ pub mod el {
     ) -> Node {
         node_props4("svfshelf", props, fc, q, gain, x)
     }
+    /// Direct-form biquad helper. Expects 6 children: b0, b1, b2, a1, a2, x.
     pub fn biquad(
         b0: impl Into<ElemNode>,
         b1: impl Into<ElemNode>,
@@ -685,147 +755,147 @@ pub mod el {
         node6("biquad", b0, b1, b2, a1, a2, x)
     }
 
-    /// Sine oscillator.
+    /// Sine helper. Expects exactly 1 child.
     pub fn sin(x: impl Into<ElemNode>) -> Node {
         node1("sin", x)
     }
 
-    /// Cosine helper.
+    /// Cosine helper. Expects exactly 1 child.
     pub fn cos(x: impl Into<ElemNode>) -> Node {
         node1("cos", x)
     }
 
-    /// Tangent helper.
+    /// Tangent helper. Expects exactly 1 child.
     pub fn tan(x: impl Into<ElemNode>) -> Node {
         node1("tan", x)
     }
 
-    /// Hyperbolic tangent helper.
+    /// Hyperbolic tangent helper. Expects exactly 1 child.
     pub fn tanh(x: impl Into<ElemNode>) -> Node {
         node1("tanh", x)
     }
 
-    /// Inverse hyperbolic sine helper.
+    /// Inverse hyperbolic sine helper. Expects exactly 1 child.
     pub fn asinh(x: impl Into<ElemNode>) -> Node {
         node1("asinh", x)
     }
 
-    /// Natural log helper.
+    /// Natural logarithm helper. Expects exactly 1 child.
     pub fn ln(x: impl Into<ElemNode>) -> Node {
         node1("ln", x)
     }
 
-    /// Log helper.
+    /// Base-10 logarithm helper. Expects exactly 1 child.
     pub fn log(x: impl Into<ElemNode>) -> Node {
         node1("log", x)
     }
 
-    /// Base-2 log helper.
+    /// Base-2 logarithm helper. Expects exactly 1 child.
     pub fn log2(x: impl Into<ElemNode>) -> Node {
         node1("log2", x)
     }
 
-    /// Ceiling helper.
+    /// Ceiling helper. Expects exactly 1 child.
     pub fn ceil(x: impl Into<ElemNode>) -> Node {
         node1("ceil", x)
     }
 
-    /// Floor helper.
+    /// Floor helper. Expects exactly 1 child.
     pub fn floor(x: impl Into<ElemNode>) -> Node {
         node1("floor", x)
     }
 
-    /// Round helper.
+    /// Round helper. Expects exactly 1 child.
     pub fn round(x: impl Into<ElemNode>) -> Node {
         node1("round", x)
     }
 
-    /// Square root helper.
+    /// Square root helper. Expects exactly 1 child.
     pub fn sqrt(x: impl Into<ElemNode>) -> Node {
         node1("sqrt", x)
     }
 
-    /// Exponential helper.
+    /// Exponential helper. Expects exactly 1 child.
     pub fn exp(x: impl Into<ElemNode>) -> Node {
         node1("exp", x)
     }
 
-    /// Absolute value helper.
+    /// Absolute value helper. Expects exactly 1 child.
     pub fn abs(x: impl Into<ElemNode>) -> Node {
         node1("abs", x)
     }
 
-    /// Less-than helper.
+    /// Less-than helper. Expects exactly 2 children.
     pub fn le(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("le", left, right)
     }
 
-    /// Less-than-or-equal helper.
+    /// Less-than-or-equal helper. Expects exactly 2 children.
     pub fn leq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("leq", left, right)
     }
 
-    /// Greater-than helper.
+    /// Greater-than helper. Expects exactly 2 children.
     pub fn ge(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("ge", left, right)
     }
 
-    /// Greater-than-or-equal helper.
+    /// Greater-than-or-equal helper. Expects exactly 2 children.
     pub fn geq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("geq", left, right)
     }
 
-    /// Power helper.
+    /// Power helper. Expects exactly 2 children.
     pub fn pow(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("pow", left, right)
     }
 
-    /// Equality helper.
+    /// Equality helper. Expects exactly 2 children.
     pub fn eq(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("eq", left, right)
     }
 
-    /// Logical and helper.
+    /// Logical `and` helper. Expects exactly 2 children.
     pub fn and(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("and", left, right)
     }
 
-    /// Logical or helper.
+    /// Logical `or` helper. Expects exactly 2 children.
     pub fn or(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("or", left, right)
     }
 
-    /// Addition helper.
+    /// Addition helper. Expects one or more children.
     pub fn add(items: impl IntoNodeList) -> Node {
         fold_node(items, "add")
     }
 
-    /// Subtraction helper.
+    /// Subtraction helper. Expects one or more children.
     pub fn sub(items: impl IntoNodeList) -> Node {
         fold_node(items, "sub")
     }
 
-    /// Multiplication helper.
+    /// Multiplication helper. Expects one or more children.
     pub fn mul(items: impl IntoNodeList) -> Node {
         fold_node(items, "mul")
     }
 
-    /// Division helper.
+    /// Division helper. Expects one or more children.
     pub fn div(items: impl IntoNodeList) -> Node {
         fold_node(items, "div")
     }
 
-    /// Modulo helper.
+    /// Modulo helper. Expects exactly 2 children.
     pub fn r#mod(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("mod", left, right)
     }
 
-    /// Minimum helper.
+    /// Minimum helper. Expects exactly 2 children.
     pub fn min(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("min", left, right)
     }
 
-    /// Maximum helper.
+    /// Maximum helper. Expects exactly 2 children.
     pub fn max(left: impl Into<ElemNode>, right: impl Into<ElemNode>) -> Node {
         node2("max", left, right)
     }
@@ -843,75 +913,75 @@ pub mod el {
         identity(props, x)
     }
 
-    /// Band-limited cycle oscillator helper.
+    /// Band-limited cycle oscillator helper. Expects 1 child: frequency or rate.
     pub fn cycle(rate: impl Into<ElemNode>) -> Node {
         sin(mul([const_(2.0 * std::f64::consts::PI), phasor(rate)]))
     }
 
-    /// Pulse train helper.
+    /// Pulse train helper. Expects 1 child: frequency or rate.
     pub fn train(rate: impl Into<ElemNode>) -> Node {
         le(phasor(rate), const_(0.5))
     }
 
-    /// Saw oscillator helper.
+    /// Saw oscillator helper. Expects 1 child: frequency or rate.
     pub fn saw(rate: impl Into<ElemNode>) -> Node {
         sub([mul([const_(2.0), phasor(rate)]), const_(1.0)])
     }
 
-    /// Square oscillator helper.
+    /// Square oscillator helper. Expects 1 child: frequency or rate.
     pub fn square(rate: impl Into<ElemNode>) -> Node {
         sub([mul([const_(2.0), train(rate)]), const_(1.0)])
     }
 
-    /// Triangle oscillator helper.
+    /// Triangle oscillator helper. Expects 1 child: frequency or rate.
     pub fn triangle(rate: impl Into<ElemNode>) -> Node {
         mul([const_(2.0), sub([const_(0.5), abs(saw(rate))])])
     }
 
-    /// Band-limited polyBLEP saw oscillator.
+    /// Band-limited polyBLEP saw oscillator. Expects 1 child: frequency or rate.
     pub fn blepsaw(rate: impl Into<ElemNode>) -> Node {
         node1("blepsaw", rate)
     }
 
-    /// Band-limited polyBLEP square oscillator.
+    /// Band-limited polyBLEP square oscillator. Expects 1 child: frequency or rate.
     pub fn blepsquare(rate: impl Into<ElemNode>) -> Node {
         node1("blepsquare", rate)
     }
 
-    /// Band-limited polyBLEP triangle oscillator.
+    /// Band-limited polyBLEP triangle oscillator. Expects 1 child: frequency or rate.
     pub fn bleptriangle(rate: impl Into<ElemNode>) -> Node {
         node1("bleptriangle", rate)
     }
 
-    /// White noise helper.
+    /// White noise helper. Optional `props` are forwarded unchanged.
     pub fn noise(props: Option<Value>) -> Node {
         sub([mul([const_(2.0), rand(props)]), const_(1.0)])
     }
 
-    /// Pink noise helper.
+    /// Pink noise helper. Optional `props` are forwarded unchanged.
     pub fn pinknoise(props: Option<Value>) -> Node {
         pink(noise(props))
     }
 
-    /// Milliseconds to samples.
+    /// Milliseconds to samples. Expects 1 child: a time value in milliseconds.
     pub fn ms2samps(t: impl Into<ElemNode>) -> Node {
         let t = resolve(t);
         mul([sr(), div([t, const_(1000.0)])])
     }
 
-    /// Time constant to pole.
+    /// Time constant to pole. Expects 1 child: a time constant in seconds.
     pub fn tau2pole(t: impl Into<ElemNode>) -> Node {
         let t = resolve(t);
         exp(div([const_(-1.0), mul([t, sr()])]))
     }
 
-    /// Decibels to gain.
+    /// Decibels to gain. Expects 1 child: a decibel value.
     pub fn db2gain(db: impl Into<ElemNode>) -> Node {
         let db = resolve(db);
         pow(const_(10.0), mul([db, const_(1.0 / 20.0)]))
     }
 
-    /// Gain to decibels.
+    /// Gain to decibels. Expects 1 child: a linear gain value.
     pub fn gain2db(gain: impl Into<ElemNode>) -> Node {
         let gain = resolve(gain);
         select(
@@ -921,7 +991,7 @@ pub mod el {
         )
     }
 
-    /// Linear select helper.
+    /// Linear select helper. Expects 3 children: gate, a, and b.
     pub fn select(g: impl Into<ElemNode>, a: impl Into<ElemNode>, b: impl Into<ElemNode>) -> Node {
         let g = resolve(g);
         let a = resolve(a);
@@ -929,7 +999,7 @@ pub mod el {
         add([mul([g.clone(), a]), mul([sub([const_(1.0), g]), b])])
     }
 
-    /// Hann window helper.
+    /// Hann window helper. Expects 1 child: the phase or normalized position.
     pub fn hann(t: impl Into<ElemNode>) -> Node {
         let t = resolve(t);
         mul([
@@ -941,19 +1011,19 @@ pub mod el {
         ])
     }
 
-    /// One-pole smoothing.
+    /// One-pole smoothing. Expects 2 children: pole coefficient and input signal.
     pub fn smooth(p: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
         let p = resolve(p);
         let x = resolve(x);
         pole(p.clone(), mul([sub([const_(1.0), p]), x]))
     }
 
-    /// 20ms smoothing helper.
+    /// 20ms smoothing helper. Expects 1 child: the input signal.
     pub fn sm(x: impl Into<ElemNode>) -> Node {
         smooth(tau2pole(const_(0.02)), x)
     }
 
-    /// Simple one-zero filter.
+    /// Simple one-zero filter. Expects 3 children: b0, b1, and input signal.
     pub fn zero(b0: impl Into<ElemNode>, b1: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
         let b0 = resolve(b0);
         let b1 = resolve(b1);
@@ -961,13 +1031,13 @@ pub mod el {
         sub([mul([b0, x.clone()]), mul([b1, z(x)])])
     }
 
-    /// DC blocking filter.
+    /// DC blocking filter. Expects 1 child: the input signal.
     pub fn dcblock(x: impl Into<ElemNode>) -> Node {
         let x = resolve(x);
         pole(const_(0.995), zero(const_(1.0), const_(1.0), x))
     }
 
-    /// Direct form 1 helper.
+    /// Direct form 1 helper. Expects 4 children: b0, b1, a1, and input signal.
     pub fn df11(
         b0: impl Into<ElemNode>,
         b1: impl Into<ElemNode>,
@@ -981,7 +1051,8 @@ pub mod el {
         pole(a1, zero(b0, b1, x))
     }
 
-    /// Lowpass filter.
+    /// Lowpass filter. `props` should carry mode metadata.
+    /// Expects 3 children: cutoff, resonance/Q, and input signal.
     pub fn lowpass(
         fc: impl Into<ElemNode>,
         q: impl Into<ElemNode>,
@@ -993,7 +1064,8 @@ pub mod el {
         svf(serde_json::json!({ "mode": "lowpass" }), fc, q, x)
     }
 
-    /// Highpass filter.
+    /// Highpass filter. `props` should carry mode metadata.
+    /// Expects 3 children: cutoff, resonance/Q, and input signal.
     pub fn highpass(
         fc: impl Into<ElemNode>,
         q: impl Into<ElemNode>,
@@ -1005,7 +1077,8 @@ pub mod el {
         svf(serde_json::json!({ "mode": "highpass" }), fc, q, x)
     }
 
-    /// Bandpass filter.
+    /// Bandpass filter. `props` should carry mode metadata.
+    /// Expects 3 children: cutoff, resonance/Q, and input signal.
     pub fn bandpass(
         fc: impl Into<ElemNode>,
         q: impl Into<ElemNode>,
@@ -1017,7 +1090,8 @@ pub mod el {
         svf(serde_json::json!({ "mode": "bandpass" }), fc, q, x)
     }
 
-    /// Notch filter.
+    /// Notch filter. `props` should carry mode metadata.
+    /// Expects 3 children: cutoff, resonance/Q, and input signal.
     pub fn notch(fc: impl Into<ElemNode>, q: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
         let fc = resolve(fc);
         let q = resolve(q);
@@ -1025,7 +1099,8 @@ pub mod el {
         svf(serde_json::json!({ "mode": "notch" }), fc, q, x)
     }
 
-    /// Allpass filter.
+    /// Allpass filter. `props` should carry mode metadata.
+    /// Expects 3 children: cutoff, resonance/Q, and input signal.
     pub fn allpass(
         fc: impl Into<ElemNode>,
         q: impl Into<ElemNode>,
@@ -1037,7 +1112,8 @@ pub mod el {
         svf(serde_json::json!({ "mode": "allpass" }), fc, q, x)
     }
 
-    /// Peak EQ filter.
+    /// Peak EQ filter. `props` should carry mode metadata.
+    /// Expects 4 children: cutoff, resonance/Q, gain in dB, and input signal.
     pub fn peak(
         fc: impl Into<ElemNode>,
         q: impl Into<ElemNode>,
@@ -1057,7 +1133,8 @@ pub mod el {
         )
     }
 
-    /// Low shelf filter.
+    /// Low shelf filter. `props` should carry mode metadata.
+    /// Expects 4 children: cutoff, resonance/Q, gain in dB, and input signal.
     pub fn lowshelf(
         fc: impl Into<ElemNode>,
         q: impl Into<ElemNode>,
@@ -1077,7 +1154,8 @@ pub mod el {
         )
     }
 
-    /// High shelf filter.
+    /// High shelf filter. `props` should carry mode metadata.
+    /// Expects 4 children: cutoff, resonance/Q, gain in dB, and input signal.
     pub fn highshelf(
         fc: impl Into<ElemNode>,
         q: impl Into<ElemNode>,
@@ -1097,7 +1175,7 @@ pub mod el {
         )
     }
 
-    /// Pinking filter.
+    /// Pinking filter. Expects 1 child: the source signal.
     pub fn pink(x: impl Into<ElemNode>) -> Node {
         let x = resolve(x);
         let clip = |lower: Node, upper: Node, x: Node| min(upper, max(lower, x));
@@ -1118,6 +1196,7 @@ pub mod el {
     }
 
     /// Exponential ADSR envelope.
+    /// Expects 5 children: attack, decay, sustain, release, and gate.
     pub fn adsr(
         attack_sec: impl Into<ElemNode>,
         decay_sec: impl Into<ElemNode>,
@@ -1151,6 +1230,7 @@ pub mod el {
     }
 
     /// Compressor.
+    /// Expects 6 children: attack in ms, release in ms, threshold, ratio, sidechain, and input.
     pub fn compress(
         attack_ms: Node,
         release_ms: Node,
@@ -1175,6 +1255,7 @@ pub mod el {
     }
 
     /// Soft-knee compressor.
+    /// Expects 7 children: attack in ms, release in ms, threshold, ratio, knee width, sidechain, and input.
     pub fn skcompress(
         attack_ms: Node,
         release_ms: Node,
@@ -1218,7 +1299,8 @@ pub mod el {
         mul([xn, compressed_gain])
     }
 
-    /// Sample playback node.
+    /// Sample playback node. `props` should carry sample metadata such as `path`.
+    /// Expects 2 children: trigger and playback rate.
     pub fn sample(props: Value, trigger: impl Into<ElemNode>, rate: impl Into<ElemNode>) -> Node {
         Node::new("sample", props, vec![resolve(trigger), resolve(rate)])
     }
