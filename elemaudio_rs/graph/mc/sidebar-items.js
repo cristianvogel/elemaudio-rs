@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["capture","sample","sampleseq","sampleseq2","table"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GraphRoots"],"mod":["el","mc"],"struct":["Graph","MountedGraph","MountedNode","Node"],"type":["Value"]};
