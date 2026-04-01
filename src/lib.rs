@@ -15,11 +15,11 @@ mod runtime;
 /// Lock-free audio transport for producer/consumer playback.
 pub use audio_ring_buffer::AudioRingBuffer;
 /// Core node utilities mirroring the upstream package surface.
-pub use core::{create_node, is_node, resolve, unpack, ElemNode};
+pub use core::{ElemNode, create_node, is_node, resolve, unpack};
 /// Error types and helpers used by the public API.
 pub use error::{Error, Result};
 /// Rust-native graph primitives.
-pub use graph::{el, mc, Graph, MountedGraph, MountedNode, Node};
+pub use graph::{Graph, MountedGraph, MountedNode, Node, el, mc};
 /// Rust-native resource registry and resource values.
 pub use resource::{AudioBuffer, Resource, ResourceId, ResourceManager};
 /// Instruction types and the runtime wrapper.

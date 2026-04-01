@@ -3,7 +3,8 @@ use std::thread;
 use std::time::Duration;
 
 use cpal::traits::StreamTrait;
-use elemaudio_rs::{el, AudioRingBuffer, Graph, Runtime};
+use elemaudio_rs::{AudioRingBuffer, Graph, Runtime, el, Node};
+use serde_json::json;
 
 #[path = "audio_support.rs"]
 mod audio_support;
@@ -23,13 +24,13 @@ fn play_sparseq_sequence_through_ring_buffer() -> std::result::Result<(), Box<dy
         .buffer_size(buffer_size)
         .call()?;
 
-    fn trigger() -> elemaudio_rs::Node {
+    fn trigger() -> Node {
         el::train(el::const_(2.0))
     }
 
-    fn freq_sequence() -> elemaudio_rs::Node {
+    fn freq_sequence() -> Node {
         el::sparseq(
-            serde_json::json!({
+            json!({
                 "seq": [
                     { "value": 110.0, "tickTime": 0.0 },
                     { "value": 165.0, "tickTime": 1.0 },

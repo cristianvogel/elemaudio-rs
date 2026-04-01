@@ -1,4 +1,4 @@
-use elemaudio_rs::{el, Graph, Runtime};
+use elemaudio_rs::{Graph, Runtime, el};
 
 #[test]
 fn mounted_graph_exposes_direct_update_handle() {
