@@ -44,11 +44,10 @@ pub fn resolve(value: impl Into<ElemNode>) -> Node {
 }
 
 /// Expands a node into one node per output channel.
-///
-/// The Rust graph model does not track the upstream `outputChannel` field,
-/// so this returns cloned nodes for the requested fan-out.
 pub fn unpack(node: Node, num_channels: usize) -> Vec<Node> {
-    vec![node; num_channels]
+    (0..num_channels)
+        .map(|output_channel| node.clone().with_output_channel(output_channel))
+        .collect()
 }
 
 #[cfg(test)]
@@ -62,14 +61,17 @@ mod tests {
         assert_eq!(node.kind(), "const");
         assert_eq!(node.props()["value"], 220.0);
         assert!(node.children().is_empty());
+        assert_eq!(node.output_channel(), 0);
     }
 
     #[test]
     fn resolve_leaves_nodes_unchanged() {
-        let node = Node::new("sin", serde_json::Value::Null, vec![]);
+        let node = Node::new("sin", serde_json::Value::Null, vec![]).with_output_channel(2);
 
         match resolve(node.clone()) {
-            resolved if resolved.kind() == node.kind() => {}
+            resolved if resolved.kind() == node.kind() => {
+                assert_eq!(resolved.output_channel(), 2);
+            }
             _ => panic!("expected resolve to keep the node as-is"),
         }
     }
@@ -97,6 +99,7 @@ mod tests {
         assert_eq!(node.children()[0].kind(), "const");
         assert_eq!(node.children()[0].props()["value"], 1.0);
         assert_eq!(node.children()[1].props()["value"], 2.0);
+        assert_eq!(node.output_channel(), 0);
     }
 
     #[test]
@@ -106,9 +109,10 @@ mod tests {
         let unpacked = unpack(node.clone(), 3);
 
         assert_eq!(unpacked.len(), 3);
-        for child in unpacked {
+        for (index, child) in unpacked.into_iter().enumerate() {
             assert_eq!(child.kind(), node.kind());
             assert_eq!(child.props(), node.props());
+            assert_eq!(child.output_channel(), index);
         }
     }
 }

@@ -209,7 +209,7 @@ impl Graph {
             batch.push(Instruction::AppendChild {
                 parent_id: root_id,
                 child_id,
-                child_output_channel: 0,
+                child_output_channel: root.output_channel as i32,
             });
             lowered_roots.push(root_id);
             mounted.roots.push(mounted_root);
@@ -246,6 +246,7 @@ pub struct Node {
     kind: String,
     props: serde_json::Value,
     children: Vec<Node>,
+    output_channel: usize,
 }
 
 impl Node {
@@ -258,7 +259,13 @@ impl Node {
             kind: kind.into(),
             props,
             children,
+            output_channel: 0,
         }
+    }
+
+    pub(crate) fn with_output_channel(mut self, output_channel: usize) -> Self {
+        self.output_channel = output_channel;
+        self
     }
 
     pub fn kind(&self) -> &str {
@@ -271,6 +278,10 @@ impl Node {
 
     pub fn children(&self) -> &[Node] {
         &self.children
+    }
+
+    pub fn output_channel(&self) -> usize {
+        self.output_channel
     }
 }
 
@@ -1431,7 +1442,7 @@ fn lower_node(
         batch.push(Instruction::AppendChild {
             parent_id: node_id,
             child_id,
-            child_output_channel: 0,
+            child_output_channel: child.output_channel as i32,
         });
     }
 
@@ -1460,5 +1471,52 @@ fn key_from_props(props: &Value) -> Option<String> {
             .and_then(|value| value.as_str())
             .map(|key| key.to_string()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{el, mc, Graph};
+
+    #[test]
+    fn lowers_multichannel_output_channels_on_append_edges() {
+        let graph = Graph::new().root(mc::sample(
+            serde_json::json!({"path": "a.wav", "channels": 2}),
+            el::const_(1.0),
+        ));
+
+        let payload: serde_json::Value =
+            serde_json::from_str(&graph.lower().to_json_string()).expect("valid batch json");
+        let instructions = payload.as_array().expect("batch is an array");
+        let mut node_types = std::collections::HashMap::new();
+
+        for instruction in instructions {
+            let array = instruction.as_array().expect("instruction is an array");
+            if array.first().and_then(|value| value.as_i64()) == Some(0) {
+                node_types.insert(
+                    array[1].as_i64().expect("node id") as i32,
+                    array[2].as_str().expect("node type"),
+                );
+            }
+        }
+
+        let output_channels: Vec<i64> = instructions
+            .iter()
+            .filter_map(|instruction| {
+                let array = instruction.as_array()?;
+                if array.first()?.as_i64()? != 2 {
+                    return None;
+                }
+
+                let parent_id = array.get(1)?.as_i64()? as i32;
+                if node_types.get(&parent_id).copied() != Some("root") {
+                    return None;
+                }
+
+                array.get(3)?.as_i64()
+            })
+            .collect();
+
+        assert_eq!(output_channels, vec![0, 1]);
     }
 }
