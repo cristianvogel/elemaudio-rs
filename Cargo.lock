@@ -333,6 +333,7 @@ dependencies = [
  "cpal",
  "elemaudio-resources",
  "serde_json",
+ "symphonia",
 ]
 
 [[package]]

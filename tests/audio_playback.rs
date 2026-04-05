@@ -6,6 +6,9 @@ use std::time::Instant;
 use cpal::traits::StreamTrait;
 use elemaudio_rs::{AudioRingBuffer, Runtime};
 
+#[cfg(feature = "resources")]
+#[path = "audio_decode.rs"]
+mod audio_decode;
 #[path = "audio_support.rs"]
 mod audio_support;
 #[path = "test_dsp.rs"]
@@ -128,4 +131,97 @@ fn play_graph_through_ring_buffer_with_fast_path_setter() -> Result<(), Box<dyn 
     loop {
         thread::park();
     }
+}
+
+#[test]
+#[ignore]
+#[cfg(feature = "resources")]
+// Requires `--features resources` so the native shared-resource bridge is linked.
+/// To run this mc test:
+/// `cargo test --test audio_playback --features resources -- --ignored play_mc_graph_through_ring_buffer`
+fn play_mc_graph_through_ring_buffer() -> Result<(), Box<dyn Error>> {
+    use elemaudio_rs::{el, mc, Graph};
+    use std::path::PathBuf;
+
+    let (device, supported) = audio_support::default_output_setup()?;
+    let stream_config = supported.config();
+    let sample_rate = stream_config.sample_rate.0 as f64;
+    let hardware_channels = stream_config.channels as usize;
+    let process_channels = hardware_channels.max(2);
+    let buffer_size = 128usize;
+
+    let runtime = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()?;
+
+    let wav_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/demo-resources/mc-test.wav");
+    let sample_path = "demo-resources/mc-test.wav";
+    let audio_buffer = audio_decode::decode_wav(&wav_path)?;
+    runtime.add_audio_resource(sample_path, audio_buffer)?;
+
+    let stereo_sample_loop = mc::sample(
+        serde_json::json!({
+            "mode": "loop",
+            "path": sample_path,
+            "channels": 2,
+            "playbackRate": 1
+        }),
+        el::const_(1.0),
+    );
+
+    let graph = Graph::new()
+        .render(stereo_sample_loop.clone());
+
+    let mounted = graph.mount();
+    runtime.apply_instructions(mounted.batch())?;
+
+    let ring = AudioRingBuffer::new(process_channels, sample_rate as usize, sample_rate)?;
+    let producer_ring = ring.clone();
+
+    let producer = thread::spawn(move || -> Result<(), Box<dyn Error + Send + Sync>> {
+        let mut outputs_storage: Vec<Vec<f64>> = vec![vec![0.0; buffer_size]; process_channels];
+
+        loop {
+            let free = producer_ring.free_frames();
+            if free == 0 {
+                thread::sleep(Duration::from_millis(1));
+                continue;
+            }
+
+            let frames = buffer_size.min(free);
+            let mut outputs: Vec<&mut [f64]> = outputs_storage
+                .iter_mut()
+                .map(|buffer| &mut buffer[..frames])
+                .collect();
+
+            runtime.process(frames, &[], &mut outputs)?;
+
+            let channel_refs: Vec<&[f64]> = outputs_storage
+                .iter()
+                .map(|buffer| &buffer[..frames])
+                .collect();
+            let _ = producer_ring.push_planar_f64(&channel_refs, frames);
+        }
+    });
+
+    while ring.available_frames() < buffer_size * 4 {
+        thread::sleep(Duration::from_millis(5));
+    }
+
+    let stream = audio_support::build_stream(
+        &device,
+        &stream_config,
+        supported.sample_format(),
+        ring,
+        hardware_channels,
+        |error| eprintln!("cpal stream error: {error}"),
+    )?;
+
+    stream.play().expect("failed to start audio stream");
+    let _ = producer;
+
+    thread::park();
+    Ok(())
 }

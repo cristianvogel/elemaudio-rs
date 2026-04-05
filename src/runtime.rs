@@ -276,11 +276,63 @@ impl Runtime {
 
     /// Adds a decoded mono audio buffer as a shared resource.
     pub fn add_audio_resource(&self, name: &str, buffer: AudioBuffer) -> Result<()> {
-        self.add_shared_resource_f32(name, buffer.samples.as_ref())?;
+        if buffer.channels == 1 {
+            self.add_shared_resource_f32(name, buffer.samples.as_ref())?;
+        } else {
+            self.add_shared_resource_f32_multi(name, &buffer)?;
+        }
         self.resources
             .borrow_mut()
             .insert(name, Resource::audio(buffer))?;
         Ok(())
+    }
+
+    /// Adds a decoded multichannel audio buffer as a shared resource.
+    fn add_shared_resource_f32_multi(&self, name: &str, buffer: &AudioBuffer) -> Result<()> {
+        if name.trim().is_empty() {
+            return Err(Error::InvalidArgument("resource id cannot be empty"));
+        }
+
+        let channels = buffer.channels as usize;
+        let frames = buffer.frames();
+        let samples = buffer.samples.as_ref();
+        let mut channel_slices: Vec<Vec<f32>> =
+            (0..channels).map(|_| Vec::with_capacity(frames)).collect();
+
+        for frame in 0..frames {
+            let base = frame * channels;
+            for channel in 0..channels {
+                channel_slices[channel].push(samples[base + channel]);
+            }
+        }
+
+        let channel_ptrs: Vec<*const f32> = channel_slices
+            .iter()
+            .map(|channel| channel.as_ptr())
+            .collect();
+        let resource_name = CString::new(name)?;
+        let code = unsafe {
+            ffi::elementary_runtime_add_shared_resource_f32_multi(
+                self.handle.as_ptr(),
+                resource_name.as_ptr(),
+                channel_ptrs.as_ptr(),
+                channel_ptrs.len(),
+                frames,
+            )
+        };
+
+        if code == 0 {
+            self.resources
+                .borrow_mut()
+                .insert(name, Resource::audio(buffer.clone()))?;
+            return Ok(());
+        }
+
+        Err(Error::Native {
+            operation: "add_shared_resource_f32_multi",
+            code,
+            message: "native runtime rejected the shared multichannel resource".to_string(),
+        })
     }
 
     /// Prunes native shared resources and releases retired Rust buffers.

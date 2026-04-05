@@ -45,6 +45,7 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - [x] Documented `key`-driven composition guidance using the upstream keys guide
 - [x] Added unit tests for the new Rust core utilities
 - [x] Documented the Rust and JS/TS authoring split in the repo README files
+- [x] Added a feature-gated audible `mc.sample` test that uses `symphonia` and the `resources` feature
 
 ### Blockers
 - None currently identified.

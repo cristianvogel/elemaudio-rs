@@ -23,3 +23,4 @@ cc = "1"
 
 [dev-dependencies]
 cpal = "0.15"
+symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm"] }

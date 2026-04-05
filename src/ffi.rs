@@ -44,6 +44,14 @@ unsafe extern "C" {
         data: *const f32,
         num_samples: usize,
     ) -> c_int;
+    /// Adds a shared multichannel `f32` resource to the runtime.
+    pub fn elementary_runtime_add_shared_resource_f32_multi(
+        handle: *mut ElementaryRuntimeHandle,
+        name: *const c_char,
+        data: *const *const f32,
+        num_channels: usize,
+        num_samples: usize,
+    ) -> c_int;
     /// Prunes native shared resources that are no longer referenced.
     pub fn elementary_runtime_prune_shared_resources(handle: *mut ElementaryRuntimeHandle);
     /// Processes one audio block.
