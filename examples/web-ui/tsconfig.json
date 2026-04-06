@@ -8,8 +8,6 @@
     "strict": true,
     "jsx": "preserve",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
-    
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
@@ -17,5 +15,5 @@
       "@elem-rs/core/*": ["../../packages/core/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../types/global.d.ts"]
 }

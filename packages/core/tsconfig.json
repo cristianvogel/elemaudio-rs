@@ -6,11 +6,10 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["vite/client"],
     "paths": {
       "@elem-rs/core": ["./src/index"],
       "@elem-rs/core/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../types/global.d.ts"]
 }

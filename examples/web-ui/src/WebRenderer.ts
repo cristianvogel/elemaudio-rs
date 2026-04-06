@@ -1,8 +1,11 @@
 import invariant from "invariant";
 import EventEmitter from "eventemitter3";
 import { Renderer } from "@elem-rs/core";
+import type { NodeRepr_t } from "@elem-rs/core";
 import WorkletProcessor from "../shims/WorkletProcessor";
 import WasmModule from "../shims/elementary-wasm";
+
+type ElemNode = NodeRepr_t | number;
 
 const pkgVersion = "dev";
 
@@ -56,11 +59,11 @@ export default class WebRenderer extends EventEmitter {
     }, workletOptions));
 
     return await new Promise<AudioWorkletNode>((resolve) => {
-      this._worklet!.port.onmessage = (e) => {
+      this._worklet!.port.onmessage = (e: MessageEvent) => {
         const [type, payload] = e.data as [string, unknown];
 
         if (type === "load") {
-          this._renderer = new Renderer(async (batch: any) => {
+          this._renderer = new Renderer(async (batch: unknown) => {
             return await this._sendWorkletRequest("renderInstructions", { batch });
           });
 
@@ -89,7 +92,7 @@ export default class WebRenderer extends EventEmitter {
     });
   }
 
-  private _sendWorkletRequest(requestType: string, payload: unknown) {
+  private _sendWorkletRequest(requestType: string, payload: unknown): Promise<unknown> {
     invariant(this._worklet, "Can't send request before worklet is ready. Have you initialized your WebRenderer instance?");
 
     const requestId = this._nextRequestId++;
@@ -105,8 +108,8 @@ export default class WebRenderer extends EventEmitter {
     });
   }
 
-  async render(...args: unknown[]) {
-    const { result, ...stats } = await this._renderer!.render(...args);
+  async render(...args: ElemNode[]) {
+    const { result, ...stats } = await this._renderer!.render(...args) as { result: { success: boolean }; [key: string]: unknown };
 
     if (!result.success) {
       return Promise.reject(result);
