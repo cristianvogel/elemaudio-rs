@@ -832,6 +832,34 @@ fn covers_extra_helpers() {
         serde_json::json!({"shiftHz": 250.0, "mix": 0.75, "reflect": 2}),
         1,
     );
+
+    let crunch_nodes = extra::crunch(
+        serde_json::json!({
+            "channels": 2,
+            "drive": 4.0,
+            "fuzz": 0.25,
+            "toneHz": 2000.0,
+            "cutHz": 50.0,
+            "outGain": 1.0,
+            "autoGain": true
+        }),
+        ElemNode::from(node(1.0)),
+    );
+
+    assert_eq!(crunch_nodes.len(), 2);
+    assert_nodes(
+        &crunch_nodes,
+        "crunch",
+        serde_json::json!({
+            "drive": 4.0,
+            "fuzz": 0.25,
+            "toneHz": 2000.0,
+            "cutHz": 50.0,
+            "outGain": 1.0,
+            "autoGain": true
+        }),
+        1,
+    );
 }
 
 #[test]

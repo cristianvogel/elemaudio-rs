@@ -118,6 +118,24 @@ export default class WebRenderer extends EventEmitter {
     return Promise.resolve(stats);
   }
 
+  async renderWithOptions(options: { rootFadeInMs: number; rootFadeOutMs: number }, ...args: ElemNode[]) {
+    const { result, ...stats } = await this._renderer!.renderWithOptions(options, ...args) as { result: { success: boolean }; [key: string]: unknown };
+
+    if (!result.success) {
+      return Promise.reject(result);
+    }
+
+    return Promise.resolve(stats);
+  }
+
+  async gc() {
+    const pruned = await this._sendWorkletRequest("gc", {}) as number[];
+
+    this._renderer?.prune(pruned);
+
+    return pruned;
+  }
+
   async updateVirtualFileSystem(vfs: Record<string, Float32Array | Float32Array[]>) {
     return await this._sendWorkletRequest("updateSharedResourceMap", {
       resources: vfs,
