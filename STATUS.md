@@ -42,6 +42,7 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - [x] Added multichannel `mc.*` helpers on the Rust side
 - [x] Added `el.convolve`-based IR channel splitting in the web-ui sample demo
 - [x] Added an IR pair toggle for swapping between channel pairs without remounting the graph
+- [x] Added `el::extra::freqshift` / `el.extra.freqshift` as a native DSP helper backed by a vendored Hilbert IIR
 - [x] Confirmed the Rust graph authoring surface remains function-based, with bracketed variadic math helpers
 - [x] Added `Graph::render(...)` as the preferred graph composition API
 - [x] Documented `key`-driven composition guidance using the upstream keys guide
@@ -62,6 +63,7 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - ✅ Rust-native `ResourceManager` added
 - ✅ Public optional resource extension split into `elemaudio-resources`
 - ✅ Rust graph authoring surface now covers the upstream `el.*` core, math, filters, oscillators, envelopes, dynamics, and multichannel helpers
+- ✅ Extended Rust/JS authoring with `el::extra::*` for native DSP nodes
 
 ### In Progress
 - 🔄 Connect resource management to runtime-facing usage patterns

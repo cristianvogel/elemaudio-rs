@@ -93,6 +93,21 @@ The current package entrypoint lives in `packages/core/src/index.ts`.
 4. Clone the repository.
 5. Run `cargo build`.
 6. Run `cargo test`.
+7. Install Emscripten if you need to rebuild the browser runtime. The `scripts/rebuild-web-ui.sh` helper requires `emcmake` and `emmake` on `PATH`.
+
+To install Emscripten globally with the official SDK:
+
+```bash
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+```
+
+If you want those tools available in future shells, add the SDK environment setup to your shell profile after activation.
+
+Version note: the vendor browser runtime currently expects Emscripten `3.1.52`. Newer `latest` SDK builds may fail in `src/vendor/elementary/runtime/elem/deps/json.hpp` during the WASM rebuild.
 
 ## Upstream Vendor Sync
 
@@ -112,6 +127,14 @@ To sync a specific ref:
 ```
 
 The sync script also regenerates `packages/core` from the upstream helper modules.
+
+To rebuild the browser runtime and then the web-ui example, run:
+
+```bash
+./scripts/rebuild-web-ui.sh
+```
+
+This is required after changing browser-visible node registrations such as `el::extra::*` helpers.
 
 
 ## Common Commands

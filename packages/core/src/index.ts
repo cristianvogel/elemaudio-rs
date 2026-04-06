@@ -6,6 +6,7 @@ import * as math from "./math";
 import * as oscillators from "./oscillators";
 import * as signals from "./signals";
 import * as mc from "./mc";
+import * as extra from "./extra";
 
 export { createNode, isNode, resolve, unpack, Renderer } from "./vendor";
 export type { NodeRepr_t } from "./vendor";
@@ -19,6 +20,7 @@ export const el = {
   ...oscillators,
   ...signals,
   mc,
+  extra,
   "const": core.constant,
   "in": math.identity,
 };

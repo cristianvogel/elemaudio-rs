@@ -358,6 +358,26 @@ pub mod mc {
     }
 }
 
+/// Extended helpers for native DSP nodes.
+pub mod extra {
+    use super::Node;
+    use crate::{resolve, unpack, ElemNode};
+
+    /// Frequency shifter helper.
+    ///
+    /// Returns two roots:
+    /// - output 0: down-shifted
+    /// - output 1: up-shifted
+    ///
+    /// Props:
+    /// - `shiftHz`: frequency shift in Hz
+    /// - `mix`: wet amount in the range `0.0..=1.0`
+    /// - `reflect`: integer mode for negative shift handling
+    pub fn freqshift(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
+        unpack(Node::new("freqshift", props, vec![resolve(x)]), 2)
+    }
+}
+
 /// Functional helpers mirroring Elementary's `el.*` style.
 ///
 /// Rust keeps the helper surface function-based.
