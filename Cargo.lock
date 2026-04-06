@@ -315,7 +315,7 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 [[package]]
 name = "elemaudio-resources"
 version = "0.1.0"
-source = "git+https://github.com/cristianvogel/elemaudio-resources#84a209557cc33b688602dcce0ebca1c77f7e88f8"
+source = "git+https://github.com/cristianvogel/elemaudio-resources#f1fd2a2b10fc9d71d4f28faab4dda2f54adb8649"
 dependencies = [
  "hound",
  "rkyv",

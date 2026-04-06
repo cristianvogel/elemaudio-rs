@@ -1,11 +1,16 @@
-import { el } from "@elem-rs/core";
-import type { NodeRepr_t } from "@elem-rs/core";
-import WebRenderer from "./WebRenderer";
+import type {NodeRepr_t} from "@elem-rs/core";
+import {el} from "@elem-rs/core";
 import sampleUrl from "../../demo-resources/115bpm_808_Beat_mono.wav?url";
+import irUrl from "../../demo-resources/DEEPNESS.wav?url";
+import WebRenderer from "./WebRenderer";
 import "./style.css";
 
 const bundledSamplePath = "demo-resources/115bpm_808_Beat_mono.wav";
+const bundledIrBasePath = "demo-resources/DEEPNESS";
 let samplePath = bundledSamplePath;
+let sampleChannels = 1;
+let irChannelPaths: string[] = [];
+let activeIrPairStart = 0;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -28,7 +33,7 @@ function mustQuery<T extends Element>(selector: string): T {
 app.innerHTML = `
   <div class="panel">
     <h1>elemaudio-rs sample demo</h1>
-    <p>Loads a sample from <code>demo-resources/</code> and plays it through <code>el.sample(...)</code>.</p>
+    <p>Loads a sample and an IR from <code>demo-resources/</code> and processes the sample through <code>el.convolve(...)</code>.</p>
     <p class="demo-link"><a href="/index.html">Back to the graph demo</a></p>
     <p class="demo-link"><a href="/resource-manager.html">Open the Rust resource manager demo</a></p>
     <div class="controls">
@@ -48,6 +53,7 @@ app.innerHTML = `
       </div>
       <button id="start">Start audio</button>
       <button id="reload" class="secondary">Reload sample</button>
+      <button id="toggle-ir" class="secondary">Use IR pair 1/2</button>
       <div class="status" id="status">Idle</div>
       <div class="resource-status" id="resource-status">Sample not loaded</div>
     </div>
@@ -60,33 +66,91 @@ const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const sampleFileInput = mustQuery<HTMLInputElement>("#sample-file");
 const rateValue = mustQuery<HTMLSpanElement>("#rate-value");
 const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
+const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
 const status = mustQuery<HTMLDivElement>("#status");
+
+updateIrToggleLabel();
 
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 let sampleLoaded = false;
 
-async function loadSampleResource() {
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function updateIrToggleLabel() {
+  if (irChannelPaths.length < 2) {
+    toggleIrButton.disabled = true;
+    toggleIrButton.textContent = "IR pair unavailable";
+    return;
+  }
+
+  toggleIrButton.disabled = irChannelPaths.length < 4;
+  toggleIrButton.textContent = activeIrPairStart === 0 ? "Use IR pair 1/2" : "Use IR pair 3/4";
+}
+
+async function loadBundledResources() {
   if (!audioContext || !renderer) {
     return;
   }
 
-  const response = await fetch(sampleUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch sample: ${response.status} ${response.statusText}`);
+  const [sampleResponse, irResponse] = await Promise.all([fetch(sampleUrl), fetch(irUrl)]);
+
+  if (!sampleResponse.ok) {
+    throw new Error(`Failed to fetch sample: ${sampleResponse.status} ${sampleResponse.statusText}`);
   }
 
-  const bytes = await response.arrayBuffer();
-  const buffer = await audioContext.decodeAudioData(bytes);
-  const mono = buffer.getChannelData(0);
+  if (!irResponse.ok) {
+    throw new Error(`Failed to fetch IR: ${irResponse.status} ${irResponse.statusText}`);
+  }
 
-  await renderer.updateVirtualFileSystem({
-    [samplePath]: new Float32Array(mono),
+  const [sampleBytes, irBytes] = await Promise.all([sampleResponse.arrayBuffer(), irResponse.arrayBuffer()]);
+  const [sampleBuffer, irBuffer] = await Promise.all([
+    audioContext.decodeAudioData(sampleBytes),
+    audioContext.decodeAudioData(irBytes),
+  ]);
+
+  sampleChannels = sampleBuffer.numberOfChannels;
+  const sampleData = sampleBuffer.numberOfChannels > 1
+    ? Array.from({ length: sampleBuffer.numberOfChannels }, (_, index) =>
+        new Float32Array(sampleBuffer.getChannelData(index)),
+      )
+    : new Float32Array(sampleBuffer.getChannelData(0));
+
+  const irData = Array.from({ length: irBuffer.numberOfChannels }, (_, index) =>
+    new Float32Array(irBuffer.getChannelData(index)),
+  );
+
+  irChannelPaths = irData.map((_, index) => `${bundledIrBasePath}_ch${index + 1}.wav`);
+
+  const vfs: Record<string, Float32Array | Float32Array[]> = {
+    [samplePath]: sampleData,
+  };
+
+  irChannelPaths.forEach((path, index) => {
+    vfs[path] = irData[index];
   });
 
+  await renderer.updateVirtualFileSystem(vfs);
+
   sampleLoaded = true;
-  resourceStatus.textContent = `Loaded ${samplePath} (${buffer.duration.toFixed(2)}s @ ${buffer.sampleRate} Hz)`;
+  activeIrPairStart = 0;
+  updateIrToggleLabel();
+  resourceStatus.textContent = `Loaded ${samplePath} and ${irChannelPaths.length} IR channels (${sampleBuffer.numberOfChannels} ch + ${irBuffer.numberOfChannels} ch @ ${sampleBuffer.sampleRate} Hz)`;
 }
 
 async function loadBrowserSample(file: File) {
@@ -96,26 +160,50 @@ async function loadBrowserSample(file: File) {
 
   const bytes = await file.arrayBuffer();
   const buffer = await audioContext.decodeAudioData(bytes);
-  const mono = buffer.getChannelData(0);
 
   samplePath = `browser/${file.name}`;
   sampleFileName.textContent = file.name;
+  sampleChannels = buffer.numberOfChannels;
+
+  const sampleData = buffer.numberOfChannels > 1
+    ? Array.from({ length: buffer.numberOfChannels }, (_, index) =>
+        new Float32Array(buffer.getChannelData(index)),
+      )
+    : new Float32Array(buffer.getChannelData(0));
 
   await renderer.updateVirtualFileSystem({
-    [samplePath]: new Float32Array(mono),
+    [samplePath]: sampleData,
   });
 
   sampleLoaded = true;
-  resourceStatus.textContent = `Loaded ${file.name} from the browser (${buffer.duration.toFixed(2)}s @ ${buffer.sampleRate} Hz)`;
+  resourceStatus.textContent = `Loaded ${file.name} from the browser (${buffer.numberOfChannels} ch @ ${buffer.sampleRate} Hz)`;
 }
 
 function buildGraph(rate: number): NodeRepr_t[] {
-  const trigger = el.train(1);
-  const playbackRate = el.const({ value: rate });
+  const trigger = el.train(0.05);
+  const leftIrPath = irChannelPaths[activeIrPairStart] ?? `${bundledIrBasePath}_ch1.wav`;
+  const rightIrPath = irChannelPaths[activeIrPairStart + 1] ?? leftIrPath;
+
+  if (sampleChannels > 1) {
+    const source = el.mc.sample({ path: samplePath, playbackRate: rate, channels: sampleChannels }, trigger);
+    const leftSource = source[0];
+    const rightSource = source[1] ?? source[0];
+    const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, leftSource));
+    const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, rightSource));
+
+    return [
+      el.mul(0.5, el.add(leftSource, el.mul(3, leftWet))),
+      el.mul(0.5, el.add(rightSource, el.mul(3, rightWet))),
+    ];
+  }
+
+  const source = el.sample({ path: samplePath }, trigger, el.const({ value: rate }));
+  const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, source));
+  const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, source));
 
   return [
-    el.mul(el.const({ value: 0.5 }), el.sample({ path: samplePath }, trigger, playbackRate)),
-    el.mul(el.const({ value: 0.5 }), el.sample({ path: samplePath }, trigger, playbackRate)),
+    el.mul(0.5, el.add(source, el.mul(3, leftWet))),
+    el.mul(0.5, el.add(source, el.mul(3, rightWet))),
   ];
 }
 
@@ -130,7 +218,7 @@ async function ensureAudio() {
   const worklet = await renderer.initialize(audioContext);
   worklet.connect(audioContext.destination);
 
-  await loadSampleResource();
+  await loadBundledResources();
 }
 
 async function renderCurrentGraph() {
@@ -154,7 +242,7 @@ startButton.addEventListener("click", async () => {
     await audioContext?.resume();
     await renderCurrentGraph();
   } catch (error) {
-    status.textContent = `Failed to start audio: ${error instanceof Error ? error.message : String(error)}`;
+    status.textContent = `Failed to start audio: ${formatError(error)}`;
     startButton.disabled = false;
   }
 });
@@ -163,11 +251,27 @@ reloadButton.addEventListener("click", async () => {
   try {
     await ensureAudio();
     samplePath = bundledSamplePath;
+    sampleChannels = 1;
+    irChannelPaths = [];
+    activeIrPairStart = 0;
     sampleFileName.textContent = "Built-in sample";
-    await loadSampleResource();
+    await loadBundledResources();
     await renderCurrentGraph();
   } catch (error) {
-    status.textContent = `Failed to reload sample: ${error instanceof Error ? error.message : String(error)}`;
+    status.textContent = `Failed to reload sample: ${formatError(error)}`;
+  }
+});
+
+toggleIrButton.addEventListener("click", async () => {
+  if (irChannelPaths.length < 4) {
+    return;
+  }
+
+  activeIrPairStart = activeIrPairStart === 0 ? 2 : 0;
+  updateIrToggleLabel();
+
+  if (renderer && audioContext?.state === "running") {
+    await renderCurrentGraph();
   }
 });
 
@@ -183,7 +287,7 @@ sampleFileInput.addEventListener("change", async () => {
     await loadBrowserSample(file);
     await renderCurrentGraph();
   } catch (error) {
-    status.textContent = `Failed to load browser file: ${error instanceof Error ? error.message : String(error)}`;
+    status.textContent = `Failed to load browser file: ${formatError(error)}`;
   }
 });
 

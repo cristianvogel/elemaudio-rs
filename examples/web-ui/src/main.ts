@@ -41,6 +41,22 @@ if (!startButton || !frequencySlider || !frequencyValue || !status) {
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 /// Here we define nodes in the graph, using the `el` utilities.
 const smoothedCycle = (key: string, value: number): NodeRepr_t => {
   return el.cycle(el.sm(el.const({ key, value })));
@@ -95,7 +111,7 @@ startButton.addEventListener("click", async () => {
     await audioContext?.resume();
     await renderCurrentGraph();
   } catch (error) {
-    status.textContent = `Failed to start audio: ${error instanceof Error ? error.message : String(error)}`;
+    status.textContent = `Failed to start audio: ${formatError(error)}`;
     startButton.disabled = false;
   }
 });
