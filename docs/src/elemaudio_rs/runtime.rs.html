@@ -276,98 +276,150 @@
 <a href=#276 id=276 data-nosnippet>276</a>
 <a href=#277 id=277 data-nosnippet>277</a>    <span class="doccomment">/// Adds a decoded mono audio buffer as a shared resource.
 <a href=#278 id=278 data-nosnippet>278</a>    </span><span class="kw">pub fn </span>add_audio_resource(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, buffer: AudioBuffer) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#279 id=279 data-nosnippet>279</a>        <span class="self">self</span>.add_shared_resource_f32(name, buffer.samples.as_ref())<span class="question-mark">?</span>;
-<a href=#280 id=280 data-nosnippet>280</a>        <span class="self">self</span>.resources
-<a href=#281 id=281 data-nosnippet>281</a>            .borrow_mut()
-<a href=#282 id=282 data-nosnippet>282</a>            .insert(name, Resource::audio(buffer))<span class="question-mark">?</span>;
-<a href=#283 id=283 data-nosnippet>283</a>        <span class="prelude-val">Ok</span>(())
-<a href=#284 id=284 data-nosnippet>284</a>    }
-<a href=#285 id=285 data-nosnippet>285</a>
-<a href=#286 id=286 data-nosnippet>286</a>    <span class="doccomment">/// Prunes native shared resources and releases retired Rust buffers.
-<a href=#287 id=287 data-nosnippet>287</a>    </span><span class="kw">pub fn </span>prune_shared_resources(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-<a href=#288 id=288 data-nosnippet>288</a>        <span class="kw">unsafe </span>{ ffi::elementary_runtime_prune_shared_resources(<span class="self">self</span>.handle.as_ptr()) }
-<a href=#289 id=289 data-nosnippet>289</a>        <span class="self">self</span>.retired_resources.borrow_mut().clear();
-<a href=#290 id=290 data-nosnippet>290</a>    }
-<a href=#291 id=291 data-nosnippet>291</a>
-<a href=#292 id=292 data-nosnippet>292</a>    <span class="doccomment">/// Processes one audio block.
-<a href=#293 id=293 data-nosnippet>293</a>    ///
-<a href=#294 id=294 data-nosnippet>294</a>    /// Every input and output channel must have at least `num_samples` samples.
-<a href=#295 id=295 data-nosnippet>295</a>    </span><span class="kw">pub fn </span>process(
-<a href=#296 id=296 data-nosnippet>296</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#297 id=297 data-nosnippet>297</a>        num_samples: usize,
-<a href=#298 id=298 data-nosnippet>298</a>        inputs: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>[f64]],
-<a href=#299 id=299 data-nosnippet>299</a>        outputs: <span class="kw-2">&amp;mut </span>[<span class="kw-2">&amp;mut </span>[f64]],
-<a href=#300 id=300 data-nosnippet>300</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#301 id=301 data-nosnippet>301</a>        <span class="kw">if </span>num_samples &gt; <span class="self">self</span>.buffer_size {
-<a href=#302 id=302 data-nosnippet>302</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidArgument(
-<a href=#303 id=303 data-nosnippet>303</a>                <span class="string">"num_samples exceeds the configured buffer_size"</span>,
-<a href=#304 id=304 data-nosnippet>304</a>            ));
-<a href=#305 id=305 data-nosnippet>305</a>        }
-<a href=#306 id=306 data-nosnippet>306</a>
-<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw">if </span>inputs.iter().any(|channel| channel.len() &lt; num_samples) {
-<a href=#308 id=308 data-nosnippet>308</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidArgument(
-<a href=#309 id=309 data-nosnippet>309</a>                <span class="string">"an input channel is shorter than num_samples"</span>,
-<a href=#310 id=310 data-nosnippet>310</a>            ));
-<a href=#311 id=311 data-nosnippet>311</a>        }
-<a href=#312 id=312 data-nosnippet>312</a>
-<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">if </span>outputs.iter().any(|channel| channel.len() &lt; num_samples) {
-<a href=#314 id=314 data-nosnippet>314</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidArgument(
-<a href=#315 id=315 data-nosnippet>315</a>                <span class="string">"an output channel is shorter than num_samples"</span>,
-<a href=#316 id=316 data-nosnippet>316</a>            ));
-<a href=#317 id=317 data-nosnippet>317</a>        }
-<a href=#318 id=318 data-nosnippet>318</a>
-<a href=#319 id=319 data-nosnippet>319</a>        <span class="kw">let </span>input_ptrs: Vec&lt;<span class="kw-2">*const </span>f64&gt; = inputs.iter().map(|channel| channel.as_ptr()).collect();
-<a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">let </span><span class="kw-2">mut </span>output_ptrs: Vec&lt;<span class="kw-2">*mut </span>f64&gt; = outputs
-<a href=#321 id=321 data-nosnippet>321</a>            .iter_mut()
-<a href=#322 id=322 data-nosnippet>322</a>            .map(|channel| channel.as_mut_ptr())
-<a href=#323 id=323 data-nosnippet>323</a>            .collect();
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="kw">let </span>code = <span class="kw">unsafe </span>{
-<a href=#326 id=326 data-nosnippet>326</a>            ffi::elementary_runtime_process(
-<a href=#327 id=327 data-nosnippet>327</a>                <span class="self">self</span>.handle.as_ptr(),
-<a href=#328 id=328 data-nosnippet>328</a>                input_ptrs.as_ptr(),
-<a href=#329 id=329 data-nosnippet>329</a>                input_ptrs.len(),
-<a href=#330 id=330 data-nosnippet>330</a>                output_ptrs.as_mut_ptr(),
-<a href=#331 id=331 data-nosnippet>331</a>                output_ptrs.len(),
-<a href=#332 id=332 data-nosnippet>332</a>                num_samples,
-<a href=#333 id=333 data-nosnippet>333</a>            )
-<a href=#334 id=334 data-nosnippet>334</a>        };
-<a href=#335 id=335 data-nosnippet>335</a>
-<a href=#336 id=336 data-nosnippet>336</a>        <span class="kw">if </span>code == <span class="number">0 </span>{
-<a href=#337 id=337 data-nosnippet>337</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#338 id=338 data-nosnippet>338</a>        }
-<a href=#339 id=339 data-nosnippet>339</a>
-<a href=#340 id=340 data-nosnippet>340</a>        <span class="prelude-val">Err</span>(Error::Native {
-<a href=#341 id=341 data-nosnippet>341</a>            operation: <span class="string">"process"</span>,
-<a href=#342 id=342 data-nosnippet>342</a>            code,
-<a href=#343 id=343 data-nosnippet>343</a>            message: describe_return_code(code).to_string(),
-<a href=#344 id=344 data-nosnippet>344</a>        })
-<a href=#345 id=345 data-nosnippet>345</a>    }
-<a href=#346 id=346 data-nosnippet>346</a>
-<a href=#347 id=347 data-nosnippet>347</a>    <span class="doccomment">/// Runs garbage collection and returns the collected node identifiers.
-<a href=#348 id=348 data-nosnippet>348</a>    </span><span class="kw">pub fn </span>gc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;NodeId&gt; {
-<a href=#349 id=349 data-nosnippet>349</a>        <span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>collect(node_id: i32, user_data: <span class="kw-2">*mut </span>c_void) {
-<a href=#350 id=350 data-nosnippet>350</a>            <span class="comment">// The pointer comes from `gc` below and remains valid for the duration of the call.
-<a href=#351 id=351 data-nosnippet>351</a>            </span><span class="kw">let </span>ids = <span class="kw">unsafe </span>{ <span class="kw-2">&amp;mut *</span>(user_data <span class="kw">as </span><span class="kw-2">*mut </span>Vec&lt;NodeId&gt;) };
-<a href=#352 id=352 data-nosnippet>352</a>            ids.push(node_id);
-<a href=#353 id=353 data-nosnippet>353</a>        }
-<a href=#354 id=354 data-nosnippet>354</a>
-<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw">let </span><span class="kw-2">mut </span>ids = Vec::new();
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">unsafe </span>{
-<a href=#357 id=357 data-nosnippet>357</a>            ffi::elementary_runtime_gc(
-<a href=#358 id=358 data-nosnippet>358</a>                <span class="self">self</span>.handle.as_ptr(),
-<a href=#359 id=359 data-nosnippet>359</a>                <span class="prelude-val">Some</span>(collect),
-<a href=#360 id=360 data-nosnippet>360</a>                <span class="kw-2">&amp;mut </span>ids <span class="kw">as </span><span class="kw-2">*mut </span><span class="kw">_ as </span><span class="kw-2">*mut </span>c_void,
-<a href=#361 id=361 data-nosnippet>361</a>            );
-<a href=#362 id=362 data-nosnippet>362</a>        }
-<a href=#363 id=363 data-nosnippet>363</a>        ids
-<a href=#364 id=364 data-nosnippet>364</a>    }
-<a href=#365 id=365 data-nosnippet>365</a>}
-<a href=#366 id=366 data-nosnippet>366</a>
-<a href=#367 id=367 data-nosnippet>367</a><span class="kw">impl </span>Drop <span class="kw">for </span>Runtime {
-<a href=#368 id=368 data-nosnippet>368</a>    <span class="doccomment">/// Releases the native runtime handle.
-<a href=#369 id=369 data-nosnippet>369</a>    </span><span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-<a href=#370 id=370 data-nosnippet>370</a>        <span class="kw">unsafe </span>{ ffi::elementary_runtime_free(<span class="self">self</span>.handle.as_ptr()) }
-<a href=#371 id=371 data-nosnippet>371</a>    }
-<a href=#372 id=372 data-nosnippet>372</a>}
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">if </span>buffer.channels == <span class="number">1 </span>{
+<a href=#280 id=280 data-nosnippet>280</a>            <span class="self">self</span>.add_shared_resource_f32(name, buffer.samples.as_ref())<span class="question-mark">?</span>;
+<a href=#281 id=281 data-nosnippet>281</a>        } <span class="kw">else </span>{
+<a href=#282 id=282 data-nosnippet>282</a>            <span class="self">self</span>.add_shared_resource_f32_multi(name, <span class="kw-2">&amp;</span>buffer)<span class="question-mark">?</span>;
+<a href=#283 id=283 data-nosnippet>283</a>        }
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="self">self</span>.resources
+<a href=#285 id=285 data-nosnippet>285</a>            .borrow_mut()
+<a href=#286 id=286 data-nosnippet>286</a>            .insert(name, Resource::audio(buffer))<span class="question-mark">?</span>;
+<a href=#287 id=287 data-nosnippet>287</a>        <span class="prelude-val">Ok</span>(())
+<a href=#288 id=288 data-nosnippet>288</a>    }
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="doccomment">/// Adds a decoded multichannel audio buffer as a shared resource.
+<a href=#291 id=291 data-nosnippet>291</a>    </span><span class="kw">fn </span>add_shared_resource_f32_multi(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, buffer: <span class="kw-2">&amp;</span>AudioBuffer) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">if </span>name.trim().is_empty() {
+<a href=#293 id=293 data-nosnippet>293</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidArgument(<span class="string">"resource id cannot be empty"</span>));
+<a href=#294 id=294 data-nosnippet>294</a>        }
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="kw">let </span>channels = buffer.channels <span class="kw">as </span>usize;
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">let </span>frames = buffer.frames();
+<a href=#298 id=298 data-nosnippet>298</a>        <span class="kw">let </span>samples = buffer.samples.as_ref();
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw">let </span><span class="kw-2">mut </span>channel_slices: Vec&lt;Vec&lt;f32&gt;&gt; =
+<a href=#300 id=300 data-nosnippet>300</a>            (<span class="number">0</span>..channels).map(|<span class="kw">_</span>| Vec::with_capacity(frames)).collect();
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw">for </span>frame <span class="kw">in </span><span class="number">0</span>..frames {
+<a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">let </span>base = frame * channels;
+<a href=#304 id=304 data-nosnippet>304</a>            <span class="kw">for </span>channel <span class="kw">in </span><span class="number">0</span>..channels {
+<a href=#305 id=305 data-nosnippet>305</a>                channel_slices[channel].push(samples[base + channel]);
+<a href=#306 id=306 data-nosnippet>306</a>            }
+<a href=#307 id=307 data-nosnippet>307</a>        }
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">let </span>channel_ptrs: Vec&lt;<span class="kw-2">*const </span>f32&gt; = channel_slices
+<a href=#310 id=310 data-nosnippet>310</a>            .iter()
+<a href=#311 id=311 data-nosnippet>311</a>            .map(|channel| channel.as_ptr())
+<a href=#312 id=312 data-nosnippet>312</a>            .collect();
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">let </span>resource_name = CString::new(name)<span class="question-mark">?</span>;
+<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span>code = <span class="kw">unsafe </span>{
+<a href=#315 id=315 data-nosnippet>315</a>            ffi::elementary_runtime_add_shared_resource_f32_multi(
+<a href=#316 id=316 data-nosnippet>316</a>                <span class="self">self</span>.handle.as_ptr(),
+<a href=#317 id=317 data-nosnippet>317</a>                resource_name.as_ptr(),
+<a href=#318 id=318 data-nosnippet>318</a>                channel_ptrs.as_ptr(),
+<a href=#319 id=319 data-nosnippet>319</a>                channel_ptrs.len(),
+<a href=#320 id=320 data-nosnippet>320</a>                frames,
+<a href=#321 id=321 data-nosnippet>321</a>            )
+<a href=#322 id=322 data-nosnippet>322</a>        };
+<a href=#323 id=323 data-nosnippet>323</a>
+<a href=#324 id=324 data-nosnippet>324</a>        <span class="kw">if </span>code == <span class="number">0 </span>{
+<a href=#325 id=325 data-nosnippet>325</a>            <span class="self">self</span>.resources
+<a href=#326 id=326 data-nosnippet>326</a>                .borrow_mut()
+<a href=#327 id=327 data-nosnippet>327</a>                .insert(name, Resource::audio(buffer.clone()))<span class="question-mark">?</span>;
+<a href=#328 id=328 data-nosnippet>328</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#329 id=329 data-nosnippet>329</a>        }
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a>        <span class="prelude-val">Err</span>(Error::Native {
+<a href=#332 id=332 data-nosnippet>332</a>            operation: <span class="string">"add_shared_resource_f32_multi"</span>,
+<a href=#333 id=333 data-nosnippet>333</a>            code,
+<a href=#334 id=334 data-nosnippet>334</a>            message: <span class="string">"native runtime rejected the shared multichannel resource"</span>.to_string(),
+<a href=#335 id=335 data-nosnippet>335</a>        })
+<a href=#336 id=336 data-nosnippet>336</a>    }
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="doccomment">/// Prunes native shared resources and releases retired Rust buffers.
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">pub fn </span>prune_shared_resources(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">unsafe </span>{ ffi::elementary_runtime_prune_shared_resources(<span class="self">self</span>.handle.as_ptr()) }
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="self">self</span>.retired_resources.borrow_mut().clear();
+<a href=#342 id=342 data-nosnippet>342</a>    }
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// Processes one audio block.
+<a href=#345 id=345 data-nosnippet>345</a>    ///
+<a href=#346 id=346 data-nosnippet>346</a>    /// Every input and output channel must have at least `num_samples` samples.
+<a href=#347 id=347 data-nosnippet>347</a>    </span><span class="kw">pub fn </span>process(
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#349 id=349 data-nosnippet>349</a>        num_samples: usize,
+<a href=#350 id=350 data-nosnippet>350</a>        inputs: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>[f64]],
+<a href=#351 id=351 data-nosnippet>351</a>        outputs: <span class="kw-2">&amp;mut </span>[<span class="kw-2">&amp;mut </span>[f64]],
+<a href=#352 id=352 data-nosnippet>352</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="kw">if </span>num_samples &gt; <span class="self">self</span>.buffer_size {
+<a href=#354 id=354 data-nosnippet>354</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidArgument(
+<a href=#355 id=355 data-nosnippet>355</a>                <span class="string">"num_samples exceeds the configured buffer_size"</span>,
+<a href=#356 id=356 data-nosnippet>356</a>            ));
+<a href=#357 id=357 data-nosnippet>357</a>        }
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a>        <span class="kw">if </span>inputs.iter().any(|channel| channel.len() &lt; num_samples) {
+<a href=#360 id=360 data-nosnippet>360</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidArgument(
+<a href=#361 id=361 data-nosnippet>361</a>                <span class="string">"an input channel is shorter than num_samples"</span>,
+<a href=#362 id=362 data-nosnippet>362</a>            ));
+<a href=#363 id=363 data-nosnippet>363</a>        }
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="kw">if </span>outputs.iter().any(|channel| channel.len() &lt; num_samples) {
+<a href=#366 id=366 data-nosnippet>366</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidArgument(
+<a href=#367 id=367 data-nosnippet>367</a>                <span class="string">"an output channel is shorter than num_samples"</span>,
+<a href=#368 id=368 data-nosnippet>368</a>            ));
+<a href=#369 id=369 data-nosnippet>369</a>        }
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span>input_ptrs: Vec&lt;<span class="kw-2">*const </span>f64&gt; = inputs.iter().map(|channel| channel.as_ptr()).collect();
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">let </span><span class="kw-2">mut </span>output_ptrs: Vec&lt;<span class="kw-2">*mut </span>f64&gt; = outputs
+<a href=#373 id=373 data-nosnippet>373</a>            .iter_mut()
+<a href=#374 id=374 data-nosnippet>374</a>            .map(|channel| channel.as_mut_ptr())
+<a href=#375 id=375 data-nosnippet>375</a>            .collect();
+<a href=#376 id=376 data-nosnippet>376</a>
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>code = <span class="kw">unsafe </span>{
+<a href=#378 id=378 data-nosnippet>378</a>            ffi::elementary_runtime_process(
+<a href=#379 id=379 data-nosnippet>379</a>                <span class="self">self</span>.handle.as_ptr(),
+<a href=#380 id=380 data-nosnippet>380</a>                input_ptrs.as_ptr(),
+<a href=#381 id=381 data-nosnippet>381</a>                input_ptrs.len(),
+<a href=#382 id=382 data-nosnippet>382</a>                output_ptrs.as_mut_ptr(),
+<a href=#383 id=383 data-nosnippet>383</a>                output_ptrs.len(),
+<a href=#384 id=384 data-nosnippet>384</a>                num_samples,
+<a href=#385 id=385 data-nosnippet>385</a>            )
+<a href=#386 id=386 data-nosnippet>386</a>        };
+<a href=#387 id=387 data-nosnippet>387</a>
+<a href=#388 id=388 data-nosnippet>388</a>        <span class="kw">if </span>code == <span class="number">0 </span>{
+<a href=#389 id=389 data-nosnippet>389</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#390 id=390 data-nosnippet>390</a>        }
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="prelude-val">Err</span>(Error::Native {
+<a href=#393 id=393 data-nosnippet>393</a>            operation: <span class="string">"process"</span>,
+<a href=#394 id=394 data-nosnippet>394</a>            code,
+<a href=#395 id=395 data-nosnippet>395</a>            message: describe_return_code(code).to_string(),
+<a href=#396 id=396 data-nosnippet>396</a>        })
+<a href=#397 id=397 data-nosnippet>397</a>    }
+<a href=#398 id=398 data-nosnippet>398</a>
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="doccomment">/// Runs garbage collection and returns the collected node identifiers.
+<a href=#400 id=400 data-nosnippet>400</a>    </span><span class="kw">pub fn </span>gc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;NodeId&gt; {
+<a href=#401 id=401 data-nosnippet>401</a>        <span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>collect(node_id: i32, user_data: <span class="kw-2">*mut </span>c_void) {
+<a href=#402 id=402 data-nosnippet>402</a>            <span class="comment">// The pointer comes from `gc` below and remains valid for the duration of the call.
+<a href=#403 id=403 data-nosnippet>403</a>            </span><span class="kw">let </span>ids = <span class="kw">unsafe </span>{ <span class="kw-2">&amp;mut *</span>(user_data <span class="kw">as </span><span class="kw-2">*mut </span>Vec&lt;NodeId&gt;) };
+<a href=#404 id=404 data-nosnippet>404</a>            ids.push(node_id);
+<a href=#405 id=405 data-nosnippet>405</a>        }
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span><span class="kw-2">mut </span>ids = Vec::new();
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">unsafe </span>{
+<a href=#409 id=409 data-nosnippet>409</a>            ffi::elementary_runtime_gc(
+<a href=#410 id=410 data-nosnippet>410</a>                <span class="self">self</span>.handle.as_ptr(),
+<a href=#411 id=411 data-nosnippet>411</a>                <span class="prelude-val">Some</span>(collect),
+<a href=#412 id=412 data-nosnippet>412</a>                <span class="kw-2">&amp;mut </span>ids <span class="kw">as </span><span class="kw-2">*mut </span><span class="kw">_ as </span><span class="kw-2">*mut </span>c_void,
+<a href=#413 id=413 data-nosnippet>413</a>            );
+<a href=#414 id=414 data-nosnippet>414</a>        }
+<a href=#415 id=415 data-nosnippet>415</a>        ids
+<a href=#416 id=416 data-nosnippet>416</a>    }
+<a href=#417 id=417 data-nosnippet>417</a>}
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a><span class="kw">impl </span>Drop <span class="kw">for </span>Runtime {
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="doccomment">/// Releases the native runtime handle.
+<a href=#421 id=421 data-nosnippet>421</a>    </span><span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">unsafe </span>{ ffi::elementary_runtime_free(<span class="self">self</span>.handle.as_ptr()) }
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>}
 </code></pre></div></section></main></body></html>
