@@ -1,18 +1,17 @@
-# elemaudio-rs
+# Elemaudio-rs
 
-Safe Rust bindings for the Elementary audio runtime.
-For detailed documentation and examples please visit the original website by Nick Thompson  => https://www.elementary.audio/
+Port of [Elementary Audio](https://www.elementary.audio/) extended for Rust-backed Audio Programming.
+For detailed documentation about the core dsp blocks and examples of programming audio with Elementary, please visit the original website by Nick Thompson  => https://www.elementary.audio/
 
-👀 You might also want to take a look at the sister repo, a Rust resource server for the Elem VFS https://github.com/cristianvogel/elemaudio-resources 
+# Status
+At this point, Elemaudio-rs is a still a work in progress, but the core dsp blocks, graph functionality and JS authoring surface are available for Rust-backed audio programming. This project aims to reach parity with the original Elementary JS/TS authoring surface, whilst also providing a Rust-native authoring surface and possibly extending DSP into Rust-native dsp blocks.
 
-## API Docs
+👀 You might also want to take a look at the sister elemaudio-rs project, [a Rust resource server]( https://github.com/cristianvogel/elemaudio-resources ) for the Elem [VFS](https://www.elementary.audio/docs/guides/Virtual_File_System)
 
-Published Rust API docs live on GitHub Pages after the `Publish docs` workflow runs:
+## Elemaudio-rs Docs
 
+Publishing Rust API docs on GitHub Pages
 - `https://cristianvogel.github.io/elemaudio-rs/`
-
-The workflow builds `cargo doc --no-deps` and publishes `target/doc` to the `gh-pages` branch.
-
 
 ## Authoring Surfaces
 
@@ -21,7 +20,7 @@ This repository exposes two composition surfaces:
 - Rust helpers in `src/graph.rs` for native examples and lower-level control
 - `@elem-rs/core` in `packages/core` for the JS/TS authoring layer
 
-The Rust runtime executes lowered instruction batches through the FFI bridge. The JS/TS package provides the higher-level authoring API used by the browser demos.
+The Rust runtime executes lowered instruction batches through the FFI bridge into the [upstream C++ runtime](https://github.com/elemaudio/elementary/tree/main/runtime). The JS/TS authoring surface of Elementary.js has been ported, to provide the higher-level authoring API as used by the browser demos and upstream demo graphs and examples.
 The Rust graph helpers also include `el.custom(...)` for custom node kinds and `mc.*` for multichannel wrappers.
 The Rust `core` module exposes `create_node`, `resolve`, `is_node`, and `unpack`.
 The Rust helper surface stays function-based: the fold-style math helpers use tuple inputs, rather than a macro DSL.
