@@ -7,7 +7,7 @@ LAST_SYNC: 2026-03-30
 PURPOSE: Track project progress, status, and metrics across development sessions
 -->
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-06
 **Project Phase:** DEVELOPMENT
 **Completion:** 70% (Rust graph authoring surface expanded and JS/TS authoring surface in place)
 **Next Phase:** Tighten parity between Rust graph helpers, multichannel wrappers, and native runtime integration
@@ -40,6 +40,8 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - [x] Added Rust graph authoring helpers for the upstream `el.*` surface
 - [x] Added `src/core.rs` with `create_node`, `resolve`, `is_node`, and `unpack`
 - [x] Added multichannel `mc.*` helpers on the Rust side
+- [x] Added `el.convolve`-based IR channel splitting in the web-ui sample demo
+- [x] Added an IR pair toggle for swapping between channel pairs without remounting the graph
 - [x] Confirmed the Rust graph authoring surface remains function-based, with bracketed variadic math helpers
 - [x] Added `Graph::render(...)` as the preferred graph composition API
 - [x] Documented `key`-driven composition guidance using the upstream keys guide
