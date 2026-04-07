@@ -1,7 +1,8 @@
 # Elemaudio-rs
 
 Port of [Elementary Audio](https://www.elementary.audio/) extended for Rust-backed Audio Programming.
-For detailed documentation about the core dsp blocks and examples of programming audio with Elementary, please visit the original website by Nick Thompson  => https://www.elementary.audio/
+For detailed documentation about the core dsp blocks and examples of programming audio with Elementary Audio, please visit the official website by Nick Thompson  => https://www.elementary.audio/
+Elementary Audio and ElemAudio-rs both include dsp code by Geraint Luff Copyright 2022+ Signalsmith Audio Ltd under MIT License
 
 # Status
 At this point, Elemaudio-rs is a still a work in progress, but the core dsp blocks, graph functionality and JS authoring surface are available for Rust-backed audio programming. This project aims to reach parity with the original Elementary JS/TS authoring surface, whilst also providing a Rust-native authoring surface and possibly extending DSP into Rust-native dsp blocks.
