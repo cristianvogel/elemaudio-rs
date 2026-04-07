@@ -109,24 +109,19 @@ If you want those tools available in future shells, add the SDK environment setu
 
 Version note: the vendor browser runtime currently expects Emscripten `3.1.52`. Newer `latest` SDK builds may fail in `src/vendor/elementary/runtime/elem/deps/json.hpp` during the WASM rebuild.
 
-## Upstream Vendor Sync
+## Vendored Elementary
 
-The Elementary JS/runtime sources are vendored under `src/vendor/elementary`.
+The Elementary JS/runtime sources are vendored under `src/vendor/elementary` as a flattened, pinned snapshot.
 The JS/TS authoring package is generated into `packages/core`.
 
-To refresh that copy from the upstream repository:
+Pinned vendored dependencies include:
+- `signalsmith-linear` 0.3.2
+- `signalsmith-dsp` v1.7.1
+- `signalsmith-hilbert` 1.0.0
+- `FFTConvolver` f2cdeb04c42141d2caec19ca4f137398b2a76b85
+- `stfx` from `Signalsmith-Audio/basics` `main`
 
-```bash
-./scripts/sync-elementary.sh
-```
-
-To sync a specific ref:
-
-```bash
-./scripts/sync-elementary.sh <branch-or-tag>
-```
-
-The sync script also regenerates `packages/core` from the upstream helper modules.
+The vendored `choc` tree was pruned down to the runtime-facing surface. Example, test, web, and other tooling-only subtrees were removed after verifying that `runtime/elem` does not directly include them.
 
 To rebuild the browser runtime and then the web-ui example, run:
 
