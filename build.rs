@@ -6,6 +6,8 @@ fn main() {
     let manifest_dir =
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is set by Cargo");
     let vendor_runtime = format!("{manifest_dir}/src/vendor/elementary/runtime");
+    let vendor_third_party =
+        format!("{manifest_dir}/src/vendor/elementary/runtime/elem/third-party");
     let native_runtime = format!("{manifest_dir}/src/native");
 
     println!("cargo:rerun-if-changed=src/ffi/elementary_bridge.cpp");
@@ -17,6 +19,7 @@ fn main() {
         .cpp(true)
         .file("src/ffi/elementary_bridge.cpp")
         .include(&vendor_runtime)
+        .include(&vendor_third_party)
         .include(&native_runtime)
         .flag_if_supported("-std=c++17");
 
