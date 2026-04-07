@@ -114,6 +114,8 @@ Version note: the vendor browser runtime currently expects Emscripten `3.1.52`. 
 The Elementary JS/runtime sources are vendored under `src/vendor/elementary` as a flattened, pinned snapshot.
 The JS/TS authoring package is generated into `packages/core`.
 
+Current pinned vendor footprint: about 5.3 MB for `src/vendor/elementary`.
+
 Pinned vendored dependencies include:
 - `signalsmith-linear` 0.3.2
 - `signalsmith-dsp` v1.7.1

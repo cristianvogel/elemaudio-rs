@@ -33,6 +33,7 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - [x] Vendored and pinned third-party dependencies locally: `signalsmith-linear` 0.3.2, `signalsmith-dsp` v1.7.1, `signalsmith-hilbert` 1.0.0, `FFTConvolver` f2cdeb04c42141d2caec19ca4f137398b2a76b85, and `stfx` from `basics/main`
 - [x] Pruned non-runtime `choc`/tooling subtrees from the vendored snapshot after verifying `runtime/elem` did not directly include them
 - [x] Restored the browser demo series after the vendor flattening and include-path fixes
+- [x] Reduced the vendored Elementary snapshot footprint to about 5.3 MB
 - [x] Added `AGENTS.md` and `CLAUDE.md`
 - [x] Added `JIMMYS-WORKFLOW.md` and `NEXT-SESSION-START-HERE.md`
 - [x] Updated `STATUS.md` for the current project state
