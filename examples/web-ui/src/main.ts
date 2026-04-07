@@ -135,23 +135,23 @@ let synthVoice = (hz: NodeRepr_t) =>
 
 let trains = [ el.train(8), el.train(6) ];
 let arp = [0, 4, 7, 11, 12, 11, 4, 7]
-    .map((x) => 261.63 * 0.5 * Math.pow(2, x / 12))
-    .map(Math.round); // for snapshot stability
+    .map((x) => 261.63 * 0.5 * Math.pow(2, x / 12));
+
 
 let modulate = (x: number, rate: number, amt:number) => el.add(x, el.mul(amt, el.cycle(rate)));
 let env = el.adsr(0.01, 0.5, 0, 0.4, trains[0] );
-let lpf = (f: number, x: NodeRepr_t) =>
-    el.lowpass(el.add( f , el.mul(modulate(1840, 0.05, 1800), env)), 1, x);
+let lpf = ( vn: number = 1, f: number, x: NodeRepr_t) =>
+    el.lowpass(el.add( el.const( {key: "lpf-cutoff-"+vn, value: f})  , el.mul(modulate(400, 0.05, 800), env)), 1, x);
 
 
 let synth_out = (f: number) => [
     el.mul(
         0.25,
-        lpf( f,  synthVoice(el.seq({seq: arp, hold: true, offset: 4}, trains[0], 1)))
+        lpf( 1, f,  synthVoice(el.seq({seq: arp, hold: true, offset: 4}, trains[0], 1)))
     ),
     el.mul(
         0.25,
-        lpf( f, synthVoice(el.seq({seq: arp, hold: true, offset: 0}, trains[1], 1)))
+        lpf( 2, f, synthVoice(el.seq({seq: arp, hold: true, offset: 0}, trains[1], 1)))
     )
 ];
 
