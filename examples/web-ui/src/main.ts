@@ -90,7 +90,6 @@ const status = mustQuery<HTMLDivElement>("#status");
 
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
-let lastCrunchEnabled = crunchEnable.checked;
 
 function mustQuery<T extends Element>(selector: string): T {
     const element = app!.querySelector<T>(selector);
@@ -221,21 +220,10 @@ async function renderCurrentGraph(checked: boolean = crunchEnable.checked) {
     crunchToneValue.textContent = `${Number(crunchToneSlider.value)} Hz`;
     crunchCutValue.textContent = `${Number(crunchCutSlider.value)} Hz`;
     crunchOutValue.textContent = `${Number(crunchOutSlider.value).toFixed(2)}x`;
-    const crunchEnabled = checked;
 
     // Use the renderer's built-in root fades so graph transitions stay smooth.
     let msg = await renderer.renderWithOptions({rootFadeInMs: 10, rootFadeOutMs: 10}, ...buildGraph(frequency));
-    console.log("Rendered", msg);
-    if (lastCrunchEnabled && !crunchEnabled) {
-        const pruned = await renderer.gc();
-        console.log("GC pruned", pruned);
-        status.textContent = `Running. Crunch removed; GC pruned ${pruned.length} nodes.`;
-    } else {
-        status.textContent = `Running. Crunch active.`;
-    }
-
-    lastCrunchEnabled = crunchEnabled;
-
+    console.log("Graph updated: ", msg);
 
 }
 
