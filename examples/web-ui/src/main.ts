@@ -20,11 +20,20 @@ app.innerHTML = `
     <div class="controls">
       <div class="row">
         <label for="frequency">
-          <span>Frequency</span>
+          <span>Synth Fc</span>
           <span id="frequency-value">220 Hz</span>
         </label>
         <input id="frequency" type="range" min="60" max="1200" value="220" step="1" />
       </div>
+      <hr style="width: 100%; opacity: 0.125"/>
+      <div class="row">
+      <label  for="drive-limiter">
+      <span>Drive limiter</span>
+      <span id="drive-limiter-value">8.0x</span>
+    </label>
+    <input id="drive-limiter" type="range" min="1" max="8" value="1" step="0.1" />
+</div>
+      <hr style="width: 100%; opacity: 0.125"/>
       <div class="row">
         <label for="crunch-drive">
           <span>Crunch drive</span>
@@ -66,6 +75,7 @@ app.innerHTML = `
         </label>
         <input id="crunch-enable" type="checkbox" checked />
       </div>
+      <hr style="width: 100%; opacity: 0.125"/>
       <button id="start">Start audio</button>
       <div class="status" id="status">Idle</div>
     </div>
@@ -75,6 +85,8 @@ app.innerHTML = `
 const startButton = mustQuery<HTMLButtonElement>("#start");
 const frequencySlider = mustQuery<HTMLInputElement>("#frequency");
 const frequencyValue = mustQuery<HTMLSpanElement>("#frequency-value");
+const driveLimiterSlider = mustQuery<HTMLInputElement>("#drive-limiter");
+const driveLimiterValue = mustQuery<HTMLSpanElement>("#drive-limiter-value");
 const crunchDriveSlider = mustQuery<HTMLInputElement>("#crunch-drive");
 const crunchDriveValue = mustQuery<HTMLSpanElement>("#crunch-drive-value");
 const crunchFuzzSlider = mustQuery<HTMLInputElement>("#crunch-fuzz");
@@ -188,10 +200,12 @@ const crunchBranch = ( input: NodeRepr_t): NodeRepr_t => {
 
 /// Now we wire up the "modules" defined above to form a graph.
 function buildGraph(f: number): NodeRepr_t[] {
-    return [
+    const voicePair =  [
         crunchBranch(synth_out(f)[0]),
         crunchBranch(synth_out(f)[1]),
     ];
+    const inputGain = Number(driveLimiterSlider.value);
+    return  el.extra.stereoLimiter(  { key: "stereo-limiter", inputGain }, voicePair[0], voicePair[1]  )  ;
 }
 
 async function ensureAudio() {
@@ -208,7 +222,7 @@ async function ensureAudio() {
 
 /// and this is the main renderer call, where dsp params
 ///  will be dynamically changed at runtime by a standard HTML slider input element.
-async function renderCurrentGraph(checked: boolean = crunchEnable.checked) {
+async function renderCurrentGraph() {
     if (!renderer || !frequencyValue || !status) {
         return;
     }
@@ -220,11 +234,11 @@ async function renderCurrentGraph(checked: boolean = crunchEnable.checked) {
     crunchToneValue.textContent = `${Number(crunchToneSlider.value)} Hz`;
     crunchCutValue.textContent = `${Number(crunchCutSlider.value)} Hz`;
     crunchOutValue.textContent = `${Number(crunchOutSlider.value).toFixed(2)}x`;
+    driveLimiterValue.textContent = `${Number(driveLimiterSlider.value).toFixed(1)}x`;
 
     // Use the renderer's built-in root fades so graph transitions stay smooth.
     let msg = await renderer.renderWithOptions({rootFadeInMs: 10, rootFadeOutMs: 10}, ...buildGraph(frequency));
-    console.log("Graph updated: ", msg);
-
+    console.log("Renderer: ", msg);
 }
 
 startButton.addEventListener("click", async () => {
@@ -246,7 +260,16 @@ frequencySlider.addEventListener("input", () => {
     frequencyValue.textContent = `${frequency} Hz`;
 
     if (renderer && audioContext?.state === "running") {
-        void renderCurrentGraph(crunchEnable.checked);
+        void renderCurrentGraph();
+    }
+});
+
+driveLimiterSlider.addEventListener("input", () => {
+    const driveLimiter = Number(driveLimiterSlider.value);
+    driveLimiterValue.textContent = `${driveLimiter.toFixed(1)}x`;
+
+    if (renderer && audioContext?.state === "running") {
+        void renderCurrentGraph();
     }
 });
 
@@ -256,7 +279,7 @@ frequencySlider.addEventListener("input", () => {
         // next render drops that branch, then the runtime GC prunes the unreachable
         // nodes after the fade-out settles.
         if (renderer && audioContext?.state === "running") {
-            void renderCurrentGraph(crunchEnable.checked);
+            void renderCurrentGraph();
         }
     });
 });
