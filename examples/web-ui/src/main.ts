@@ -140,8 +140,7 @@ let synthVoice = (hz: NodeRepr_t) =>
         el.add(
             el.blepsaw(el.mul(hz, 1.001)),
             el.blepsquare(el.mul(hz, 0.994)),
-            el.blepsquare(el.mul(hz, 0.501)),
-            el.blepsaw(el.mul(hz, 0.496))
+            el.cycle(el.mul(hz, 0.5)),
         )
     );
 
