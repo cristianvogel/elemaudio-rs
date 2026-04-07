@@ -93,25 +93,45 @@ The current package entrypoint lives in `packages/core/src/index.ts`.
 4. Clone the repository.
 5. Run `cargo build`.
 6. Run `cargo test`.
+7. Install Emscripten if you need to rebuild the browser runtime. The `scripts/rebuild-web-ui.sh` helper requires `emcmake` and `emmake` on `PATH`.
 
-## Upstream Vendor Sync
+To install Emscripten globally with the official SDK:
 
-The Elementary JS/runtime sources are vendored under `src/vendor/elementary`.
+```bash
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+```
+
+If you want those tools available in future shells, add the SDK environment setup to your shell profile after activation.
+
+Version note: the vendor browser runtime currently expects Emscripten `3.1.52`. Newer `latest` SDK builds may fail in `src/vendor/elementary/runtime/elem/deps/json.hpp` during the WASM rebuild.
+
+## Vendored Elementary
+
+The Elementary JS/runtime sources are vendored under `src/vendor/elementary` as a flattened, pinned snapshot.
 The JS/TS authoring package is generated into `packages/core`.
 
-To refresh that copy from the upstream repository:
+Current pinned vendor footprint: about 5.3 MB for `src/vendor/elementary`.
+
+Pinned vendored dependencies include:
+- `signalsmith-linear` 0.3.2
+- `signalsmith-dsp` v1.7.1
+- `signalsmith-hilbert` 1.0.0
+- `FFTConvolver` f2cdeb04c42141d2caec19ca4f137398b2a76b85
+- `stfx` from `Signalsmith-Audio/basics` `main`
+
+The vendored `choc` tree was pruned down to the runtime-facing surface. Example, test, web, and other tooling-only subtrees were removed after verifying that `runtime/elem` does not directly include them.
+
+To rebuild the browser runtime and then the web-ui example, run:
 
 ```bash
-./scripts/sync-elementary.sh
+./scripts/rebuild-web-ui.sh
 ```
 
-To sync a specific ref:
-
-```bash
-./scripts/sync-elementary.sh <branch-or-tag>
-```
-
-The sync script also regenerates `packages/core` from the upstream helper modules.
+This is required after changing browser-visible node registrations such as `el::extra::*` helpers.
 
 
 ## Common Commands

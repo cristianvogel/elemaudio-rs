@@ -19,7 +19,7 @@ pub use core::{create_node, is_node, resolve, unpack, ElemNode};
 /// Error types and helpers used by the public API.
 pub use error::{Error, Result};
 /// Rust-native graph primitives.
-pub use graph::{el, mc, Graph, MountedGraph, MountedNode, Node};
+pub use graph::{el, extra, mc, Graph, MountedGraph, MountedNode, Node};
 /// Rust-native resource registry and resource values.
 pub use resource::{AudioBuffer, Resource, ResourceId, ResourceManager};
 /// Instruction types and the runtime wrapper.

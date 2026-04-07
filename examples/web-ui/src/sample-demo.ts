@@ -45,6 +45,13 @@ app.innerHTML = `
         <input id="rate" type="range" min="0.5" max="1.5" value="1" step="0.01" />
       </div>
       <div class="row">
+        <label for="blend">
+          <span>Dry / wet blend</span>
+          <span id="blend-value">50%</span>
+        </label>
+        <input id="blend" type="range" min="0" max="100" value="50" step="1" />
+      </div>
+      <div class="row">
         <label for="sample-file">
           <span>Browser file</span>
           <span id="sample-file-name">Built-in sample</span>
@@ -63,8 +70,10 @@ app.innerHTML = `
 const startButton = mustQuery<HTMLButtonElement>("#start");
 const reloadButton = mustQuery<HTMLButtonElement>("#reload");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
+const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const sampleFileInput = mustQuery<HTMLInputElement>("#sample-file");
 const rateValue = mustQuery<HTMLSpanElement>("#rate-value");
+const blendValue = mustQuery<HTMLSpanElement>("#blend-value");
 const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
 const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
@@ -101,6 +110,15 @@ function updateIrToggleLabel() {
 
   toggleIrButton.disabled = irChannelPaths.length < 4;
   toggleIrButton.textContent = activeIrPairStart === 0 ? "Use IR pair 1/2" : "Use IR pair 3/4";
+}
+
+async function updateBlend() {
+  const blend = Number(blendSlider.value) / 100;
+  blendValue.textContent = `${Math.round(blend * 100)}%`;
+
+  if (renderer && audioContext?.state === "running") {
+    await renderCurrentGraph();
+  }
 }
 
 async function loadBundledResources() {
@@ -180,30 +198,40 @@ async function loadBrowserSample(file: File) {
 }
 
 function buildGraph(rate: number): NodeRepr_t[] {
-  const trigger = el.train(0.05);
+  const trigger = el.train(0.1);
+  const blend = Number(blendSlider.value) / 100;
   const leftIrPath = irChannelPaths[activeIrPairStart] ?? `${bundledIrBasePath}_ch1.wav`;
   const rightIrPath = irChannelPaths[activeIrPairStart + 1] ?? leftIrPath;
+  const blendNode = el.const({ value: blend });
 
   if (sampleChannels > 1) {
     const source = el.mc.sample({ path: samplePath, playbackRate: rate, channels: sampleChannels }, trigger);
     const leftSource = source[0];
     const rightSource = source[1] ?? source[0];
-    const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, leftSource));
-    const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, rightSource));
+    const leftShiftDown = el.extra.freqshift( {shiftHz: 100, mix: 1.0, key: "fshift_Left", reflect: 3}, leftSource)[0];
+    const rightShiftDown = el.extra.freqshift( {shiftHz: 300, mix: 1.0, key: "fshift_Right", reflect: 3}, rightSource)[0];
+    const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, leftShiftDown));
+    const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, rightShiftDown));
+    const leftBlend = el.select(blendNode, leftWet, leftShiftDown);
+    const rightBlend = el.select(blendNode, rightWet, rightShiftDown);
 
     return [
-      el.mul(0.5, el.add(leftSource, el.mul(3, leftWet))),
-      el.mul(0.5, el.add(rightSource, el.mul(3, rightWet))),
+      el.mul(0.5, leftBlend),
+      el.mul(0.5, rightBlend),
     ];
   }
 
   const source = el.sample({ path: samplePath }, trigger, el.const({ value: rate }));
-  const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, source));
-  const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, source));
+  const shiftDown = el.extra.freqshift({ shiftHz: 100, mix: 1.0, key: "mono_fshift_down", reflect: 3 }, source)[0];
+  const shiftUp = el.extra.freqshift({ shiftHz: 100, mix: 1.0, key: "mono_fshift_up", reflect: 3 }, source)[1];
+  const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, shiftDown));
+  const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, shiftUp));
+  const leftBlend = el.select(blendNode, leftWet, shiftDown);
+  const rightBlend = el.select(blendNode, rightWet, shiftUp);
 
   return [
-    el.mul(0.5, el.add(source, el.mul(3, leftWet))),
-    el.mul(0.5, el.add(source, el.mul(3, rightWet))),
+    el.mul(0.5, leftBlend),
+    el.mul(0.5, rightBlend),
   ];
 }
 
@@ -297,4 +325,8 @@ rateSlider.addEventListener("input", () => {
   if (renderer && audioContext?.state === "running") {
     void renderCurrentGraph();
   }
+});
+
+blendSlider.addEventListener("input", () => {
+  void updateBlend();
 });

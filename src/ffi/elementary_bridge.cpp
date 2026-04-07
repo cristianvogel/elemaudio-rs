@@ -7,6 +7,9 @@
 #include <elem/JSON.h>
 #include <elem/Runtime.h>
 
+#include <extra/crunch.h>
+#include <extra/freqshift.h>
+
 extern "C" {
 
 struct elementary_runtime_handle {
@@ -24,6 +27,15 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         handle->runtime = std::make_unique<elem::Runtime<double>>(sample_rate, block_size);
         handle->sample_rate = sample_rate;
         handle->sample_time = 0;
+
+        handle->runtime->registerNodeType("freqshift", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FreqShiftNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::CrunchNode<double>>(id, fs, bs);
+        });
+
         return handle.release();
     } catch (...) {
         return nullptr;

@@ -358,6 +358,57 @@ pub mod mc {
     }
 }
 
+/// Extended helpers for native DSP nodes.
+pub mod extra {
+    use super::Node;
+    use crate::{resolve, unpack, ElemNode};
+
+    fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value) {
+        let channels = props
+            .get("channels")
+            .and_then(|value| value.as_u64())
+            .expect("extra helper props must include a positive integer `channels`")
+            as usize;
+
+        if let serde_json::Value::Object(map) = &mut props {
+            map.remove("channels");
+        }
+
+        (channels, props)
+    }
+
+    /// Frequency shifter helper.
+    ///
+    /// Returns two roots:
+    /// - output 0: down-shifted
+    /// - output 1: up-shifted
+    ///
+    /// Props:
+    /// - `shiftHz`: frequency shift in Hz
+    /// - `mix`: wet amount in the range `0.0..=1.0`
+    /// - `reflect`: integer mode for negative shift handling
+    pub fn freqshift(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
+        unpack(Node::new("freqshift", props, vec![resolve(x)]), 2)
+    }
+
+    /// Crunch distortion helper.
+    ///
+    /// Returns one root per output channel.
+    ///
+    /// Props:
+    /// - `channels`: number of channels to unpack
+    /// - `drive`: pre-distortion input gain
+    /// - `fuzz`: amplitude-independent distortion amount
+    /// - `toneHz`: tone control frequency
+    /// - `cutHz`: pre-distortion high-pass frequency
+    /// - `outGain`: output gain
+    /// - `autoGain`: enable auto gain compensation
+    pub fn crunch(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
+        let (channels, props) = channels_and_props(props);
+        unpack(Node::new("crunch", props, vec![resolve(x)]), channels)
+    }
+}
+
 /// Functional helpers mirroring Elementary's `el.*` style.
 ///
 /// Rust keeps the helper surface function-based.
