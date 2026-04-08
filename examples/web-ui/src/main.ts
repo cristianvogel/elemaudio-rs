@@ -1,5 +1,5 @@
-import {el} from "@elem-rs/core";
 import type {NodeRepr_t} from "@elem-rs/core";
+import {el} from "@elem-rs/core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
 
@@ -103,6 +103,83 @@ const status = mustQuery<HTMLDivElement>("#status");
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 
+
+///////// DSP ////////////////////////////////////////////////
+/// Here we define nodes in the graph, using the `el` utilities.
+///=== synth arp demo
+
+let synthVoice = (hz: NodeRepr_t) =>
+    el.mul(
+        0.25,
+        el.add(
+            el.blepsaw(el.mul(hz, 1.001)),
+            el.blepsquare(el.mul(hz, 0.994)),
+            el.cycle(el.mul(hz, 0.5))
+        )
+    );
+
+let trains = [el.train(8), el.train(6)];
+let arp = [0, 4, 7, 11, 12, 11, 4, 7]
+    .map((x) => 261.63 * 0.5 * Math.pow(2, x / 12));
+
+
+let modulate = (x: number, rate: number, amt: number) => el.add(x, el.mul(amt, el.cycle(rate)));
+let env = el.adsr(0.01, 0.5, 0, 0.4, trains[0]);
+let lpf = (vn: number = 1, f: number, x: NodeRepr_t) =>
+    el.lowpass(el.add(el.const({key: "lpf-cutoff-" + vn, value: f}), el.mul(modulate(400, 0.05, 800), env)), 1, x);
+
+
+let synth_out = (f: number) => [
+    el.mul(
+        0.25,
+        lpf(1, f, synthVoice(el.seq({seq: arp, hold: true, offset: 4}, trains[0], 1)))
+    ),
+    el.mul(
+        0.25,
+        lpf(2, f, synthVoice(el.seq({seq: arp, hold: true, offset: 0}, trains[1], 1)))
+    )
+];
+
+
+const crunchBranch = (key: string = "crunch-node", input: NodeRepr_t): NodeRepr_t => {
+    const drive = Number(crunchDriveSlider.value);
+    const fuzz = Number(crunchFuzzSlider.value) / 100;
+    const toneHz = Number(crunchToneSlider.value);
+    const cutHz = Number(crunchCutSlider.value);
+    const outGain = Number(crunchOutSlider.value);
+    const enabled = crunchEnable.checked ? 1 : 0;
+    // When the toggle is off, the next render omits the crunch node entirely.
+    // That makes it unreachable from the new root set and eligible for runtime GC.
+    if (!enabled) {
+        return input;
+    }
+    // Key the node so the runtime can keep its identity stable while the effect
+    // is active, then fully remove it when the toggle goes off.
+    return el.extra.crunch({
+        key,
+        channels: 1,
+        drive,
+        fuzz,
+        toneHz,
+        cutHz,
+        outGain,
+        autoGain: true
+    }, input)[0];
+};
+
+/// Now we wire up the "modules" defined above to form a graph.
+function buildGraph(f: number): NodeRepr_t[] {
+    const voicePair = [
+        crunchBranch("crunch:0", synth_out(f)[0]),
+        crunchBranch("crunch:1", synth_out(f)[1])
+    ];
+    const inputGain = Number(driveLimiterSlider.value);
+    return el.extra.stereoLimiter({key: "stereo-limiter", inputGain}, voicePair[0], voicePair[1]);
+}
+
+
+//////////////////////////////////////////////
+//== Audio and reactivity support from here on
 function mustQuery<T extends Element>(selector: string): T {
     const element = app!.querySelector<T>(selector);
 
@@ -129,84 +206,6 @@ function formatError(error: unknown): string {
     }
 }
 
-/// Here we define nodes in the graph, using the `el` utilities.
-
-
-///=== synth arp demo
-
-let synthVoice = (hz: NodeRepr_t) =>
-    el.mul(
-        0.25,
-        el.add(
-            el.blepsaw(el.mul(hz, 1.001)),
-            el.blepsquare(el.mul(hz, 0.994)),
-            el.cycle(el.mul(hz, 0.5)),
-        )
-    );
-
-let trains = [ el.train(8), el.train(6) ];
-let arp = [0, 4, 7, 11, 12, 11, 4, 7]
-    .map((x) => 261.63 * 0.5 * Math.pow(2, x / 12));
-
-
-let modulate = (x: number, rate: number, amt:number) => el.add(x, el.mul(amt, el.cycle(rate)));
-let env = el.adsr(0.01, 0.5, 0, 0.4, trains[0] );
-let lpf = ( vn: number = 1, f: number, x: NodeRepr_t) =>
-    el.lowpass(el.add( el.const( {key: "lpf-cutoff-"+vn, value: f})  , el.mul(modulate(400, 0.05, 800), env)), 1, x);
-
-
-let synth_out = (f: number) => [
-    el.mul(
-        0.25,
-        lpf( 1, f,  synthVoice(el.seq({seq: arp, hold: true, offset: 4}, trains[0], 1)))
-    ),
-    el.mul(
-        0.25,
-        lpf( 2, f, synthVoice(el.seq({seq: arp, hold: true, offset: 0}, trains[1], 1)))
-    )
-];
-
-
-const crunchBranch = ( input: NodeRepr_t): NodeRepr_t => {
-    const drive = Number(crunchDriveSlider.value);
-    const fuzz = Number(crunchFuzzSlider.value) / 100;
-    const toneHz = Number(crunchToneSlider.value);
-    const cutHz = Number(crunchCutSlider.value);
-    const outGain = Number(crunchOutSlider.value);
-    const enabled = crunchEnable.checked ? 1 : 0;
-
-    // When the toggle is off, the next render omits the crunch node entirely.
-    // That makes it unreachable from the new root set and eligible for runtime GC.
-    if (!enabled) {
-        return input;
-    }
-
-    // Key the node so the runtime can keep its identity stable while the effect
-    // is active, then fully remove it when the toggle goes off.
-    const [crushed] = el.extra.crunch({
-        key: "crunch-node",
-        channels: 1,
-        drive,
-        fuzz,
-        toneHz,
-        cutHz,
-        outGain,
-        autoGain: true
-    }, input);
-
-    return crushed;
-};
-
-/// Now we wire up the "modules" defined above to form a graph.
-function buildGraph(f: number): NodeRepr_t[] {
-    const voicePair =  [
-        crunchBranch(synth_out(f)[0]),
-        crunchBranch(synth_out(f)[1]),
-    ];
-    const inputGain = Number(driveLimiterSlider.value);
-    return  el.extra.stereoLimiter(  { key: "stereo-limiter", inputGain }, voicePair[0], voicePair[1]  )  ;
-}
-
 async function ensureAudio() {
     if (audioContext && renderer) {
         return;
@@ -226,8 +225,7 @@ async function renderCurrentGraph() {
         return;
     }
 
-    const frequency = Number(frequencySlider?.value);
-    frequencyValue.textContent = `${frequency} Hz`;
+    frequencyValue.textContent = `${Number(frequencySlider?.value)} Hz`;
     crunchDriveValue.textContent = `${Number(crunchDriveSlider.value).toFixed(1)}x`;
     crunchFuzzValue.textContent = `${Number(crunchFuzzSlider.value)}%`;
     crunchToneValue.textContent = `${Number(crunchToneSlider.value)} Hz`;
@@ -236,8 +234,13 @@ async function renderCurrentGraph() {
     driveLimiterValue.textContent = `${Number(driveLimiterSlider.value).toFixed(1)}x`;
 
     // Use the renderer's built-in root fades so graph transitions stay smooth.
-    let msg = await renderer.renderWithOptions({rootFadeInMs: 10, rootFadeOutMs: 10}, ...buildGraph(frequency));
-    console.log("Renderer: ", msg);
+    let msg = await renderer
+        .renderWithOptions(
+            {
+                rootFadeInMs: 10,
+                rootFadeOutMs: 10
+            }, ...buildGraph(Number(frequencySlider?.value)));
+    console.log("Renderer info: ", msg);
 }
 
 startButton.addEventListener("click", async () => {
