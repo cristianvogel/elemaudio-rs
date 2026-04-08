@@ -32,8 +32,12 @@ function mustQuery<T extends Element>(selector: string): T {
 
 app.innerHTML = `
   <div class="panel">
-    <h1>elemaudio-rs sample demo</h1>
-    <p>Loads a sample and an IR from <code>demo-resources/</code> and processes the sample through <code>el.convolve(...)</code>.</p>
+    <h1>elemaudio-rs</h1> <h3>sample, frequency shifter and convolver</h3>
+    <p>Loads a sample and a four-channel IR from <code>demo-resources/</code> 
+    then processes the audio through 
+    <code>el.extra.freqShift(...)</code> into <code>el.convolve(...)</code>. 
+    The four-channel IR has been pre-prepared, so that channel 3 and 4 are reversed versions of the IR. 
+    This makes it trivial to swap the IR flavour, as demonstrated by the UI button there are the bottom.</p>
     <p class="demo-link"><a href="/index.html">Back to the graph demo</a></p>
     <p class="demo-link"><a href="/resource-manager.html">Open the Rust resource manager demo</a></p>
     <div class="controls">
