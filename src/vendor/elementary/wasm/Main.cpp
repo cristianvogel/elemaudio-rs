@@ -5,6 +5,7 @@
 
 #include "Convolve.h"
 #include "FFT.h"
+#include "../../../../native/extra/boxsum.h"
 #include "../../../../native/extra/freqshift.h"
 #include "../../../../native/extra/crunch.h"
 #include "../../../../native/extra/limiter.h"
@@ -58,6 +59,10 @@ public:
 
         runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::CrunchNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("boxsum", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::BoxSumNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {

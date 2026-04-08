@@ -69,6 +69,16 @@ export interface LimiterProps extends Record<string, unknown> {
 }
 
 /**
+ * Props for `el.extra.boxSum(...)`.
+ */
+export interface BoxSumProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Box window width in Hz. */
+  windowHz: number;
+}
+
+/**
  * Native frequency shifter helper.
  *
  * Returns two outputs in order: down-shifted, then up-shifted.
@@ -167,9 +177,16 @@ export function stereoLimiter(
 }
 
 /**
- * Methods for `el.extra.strideDelay(...)`.
+ * Raw variable-width box sum for a mono source node.
  */
-export type StrideDelayMethod = "linear" | "dualStride" | "step";
+export function boxSum(props: BoxSumProps, x: ElemNode): NodeRepr_t {
+  return createNode("boxsum", props, [resolve(x)]);
+}
+
+/**
+ * Modes for `el.extra.strideDelay(...)`.
+ */
+export type StrideDelayMode = "linear" | "dualStride" | "step";
 
 /**
  * Props for `el.extra.strideDelay(...)`.
@@ -186,7 +203,7 @@ export interface StrideDelayProps extends Record<string, unknown> {
   /** Crossfade length in milliseconds. */
   transitionMs?: number;
   /** Large-jump interpolation mode. */
-  mode?: StrideDelayMethod;
+  mode?: StrideDelayMode;
 }
 
 /**

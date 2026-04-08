@@ -1,6 +1,6 @@
 import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
-import {StrideDelayMethod} from "@elem-rs/core/extra";
+import {StrideDelayMode} from "@elem-rs/core/extra";
 import {time} from "@elem-rs/core/vendor-core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
@@ -34,7 +34,7 @@ let lpf = (vn: number = 1, f: number, x: NodeRepr_t) =>
 let strideDelay = (vn: number = 1, x: NodeRepr_t ) =>
     el.extra.strideDelay( {
         key: "stride-delay-" + vn,
-        mode: delayMethodSlider.value as StrideDelayMethod,
+        mode: delayMethodSlider.value as StrideDelayMode,
         fb: Number(delayFeedbackSlider.value) / 100,
         delayMs: Number(delayTimeSlider.value),
         transitionMs: Number(delayTransitionSlider.value),
@@ -139,6 +139,7 @@ app.innerHTML = `
     <p>Click start to open the browser audio engine, build a JS graph, and stream it into the runtime.</p>
     <p class="demo-link"><a href="${sampleDemoHref}">Open the sample-file demo</a></p>
     <p class="demo-link"><a href="${resourceManagerHref}">Open the Rust resource manager demo</a></p>
+    <p class="demo-link"><a href="/boxsum.html">Open the box-sum demo</a></p>
     <div class="controls">
       <button id="start" class="start-button">Start audio</button>
       <div class="row">
