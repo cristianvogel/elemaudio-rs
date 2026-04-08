@@ -180,6 +180,22 @@ function buildGraph(f: number): NodeRepr_t[] {
 
 //////////////////////////////////////////////
 //== Audio and reactivity support from here on
+
+
+const controls = [crunchDriveSlider, crunchFuzzSlider, crunchToneSlider, crunchCutSlider, crunchOutSlider, crunchEnable, driveLimiterSlider, frequencySlider];
+
+controls.forEach((control) => {
+    control.addEventListener("input", () => {
+        // Any control change re-renders the graph. When crunch is toggled off the
+        // next render drops that branch, then the runtime GC prunes the unreachable
+        // nodes after the fade-out settles.
+        if (renderer && audioContext?.state === "running") {
+            void renderCurrentGraph();
+        }
+    });
+});
+
+
 function mustQuery<T extends Element>(selector: string): T {
     const element = app!.querySelector<T>(selector);
 
@@ -224,7 +240,6 @@ async function renderCurrentGraph() {
     if (!renderer || !frequencyValue || !status) {
         return;
     }
-
     frequencyValue.textContent = `${Number(frequencySlider?.value)} Hz`;
     crunchDriveValue.textContent = `${Number(crunchDriveSlider.value).toFixed(1)}x`;
     crunchFuzzValue.textContent = `${Number(crunchFuzzSlider.value)}%`;
@@ -257,31 +272,3 @@ startButton.addEventListener("click", async () => {
     }
 });
 
-frequencySlider.addEventListener("input", () => {
-    const frequency = Number(frequencySlider.value);
-    frequencyValue.textContent = `${frequency} Hz`;
-
-    if (renderer && audioContext?.state === "running") {
-        void renderCurrentGraph();
-    }
-});
-
-driveLimiterSlider.addEventListener("input", () => {
-    const driveLimiter = Number(driveLimiterSlider.value);
-    driveLimiterValue.textContent = `${driveLimiter.toFixed(1)}x`;
-
-    if (renderer && audioContext?.state === "running") {
-        void renderCurrentGraph();
-    }
-});
-
-[crunchDriveSlider, crunchFuzzSlider, crunchToneSlider, crunchCutSlider, crunchOutSlider, crunchEnable].forEach((control) => {
-    control.addEventListener("input", () => {
-        // Any control change re-renders the graph. When crunch is toggled off the
-        // next render drops that branch, then the runtime GC prunes the unreachable
-        // nodes after the fade-out settles.
-        if (renderer && audioContext?.state === "running") {
-            void renderCurrentGraph();
-        }
-    });
-});
