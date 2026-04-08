@@ -3,6 +3,44 @@ import {el} from "@elem-rs/core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
 
+
+function buildGraph(): NodeRepr_t[] {
+
+    const noise = el.noise({key: "boxsum:noise", seed: 7});
+
+    const box = el.extra.boxSum({windowHz: Number(windowHzSlider.value)}, noise);
+
+    const toneBases = [
+        el.const({key: 'blep:0', value: Number(toneHzSlider.value)}),
+        el.const({key: 'blep:1', value: Number(toneHzSlider.value) * 1.01})
+    ];
+    const modRange = el.const({
+        key: 'boxModRange',
+        value: Number(boxModRangeSlider.value)
+    });
+
+    const left = el.mul(
+        0.25,
+        el.blepsaw(el.abs(el.add(toneBases[0], el.mul(box, modRange)))));
+
+    const right = el.mul(
+        0.25,
+        el.blepsaw(el.abs(el.sub( el.mul(box, modRange) , toneBases[1]))));
+
+    return [left, right];
+}
+
+async function renderCurrentGraph() {
+    if (!renderer || !audioContext) {
+        return;
+    }
+
+    await audioContext.resume();
+    await renderer.render(...buildGraph());
+    updateSliderValues();
+    status.textContent = "Playing box-sum demo";
+}
+
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (!app) {
@@ -72,40 +110,6 @@ function updateSliderValues() {
     windowHzValue.textContent = `${Number(windowHzSlider.value)} Hz`;
     toneHzValue.textContent = `${Number(toneHzSlider.value)} Hz`;
     boxModRangeValue.textContent = `x${Number(boxModRangeSlider.value)}`;
-}
-
-function buildGraph(): NodeRepr_t[] {
-    const noise = el.noise({key: "boxsum:noise", seed: 7});
-    const box = el.extra.boxSum({windowHz: Number(windowHzSlider.value)}, noise);
-    const toneBases = [
-        el.const({key: 'blep:0', value: Number(toneHzSlider.value)}),
-        el.const({key: 'blep:1', value: Number(toneHzSlider.value) * 1.01})
-    ];
-    const modRange = el.const({
-        key: 'boxModRange',
-        value: Number(boxModRangeSlider.value)
-    });
-
-    const left = el.mul(
-        0.25,
-        el.blepsaw(el.abs(el.add(toneBases[0], el.mul(box, modRange)))));
-
-    const right = el.mul(
-        0.25,
-        el.blepsaw(el.abs(el.sub( el.mul(box, modRange) , toneBases[1]))));
-
-    return [left, right];
-}
-
-async function renderCurrentGraph() {
-    if (!renderer || !audioContext) {
-        return;
-    }
-
-    await audioContext.resume();
-    await renderer.render(...buildGraph());
-    updateSliderValues();
-    status.textContent = "Playing box-sum demo";
 }
 
 async function ensureAudio() {
