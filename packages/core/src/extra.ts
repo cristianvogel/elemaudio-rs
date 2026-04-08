@@ -167,9 +167,9 @@ export function stereoLimiter(
 }
 
 /**
- * Fallback modes for `el.extra.strideDelay(...)`.
+ * Methods for `el.extra.strideDelay(...)`.
  */
-export type StrideDelayFallbackMode = "linear" | "dualStrideCrossfade" | "step";
+export type StrideDelayMethod = "linear" | "dualStride" | "step";
 
 /**
  * Props for `el.extra.strideDelay(...)`.
@@ -183,14 +183,10 @@ export interface StrideDelayProps extends Record<string, unknown> {
   delayMs: number;
   /** Feedback amount. */
   fb?: number;
-  /** Stride length in milliseconds. */
-  strideMs?: number;
   /** Crossfade length in milliseconds. */
   transitionMs?: number;
-  /** Maximum jump size before the `step` fallback subdivides the move. */
-  maxJumpMs?: number;
-  /** Large-jump fallback strategy. */
-  fallback?: StrideDelayFallbackMode;
+  /** Large-jump interpolation method. */
+  method?: StrideDelayMethod;
 }
 
 /**
@@ -220,10 +216,8 @@ export function strideDelay(
     maxDelayMs = 1000,
     delayMs,
     fb = 0,
-    strideMs = 8,
-    transitionMs = 20,
-    maxJumpMs = 50,
-    fallback = "dualStrideCrossfade",
+    transitionMs = 100,
+    method = "dualStride",
     ...other
   } = props;
 
@@ -232,10 +226,8 @@ export function strideDelay(
     maxDelayMs,
     delayMs,
     fb,
-    strideMs,
     transitionMs,
-    maxJumpMs,
-    fallback,
+    method,
   };
 
   if (right === undefined) {

@@ -12,6 +12,7 @@
 
 namespace elem
 {
+    static constexpr double kStrideDelayMaxJumpMs = 1000.0;
 
     template <typename FloatType>
     struct StrideDelayNode : public GraphNode<FloatType> {
@@ -34,18 +35,12 @@ namespace elem
             } else if (key == "fb") {
                 if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
                 fbTarget.store(static_cast<Sample>((js::Number) val), std::memory_order_relaxed);
-            } else if (key == "strideMs") {
-                if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
-                strideMsTarget.store(std::max<Sample>(0, static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
             } else if (key == "transitionMs") {
                 if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
                 transitionMsTarget.store(std::max<Sample>(0, static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
-            } else if (key == "maxJumpMs") {
-                if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
-                maxJumpMsTarget.store(std::max<Sample>(0, static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
-            } else if (key == "fallback") {
+            } else if (key == "method") {
                 if (!val.isString()) return ReturnCode::InvalidPropertyType();
-                fallbackTarget.store(static_cast<int>(parseFallback(val.toString())), std::memory_order_relaxed);
+                methodTarget.store(static_cast<int>(parseMethod(val.toString())), std::memory_order_relaxed);
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
@@ -87,13 +82,11 @@ namespace elem
 
             auto targetDelayMs = delayMsTarget.load(std::memory_order_relaxed);
             auto targetFb = fbTarget.load(std::memory_order_relaxed);
-            auto strideMs = strideMsTarget.load(std::memory_order_relaxed);
             auto transitionMs = transitionMsTarget.load(std::memory_order_relaxed);
-            auto maxJumpMs = maxJumpMsTarget.load(std::memory_order_relaxed);
-            auto fallback = fallbackTarget.load(std::memory_order_relaxed);
+            auto method = methodTarget.load(std::memory_order_relaxed);
 
             if (!transitionActive && std::abs(targetDelayMs - currentDelayMs) > Sample(1e-9)) {
-                startTransition(targetDelayMs, transitionMs, maxJumpMs, fallback);
+                startTransition(targetDelayMs, transitionMs, method);
             }
 
             std::vector<Sample> dry(channelCount, Sample(0));
@@ -104,7 +97,7 @@ namespace elem
             std::vector<Sample> write(channelCount, Sample(0));
 
             auto sampleRate = GraphNode<FloatType>::getSampleRate();
-            auto strideSamples = std::max<Sample>(Sample(1), strideMs * Sample(0.001) * static_cast<Sample>(sampleRate));
+            auto strideSamples = computeStrideSamples(transitionMs, sampleRate);
             for (size_t i = 0; i < numSamples; ++i) {
                 delayLine->read(delayToSamples(currentDelayMs, sampleRate), wet);
 
@@ -113,7 +106,7 @@ namespace elem
                     auto toDelaySamples = delayToSamples(transitionToMs, sampleRate);
                     auto t = smoothStep(static_cast<Sample>(transitionProgress) / static_cast<Sample>(transitionSamples));
 
-                    if (currentFallback == FallbackMode::DualStrideCrossfade) {
+                    if (currentMethod == FallbackMode::DualStrideCrossfade) {
                         readStrided(fromDelaySamples, strideSamples, readA, readScratch);
                         readStrided(toDelaySamples, strideSamples, readB, readScratch);
                     } else {
@@ -131,10 +124,10 @@ namespace elem
                         transitionActive = false;
                         transitionProgress = 0;
 
-                        if (currentFallback == FallbackMode::Step && std::abs(targetDelayMs - currentDelayMs) > maxJumpMs) {
-                            startTransition(targetDelayMs, transitionMs, maxJumpMs, fallback);
+                        if (currentMethod == FallbackMode::Step && std::abs(targetDelayMs - currentDelayMs) > Sample(kStrideDelayMaxJumpMs)) {
+                            startTransition(targetDelayMs, transitionMs, method);
                         } else if (std::abs(targetDelayMs - currentDelayMs) > Sample(1e-9)) {
-                            startTransition(targetDelayMs, transitionMs, maxJumpMs, fallback);
+                            startTransition(targetDelayMs, transitionMs, method);
                         }
                     }
                 }
@@ -171,10 +164,16 @@ namespace elem
             return delayMs * Sample(0.001) * static_cast<Sample>(sampleRate);
         }
 
-        static FallbackMode parseFallback(std::string const& fallback)
+        static Sample computeStrideSamples(Sample transitionMs, double sampleRate)
         {
-            if (fallback == "dualStrideCrossfade") return FallbackMode::DualStrideCrossfade;
-            if (fallback == "step") return FallbackMode::Step;
+            auto derivedStrideMs = std::max<Sample>(Sample(1), transitionMs * Sample(0.25));
+            return std::max<Sample>(Sample(1), derivedStrideMs * Sample(0.001) * static_cast<Sample>(sampleRate));
+        }
+
+        static FallbackMode parseMethod(std::string const& method)
+        {
+            if (method == "dualStride") return FallbackMode::DualStrideCrossfade;
+            if (method == "step") return FallbackMode::Step;
             return FallbackMode::Linear;
         }
 
@@ -212,21 +211,23 @@ namespace elem
             }
         }
 
-        void startTransition(Sample targetDelayMs, Sample transitionMs, Sample maxJumpMs, int fallback)
+        void startTransition(Sample targetDelayMs, Sample transitionMs, int method)
         {
             transitionFromMs = currentDelayMs;
             transitionToMs = targetDelayMs;
-            currentFallback = static_cast<FallbackMode>(fallback);
+            currentMethod = static_cast<FallbackMode>(method);
 
-            if (currentFallback == FallbackMode::Step) {
+            if (currentMethod == FallbackMode::Step) {
                 auto remaining = std::abs(transitionToMs - transitionFromMs);
+                auto maxJumpMs = Sample(kStrideDelayMaxJumpMs);
                 if (remaining > maxJumpMs && maxJumpMs > Sample(0)) {
                     auto direction = transitionToMs > transitionFromMs ? Sample(1) : Sample(-1);
                     transitionToMs = transitionFromMs + direction * maxJumpMs;
                 }
             }
 
-            transitionSamples = std::max<size_t>(1, static_cast<size_t>(std::ceil(transitionMs * Sample(0.001) * static_cast<Sample>(GraphNode<FloatType>::getSampleRate()))));
+            auto softenedTransitionMs = std::max<Sample>(transitionMs, Sample(60));
+            transitionSamples = std::max<size_t>(1, static_cast<size_t>(std::ceil(softenedTransitionMs * Sample(0.001) * static_cast<Sample>(GraphNode<FloatType>::getSampleRate()))));
             transitionProgress = 0;
             transitionActive = true;
         }
@@ -234,10 +235,8 @@ namespace elem
         std::atomic<Sample> maxDelayMsTarget{Sample(1000)};
         std::atomic<Sample> delayMsTarget{Sample(250)};
         std::atomic<Sample> fbTarget{Sample(0)};
-        std::atomic<Sample> strideMsTarget{Sample(8)};
-        std::atomic<Sample> transitionMsTarget{Sample(20)};
-        std::atomic<Sample> maxJumpMsTarget{Sample(50)};
-        std::atomic<int> fallbackTarget{static_cast<int>(FallbackMode::DualStrideCrossfade)};
+        std::atomic<Sample> transitionMsTarget{Sample(100)};
+        std::atomic<int> methodTarget{static_cast<int>(FallbackMode::DualStrideCrossfade)};
 
         size_t configuredChannels = 0;
         size_t configuredCapacitySamples = 0;
@@ -249,7 +248,7 @@ namespace elem
         size_t transitionSamples = 1;
         size_t transitionProgress = 0;
         bool transitionActive = false;
-        FallbackMode currentFallback = FallbackMode::DualStrideCrossfade;
+        FallbackMode currentMethod = FallbackMode::DualStrideCrossfade;
 
         std::optional<DelayLine> delayLine;
     };

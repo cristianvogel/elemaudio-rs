@@ -1,6 +1,6 @@
 import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
-import {StrideDelayFallbackMode} from "@elem-rs/core/extra";
+import {StrideDelayMethod} from "@elem-rs/core/extra";
 import {time} from "@elem-rs/core/vendor-core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
@@ -34,12 +34,10 @@ let lpf = (vn: number = 1, f: number, x: NodeRepr_t) =>
 let strideDelay = (vn: number = 1, x: NodeRepr_t ) =>
     el.extra.strideDelay( {
         key: "stride-delay-" + vn,
-        fallback: delayFallbackSlider.value as StrideDelayFallbackMode,
+        method: delayMethodSlider.value as StrideDelayMethod,
         fb: Number(delayFeedbackSlider.value) / 100,
         delayMs: Number(delayTimeSlider.value),
-        strideMs: Number(delayStrideSlider.value),
         transitionMs: Number(delayTransitionSlider.value),
-        maxJumpMs: Number(delayJumpSlider.value),
         maxDelayMs: 1000,
     }, x);
 
@@ -142,6 +140,7 @@ app.innerHTML = `
     <p class="demo-link"><a href="${sampleDemoHref}">Open the sample-file demo</a></p>
     <p class="demo-link"><a href="${resourceManagerHref}">Open the Rust resource manager demo</a></p>
     <div class="controls">
+      <button id="start" class="start-button">Start audio</button>
       <div class="row">
         <label for="frequency">
           <span>Synth Fc</span>
@@ -180,34 +179,18 @@ app.innerHTML = `
           <input id="delay-feedback" type="range" min="0" max="95" value="0" step="1" />
         </div>
         <div class="dial">
-          <label for="delay-stride">
-            <span>Stride</span>
-            <span id="delay-stride-value">8 ms</span>
-          </label>
-          <input id="delay-stride" type="range" min="1" max="64" value="8" step="1" />
-        </div>
-        <div class="dial">
           <label for="delay-transition">
             <span>Transition</span>
             <span id="delay-transition-value">20 ms</span>
           </label>
           <input id="delay-transition" type="range" min="1" max="250" value="20" step="1" />
         </div>
-      </div>
-      <div class="dial-strip">
         <div class="dial">
-          <label for="delay-jump">
-            <span>Max jump</span>
-            <span id="delay-jump-value">50 ms</span>
+          <label for="delay-method">
+            <span>Method</span>
+            <span id="delay-method-value">dualStride</span>
           </label>
-          <input id="delay-jump" type="range" min="1" max="250" value="50" step="1" />
-        </div>
-        <div class="dial">
-          <label for="delay-fallback">
-            <span>Fallback</span>
-            <span id="delay-fallback-value">dualStrideCrossfade</span>
-          </label>
-          <input id="delay-fallback" type="range" min="0" max="2" value="1" step="1" />
+          <input id="delay-method" type="range" min="0" max="2" value="1" step="1" />
         </div>
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
@@ -253,7 +236,6 @@ app.innerHTML = `
         <input id="crunch-enable" class="toggle-input" type="checkbox" checked />
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
-      <button id="start">Start audio</button>
       <div class="status" id="status">Idle</div>
     </div>
   </div>
@@ -269,14 +251,10 @@ const delayTimeSlider = mustQuery<HTMLInputElement>(app, "#delay-time");
 const delayTimeValue = mustQuery<HTMLSpanElement>(app, "#delay-time-value");
 const delayFeedbackSlider = mustQuery<HTMLInputElement>(app, "#delay-feedback");
 const delayFeedbackValue = mustQuery<HTMLSpanElement>(app, "#delay-feedback-value");
-const delayStrideSlider = mustQuery<HTMLInputElement>(app, "#delay-stride");
-const delayStrideValue = mustQuery<HTMLSpanElement>(app, "#delay-stride-value");
 const delayTransitionSlider = mustQuery<HTMLInputElement>(app, "#delay-transition");
 const delayTransitionValue = mustQuery<HTMLSpanElement>(app, "#delay-transition-value");
-const delayJumpSlider = mustQuery<HTMLInputElement>(app, "#delay-jump");
-const delayJumpValue = mustQuery<HTMLSpanElement>(app, "#delay-jump-value");
-const delayFallbackSlider = mustQuery<HTMLInputElement>(app, "#delay-fallback");
-const delayFallbackValue = mustQuery<HTMLSpanElement>(app, "#delay-fallback-value");
+const delayMethodSlider = mustQuery<HTMLInputElement>(app, "#delay-method");
+const delayMethodValue = mustQuery<HTMLSpanElement>(app, "#delay-method-value");
 const limiterEnable = mustQuery<HTMLInputElement>(app, "#limiter-enable");
 const crunchDriveSlider = mustQuery<HTMLInputElement>(app, "#crunch-drive");
 const crunchDriveValue = mustQuery<HTMLSpanElement>(app, "#crunch-drive-value");
@@ -304,10 +282,8 @@ function updateSliderValues() {
     driveLimiterValue.textContent = `${Number(driveLimiterSlider.value).toFixed(1)}x`;
     delayTimeValue.textContent = `${Number(delayTimeSlider.value)} ms`;
     delayFeedbackValue.textContent = `${Number(delayFeedbackSlider.value)}%`;
-    delayStrideValue.textContent = `${Number(delayStrideSlider.value)} ms`;
     delayTransitionValue.textContent = `${Number(delayTransitionSlider.value)} ms`;
-    delayJumpValue.textContent = `${Number(delayJumpSlider.value)} ms`;
-    delayFallbackValue.textContent = ["linear", "dualStrideCrossfade", "step"][Number(delayFallbackSlider.value)] ?? "dualStrideCrossfade";
+    delayMethodValue.textContent = ["linear", "dualStride", "step"][Number(delayMethodSlider.value)] ?? "dualStride";
 }
 
 const controls = [
@@ -321,10 +297,8 @@ const controls = [
     limiterEnable,
     delayTimeSlider,
     delayFeedbackSlider,
-    delayStrideSlider,
     delayTransitionSlider,
-    delayJumpSlider,
-    delayFallbackSlider,
+    delayMethodSlider,
     frequencySlider
 ];
 
@@ -333,10 +307,8 @@ const resetValues = new Map<HTMLInputElement, string>([
     [driveLimiterSlider, "1"],
     [delayTimeSlider, "250"],
     [delayFeedbackSlider, "0"],
-    [delayStrideSlider, "8"],
-    [delayTransitionSlider, "20"],
-    [delayJumpSlider, "50"],
-    [delayFallbackSlider, "1"],
+    [delayTransitionSlider, "100"],
+    [delayMethodSlider, "1"],
     [crunchDriveSlider, "4"],
     [crunchFuzzSlider, "0"],
     [crunchToneSlider, "2000"],

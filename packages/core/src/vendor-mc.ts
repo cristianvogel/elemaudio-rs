@@ -140,10 +140,8 @@ export function strideDelay(
     maxDelayMs?: number;
     delayMs: number;
     fb?: number;
-    strideMs?: number;
     transitionMs?: number;
-    maxJumpMs?: number;
-    fallback?: "linear" | "dualStrideCrossfade" | "step";
+    method?: "linear" | "dualStride" | "step";
   },
   x: Array<ElemNode>,
 ): Array<NodeRepr_t> {
