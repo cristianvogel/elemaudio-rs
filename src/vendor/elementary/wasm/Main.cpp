@@ -7,6 +7,7 @@
 #include "FFT.h"
 #include "../../../../native/extra/freqshift.h"
 #include "../../../../native/extra/crunch.h"
+#include "../../../../native/extra/limiter.h"
 #include "Metro.h"
 #include "SampleTime.h"
 
@@ -56,6 +57,10 @@ public:
 
         runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::CrunchNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("fft", [](elem::NodeId const id, double fs, int const bs) {

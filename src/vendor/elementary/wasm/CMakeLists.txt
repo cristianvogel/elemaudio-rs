@@ -12,7 +12,8 @@ add_executable(${TargetName}
   ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver/Utilities.cpp)
 
 target_include_directories(${TargetName} PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver)
+  ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver
+  ${CMAKE_CURRENT_SOURCE_DIR}/../runtime/elem/third-party)
 
 target_compile_features(${TargetName} PRIVATE
   cxx_std_17)

@@ -111,3 +111,22 @@ export function capture(
     channels,
   );
 }
+
+export function limiter(
+  props: {
+    key?: string;
+    maxDelayMs?: number;
+    inputGain?: number;
+    outputLimit?: number;
+    attackMs?: number;
+    holdMs?: number;
+    releaseMs?: number;
+    smoothingStages?: number;
+    linkChannels?: number;
+  },
+  x: Array<ElemNode>,
+): Array<NodeRepr_t> {
+  invariant(x.length > 0, "mc.limiter requires at least one channel");
+
+  return unpack(createNode("limiter", props, x.map(resolve)), x.length);
+}

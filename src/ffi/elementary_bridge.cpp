@@ -9,6 +9,7 @@
 
 #include <extra/crunch.h>
 #include <extra/freqshift.h>
+#include <extra/limiter.h>
 
 extern "C" {
 
@@ -34,6 +35,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::CrunchNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });
 
         return handle.release();

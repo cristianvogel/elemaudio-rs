@@ -45,6 +45,30 @@ export interface CrunchProps extends Record<string, unknown> {
 }
 
 /**
+ * Props for `el.extra.limiter(...)`.
+ */
+export interface LimiterProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Optional constructor arg on the native effect; defaults to 100. */
+  maxDelayMs?: number;
+  /** pre-gain, amplifies the input before limiting */
+  inputGain?: number;
+  /** limit, maximum output amplitude */
+  outputLimit?: number;
+  /** attack, envelope smoothing time */
+  attackMs?: number;
+  /** hold, hold constant after peaks */
+  holdMs?: number;
+  /** release, extra release time (in addition to attack + hold) */
+  releaseMs?: number;
+  /** smoothing, smoothing filter(s) used for attack-smoothing */
+  smoothingStages?: number;
+  /** link, link channel gains together */
+  linkChannels?: number;
+}
+
+/**
  * Native frequency shifter helper.
  *
  * Returns two outputs in order: down-shifted, then up-shifted.
@@ -72,4 +96,60 @@ export function crunch(
   }
 
   return unpack(createNode("crunch", other, [resolve(x)]), channels);
+}
+
+export function limiter(props: LimiterProps, x: ElemNode): NodeRepr_t;
+export function limiter(
+  props: LimiterProps,
+  left: ElemNode,
+  right: ElemNode,
+): Array<NodeRepr_t>;
+export function limiter(
+  props: LimiterProps,
+  x: ElemNode,
+  right?: ElemNode,
+): NodeRepr_t | Array<NodeRepr_t> {
+  const {
+    maxDelayMs = 100,
+    inputGain = 1,
+    outputLimit = Math.pow(10, -3 / 20),
+    attackMs = 20,
+    holdMs = 0,
+    releaseMs = 0,
+    smoothingStages = 1,
+    linkChannels = 0.5,
+    ...other
+  } = props;
+
+  const resolvedProps = {
+    ...other,
+    maxDelayMs,
+    inputGain,
+    outputLimit,
+    attackMs,
+    holdMs,
+    releaseMs,
+    smoothingStages,
+    linkChannels,
+  };
+
+  if (right === undefined) {
+    return createNode("limiter", resolvedProps, [resolve(x)]);
+  }
+
+  return unpack(
+    createNode("limiter", resolvedProps, [resolve(x), resolve(right)]),
+    2,
+  );
+}
+
+/**
+ * Stereo alias for `el.extra.limiter(...)`.
+ */
+export function stereoLimiter(
+  props: LimiterProps,
+  left: ElemNode,
+  right: ElemNode,
+): Array<NodeRepr_t> {
+  return limiter(props, left, right) as Array<NodeRepr_t>;
 }

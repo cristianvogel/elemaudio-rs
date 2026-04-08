@@ -1,5 +1,5 @@
-import {el} from "@elem-rs/core";
 import type {NodeRepr_t} from "@elem-rs/core";
+import {el} from "@elem-rs/core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
 
@@ -20,11 +20,26 @@ app.innerHTML = `
     <div class="controls">
       <div class="row">
         <label for="frequency">
-          <span>Frequency</span>
+          <span>Synth Fc</span>
           <span id="frequency-value">220 Hz</span>
         </label>
         <input id="frequency" type="range" min="60" max="1200" value="220" step="1" />
       </div>
+      <hr style="width: 100%; opacity: 0.125"/>
+            <div class="row">
+        <label class="toggle-row" for="crunch-enable">
+          <span>Enable Limiter</span>
+        </label>
+        <input id="limiter-enable" type="checkbox" checked />
+      </div>
+      <div class="row">
+      <label  for="drive-limiter">
+      <span>Drive limiter</span>
+      <span id="drive-limiter-value">8.0x</span>
+    </label>
+    <input id="drive-limiter" type="range" min="1" max="8" value="1" step="0.1" />
+</div>
+      <hr style="width: 100%; opacity: 0.125"/>
       <div class="row">
         <label for="crunch-drive">
           <span>Crunch drive</span>
@@ -66,6 +81,7 @@ app.innerHTML = `
         </label>
         <input id="crunch-enable" type="checkbox" checked />
       </div>
+      <hr style="width: 100%; opacity: 0.125"/>
       <button id="start">Start audio</button>
       <div class="status" id="status">Idle</div>
     </div>
@@ -75,6 +91,9 @@ app.innerHTML = `
 const startButton = mustQuery<HTMLButtonElement>("#start");
 const frequencySlider = mustQuery<HTMLInputElement>("#frequency");
 const frequencyValue = mustQuery<HTMLSpanElement>("#frequency-value");
+const driveLimiterSlider = mustQuery<HTMLInputElement>("#drive-limiter");
+const driveLimiterValue = mustQuery<HTMLSpanElement>("#drive-limiter-value");
+const limiterEnable = mustQuery<HTMLInputElement>("#limiter-enable");
 const crunchDriveSlider = mustQuery<HTMLInputElement>("#crunch-drive");
 const crunchDriveValue = mustQuery<HTMLSpanElement>("#crunch-drive-value");
 const crunchFuzzSlider = mustQuery<HTMLInputElement>("#crunch-fuzz");
@@ -91,6 +110,166 @@ const status = mustQuery<HTMLDivElement>("#status");
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 
+
+///////// DSP ////////////////////////////////////////////////
+/// Here we define nodes in the graph, using the `el` utilities.
+///=== synth arp demo
+
+let synthVoice = (hz: NodeRepr_t) =>
+    el.mul(
+        0.25,
+        el.add(
+            el.blepsaw(el.mul(hz, 1.001)),
+            el.blepsquare(el.mul(hz, 0.994)),
+            el.cycle(el.mul(hz, 0.5))
+        )
+    );
+
+let trains = [el.train(8), el.train(6)];
+
+let arp = [0, 4, 7, 11, 12, 11, 4, 7]
+    .map((x) => 261.63 * 0.5 * Math.pow(2, x / 12));
+
+let modulate = (x: number, rate: number, amt: number) => el.add(x, el.mul(amt, el.cycle(rate)));
+
+let env = el.adsr(0.01, 0.5, 0, 0.4, trains[0]);
+
+let lpf = (vn: number = 1, f: number, x: NodeRepr_t) =>
+    el.lowpass(el.add(el.const({key: "lpf-cutoff-" + vn, value: f}), el.mul(modulate(400, 0.05, 800), env)), 1, x);
+
+let synth_out = (f: number) => [
+    el.mul(
+        0.25,
+        lpf(1, f, synthVoice(el.seq({seq: arp, hold: true, offset: 4}, trains[0], 1)))
+    ),
+    el.mul(
+        0.25,
+        lpf(2, f, synthVoice(el.seq({seq: arp, hold: true, offset: 0}, trains[1], 1)))
+    )
+];
+
+const crunchBranch = (key: string = "crunch-node", input: NodeRepr_t): NodeRepr_t => {
+    const drive = Number(crunchDriveSlider.value);
+    const fuzz = Number(crunchFuzzSlider.value) / 100;
+    const toneHz = Number(crunchToneSlider.value);
+    const cutHz = Number(crunchCutSlider.value);
+    const outGain = Number(crunchOutSlider.value);
+    const enabled = crunchEnable.checked ? 1 : 0;
+    // When the toggle is off, the next render omits the crunch node entirely.
+    // That makes it unreachable from the new root set and eligible for runtime GC.
+    if (!enabled) {
+        return input;
+    }
+    // Key the node so the runtime can keep its identity stable while the effect
+    // is active, then fully remove it when the toggle goes off.
+    return el.extra.crunch({
+        key,
+        channels: 1,
+        drive,
+        fuzz,
+        toneHz,
+        cutHz,
+        outGain,
+        autoGain: true
+    }, input)[0];
+};
+
+/// Now we wire up the "modules" defined above to form a graph.
+function buildGraph(f: number): NodeRepr_t[] {
+    const voicePair = [
+        crunchBranch("crunch:0", synth_out(f)[0]),
+        crunchBranch("crunch:1", synth_out(f)[1])
+    ];
+    const inputGain = Number(driveLimiterSlider.value);
+    if (!limiterEnable.checked) {
+        return voicePair;
+    }
+    return el.extra.stereoLimiter({key: "stereo-limiter", inputGain}, voicePair[0], voicePair[1]);
+}
+
+/// and this is the main renderer call, where dsp params
+function updateSliderValues() {
+    frequencyValue.textContent = `${Number(frequencySlider?.value)} Hz`;
+    crunchDriveValue.textContent = `${Number(crunchDriveSlider.value).toFixed(1)}x`;
+    crunchFuzzValue.textContent = `${Number(crunchFuzzSlider.value)}%`;
+    crunchToneValue.textContent = `${Number(crunchToneSlider.value)} Hz`;
+    crunchCutValue.textContent = `${Number(crunchCutSlider.value)} Hz`;
+    crunchOutValue.textContent = `${Number(crunchOutSlider.value).toFixed(2)}x`;
+    driveLimiterValue.textContent = `${Number(driveLimiterSlider.value).toFixed(1)}x`;
+}
+
+///  will be dynamically changed at runtime by a standard HTML slider input element.
+async function renderCurrentGraph() {
+    if (!renderer || !frequencyValue || !status) {
+        return;
+    }
+    // Render the graph and use the renderer's built-in root fades so graph transitions stay smooth.
+    let msg = await renderer
+        .renderWithOptions(
+            {
+                rootFadeInMs: 250,
+                rootFadeOutMs: 250
+            }, ...buildGraph(Number(frequencySlider?.value)));
+
+    updateSliderValues();
+
+    console.log("Renderer info: ", msg);
+}
+
+
+//////////////////////////////////////////////
+//== Audio and reactivity support from here on
+const controls = [
+    crunchDriveSlider,
+    crunchFuzzSlider,
+    crunchToneSlider,
+    crunchCutSlider,
+    crunchOutSlider,
+    crunchEnable,
+    driveLimiterSlider,
+    limiterEnable,
+    frequencySlider
+];
+
+controls.forEach((control) => {
+    control.addEventListener("input", () => {
+        // Any control change re-renders the graph. When a branch is toggled off the
+        // next render should drop that branch, then the runtime GC prunes the unreachable nodes
+        if (renderer && audioContext?.state === "running") {
+            void renderCurrentGraph();
+        }
+    });
+});
+
+
+startButton.addEventListener("click", async () => {
+    startButton.disabled = true;
+    status.textContent = "Starting audio...";
+
+    try {
+        await ensureAudio();
+        await audioContext?.resume();
+        await renderCurrentGraph();
+    } catch (error) {
+        status.textContent = `Failed to start audio: ${formatError(error)}`;
+        startButton.disabled = false;
+    }
+});
+
+
+async function ensureAudio() {
+    if (audioContext && renderer) {
+        return;
+    }
+
+    audioContext = new AudioContext();
+    renderer = new WebRenderer();
+
+    const worklet = await renderer.initialize(audioContext);
+    worklet.connect(audioContext.destination);
+}
+
+
 function mustQuery<T extends Element>(selector: string): T {
     const element = app!.querySelector<T>(selector);
 
@@ -100,6 +279,8 @@ function mustQuery<T extends Element>(selector: string): T {
 
     return element;
 }
+
+
 
 function formatError(error: unknown): string {
     if (error instanceof Error) {
@@ -117,146 +298,3 @@ function formatError(error: unknown): string {
     }
 }
 
-/// Here we define nodes in the graph, using the `el` utilities.
-
-
-///=== synth arp demo
-
-let synthVoice = (hz: NodeRepr_t) =>
-    el.mul(
-        0.25,
-        el.add(
-            el.blepsaw(el.mul(hz, 1.001)),
-            el.blepsquare(el.mul(hz, 0.994)),
-            el.blepsquare(el.mul(hz, 0.501)),
-            el.blepsaw(el.mul(hz, 0.496))
-        )
-    );
-
-let trains = [ el.train(8), el.train(6) ];
-let arp = [0, 4, 7, 11, 12, 11, 4, 7]
-    .map((x) => 261.63 * 0.5 * Math.pow(2, x / 12))
-    .map(Math.round); // for snapshot stability
-
-let modulate = (x: number, rate: number, amt:number) => el.add(x, el.mul(amt, el.cycle(rate)));
-let env = el.adsr(0.01, 0.5, 0, 0.4, trains[0] );
-let lpf = (f: number, x: NodeRepr_t) =>
-    el.lowpass(el.add( f , el.mul(modulate(1840, 0.05, 1800), env)), 1, x);
-
-
-let synth_out = (f: number) => [
-    el.mul(
-        0.25,
-        lpf( f,  synthVoice(el.seq({seq: arp, hold: true, offset: 4}, trains[0], 1)))
-    ),
-    el.mul(
-        0.25,
-        lpf( f, synthVoice(el.seq({seq: arp, hold: true, offset: 0}, trains[1], 1)))
-    )
-];
-
-
-const crunchBranch = ( input: NodeRepr_t): NodeRepr_t => {
-    const drive = Number(crunchDriveSlider.value);
-    const fuzz = Number(crunchFuzzSlider.value) / 100;
-    const toneHz = Number(crunchToneSlider.value);
-    const cutHz = Number(crunchCutSlider.value);
-    const outGain = Number(crunchOutSlider.value);
-    const enabled = crunchEnable.checked ? 1 : 0;
-
-    // When the toggle is off, the next render omits the crunch node entirely.
-    // That makes it unreachable from the new root set and eligible for runtime GC.
-    if (!enabled) {
-        return input;
-    }
-
-    // Key the node so the runtime can keep its identity stable while the effect
-    // is active, then fully remove it when the toggle goes off.
-    const [crushed] = el.extra.crunch({
-        key: "crunch-node",
-        channels: 1,
-        drive,
-        fuzz,
-        toneHz,
-        cutHz,
-        outGain,
-        autoGain: true
-    }, input);
-
-    return crushed;
-};
-
-/// Now we wire up the "modules" defined above to form a graph.
-function buildGraph(f: number): NodeRepr_t[] {
-    return [
-        crunchBranch(synth_out(f)[0]),
-        crunchBranch(synth_out(f)[1]),
-    ];
-}
-
-async function ensureAudio() {
-    if (audioContext && renderer) {
-        return;
-    }
-
-    audioContext = new AudioContext();
-    renderer = new WebRenderer();
-
-    const worklet = await renderer.initialize(audioContext);
-    worklet.connect(audioContext.destination);
-}
-
-/// and this is the main renderer call, where dsp params
-///  will be dynamically changed at runtime by a standard HTML slider input element.
-async function renderCurrentGraph(checked: boolean = crunchEnable.checked) {
-    if (!renderer || !frequencyValue || !status) {
-        return;
-    }
-
-    const frequency = Number(frequencySlider?.value);
-    frequencyValue.textContent = `${frequency} Hz`;
-    crunchDriveValue.textContent = `${Number(crunchDriveSlider.value).toFixed(1)}x`;
-    crunchFuzzValue.textContent = `${Number(crunchFuzzSlider.value)}%`;
-    crunchToneValue.textContent = `${Number(crunchToneSlider.value)} Hz`;
-    crunchCutValue.textContent = `${Number(crunchCutSlider.value)} Hz`;
-    crunchOutValue.textContent = `${Number(crunchOutSlider.value).toFixed(2)}x`;
-
-    // Use the renderer's built-in root fades so graph transitions stay smooth.
-    let msg = await renderer.renderWithOptions({rootFadeInMs: 10, rootFadeOutMs: 10}, ...buildGraph(frequency));
-    console.log("Graph updated: ", msg);
-
-}
-
-startButton.addEventListener("click", async () => {
-    startButton.disabled = true;
-    status.textContent = "Starting audio...";
-
-    try {
-        await ensureAudio();
-        await audioContext?.resume();
-        await renderCurrentGraph();
-    } catch (error) {
-        status.textContent = `Failed to start audio: ${formatError(error)}`;
-        startButton.disabled = false;
-    }
-});
-
-frequencySlider.addEventListener("input", () => {
-    const frequency = Number(frequencySlider.value);
-    frequencyValue.textContent = `${frequency} Hz`;
-
-    if (renderer && audioContext?.state === "running") {
-        void renderCurrentGraph(crunchEnable.checked);
-    }
-});
-
-[crunchDriveSlider, crunchFuzzSlider, crunchToneSlider, crunchCutSlider, crunchOutSlider, crunchEnable].forEach((control) => {
-    control.addEventListener("input", () => {
-        // Any control change re-renders the graph. When crunch is toggled off the
-        // next render drops that branch, then the runtime GC prunes the unreachable
-        // nodes after the fade-out settles.
-        if (renderer && audioContext?.state === "running") {
-            void renderCurrentGraph(crunchEnable.checked);
-        }
-    });
-});
