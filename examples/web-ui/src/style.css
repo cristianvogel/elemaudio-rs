@@ -84,6 +84,59 @@ p {
   gap: 8px;
 }
 
+.dial-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.dial {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dial label {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.dial label span:last-child {
+  color: #9fb0c3;
+  font-size: 11px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.toggle-input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #8b5cf6;
+}
+
 .resource-row {
   padding: 12px;
   border-radius: 14px;
@@ -167,5 +220,3 @@ button:disabled {
   color: #9fb0c3;
   font-size: 13px;
 }
-
-

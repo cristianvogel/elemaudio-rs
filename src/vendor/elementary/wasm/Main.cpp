@@ -8,6 +8,7 @@
 #include "../../../../native/extra/freqshift.h"
 #include "../../../../native/extra/crunch.h"
 #include "../../../../native/extra/limiter.h"
+#include "../../../../native/extra/stridedelay.h"
 #include "Metro.h"
 #include "SampleTime.h"
 
@@ -61,6 +62,10 @@ public:
 
         runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("stridedelay", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::StrideDelayNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("fft", [](elem::NodeId const id, double fs, int const bs) {

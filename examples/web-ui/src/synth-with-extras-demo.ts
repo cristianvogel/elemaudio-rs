@@ -1,5 +1,7 @@
 import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
+import {StrideDelayFallbackMode} from "@elem-rs/core/extra";
+import {time} from "@elem-rs/core/vendor-core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
 
@@ -28,6 +30,18 @@ let env = el.adsr(0.01, 0.5, 0, 0.4, trains[0]);
 
 let lpf = (vn: number = 1, f: number, x: NodeRepr_t) =>
     el.lowpass(el.add(el.const({key: "lpf-cutoff-" + vn, value: f}), el.mul(modulate(400, 0.05, 800), env)), 1, x);
+
+let strideDelay = (vn: number = 1, x: NodeRepr_t ) =>
+    el.extra.strideDelay( {
+        key: "stride-delay-" + vn,
+        fallback: delayFallbackSlider.value as StrideDelayFallbackMode,
+        fb: Number(delayFeedbackSlider.value) / 100,
+        delayMs: Number(delayTimeSlider.value),
+        strideMs: Number(delayStrideSlider.value),
+        transitionMs: Number(delayTransitionSlider.value),
+        maxJumpMs: Number(delayJumpSlider.value),
+        maxDelayMs: 1000,
+    }, x);
 
 let synth_out = (f: number) => [
     el.mul(
@@ -64,15 +78,21 @@ const crunchBranch = (key: string = "crunch-node", input: NodeRepr_t): NodeRepr_
 /// and return the root nodes of the graph, a stereo limiter
 //  around the full synth output.
 function buildGraph(f: number): NodeRepr_t[] {
-    const voicePair = [
+    const crunchyVoicesPreFX = [
         crunchBranch("crunch:0", synth_out(f)[0]),
         crunchBranch("crunch:1", synth_out(f)[1])
     ];
+
+    const voiceWithFx = [
+        strideDelay(1, crunchyVoicesPreFX[0]),
+        strideDelay(2, crunchyVoicesPreFX[1]),
+    ]
+
     const inputGain = Number(driveLimiterSlider.value);
     if (!limiterEnable.checked) {
-        return voicePair;
+        return voiceWithFx;
     }
-    return el.extra.stereoLimiter({key: "stereo-limiter", inputGain}, voicePair[0], voicePair[1]);
+    return el.extra.stereoLimiter({key: "stereo-limiter", inputGain}, voiceWithFx[0], voiceWithFx[1]);
 }
 /// and this is the main renderer call, where dsp params
 ///  will be dynamically changed at runtime by a standard HTML slider input element.
@@ -130,21 +150,68 @@ app.innerHTML = `
         <input id="frequency" type="range" min="60" max="1200" value="220" step="1" />
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
-            <div class="row">
-        <label class="toggle-row" for="crunch-enable">
+      <div class="row toggle-row">
+        <label class="toggle-label" for="limiter-enable">
           <span>Enable Limiter</span>
         </label>
-        <input id="limiter-enable" type="checkbox" checked />
+        <input id="limiter-enable" class="toggle-input" type="checkbox" checked />
       </div>
       <div class="row">
-      <label  for="drive-limiter">
+        <label  for="drive-limiter">
       <span>Drive limiter</span>
       <span id="drive-limiter-value">8.0x</span>
     </label>
     <input id="drive-limiter" type="range" min="1" max="8" value="1" step="0.1" />
 </div>
       <hr style="width: 100%; opacity: 0.125"/>
-      <div class="row">
+      <div class="dial-strip" aria-label="Stride delay controls">
+        <div class="dial">
+          <label for="delay-time">
+            <span>Delay</span>
+            <span id="delay-time-value">250 ms</span>
+          </label>
+          <input id="delay-time" type="range" min="10" max="1200" value="250" step="1" />
+        </div>
+        <div class="dial">
+          <label for="delay-feedback">
+            <span>Feedback</span>
+            <span id="delay-feedback-value">0%</span>
+          </label>
+          <input id="delay-feedback" type="range" min="0" max="95" value="0" step="1" />
+        </div>
+        <div class="dial">
+          <label for="delay-stride">
+            <span>Stride</span>
+            <span id="delay-stride-value">8 ms</span>
+          </label>
+          <input id="delay-stride" type="range" min="1" max="64" value="8" step="1" />
+        </div>
+        <div class="dial">
+          <label for="delay-transition">
+            <span>Transition</span>
+            <span id="delay-transition-value">20 ms</span>
+          </label>
+          <input id="delay-transition" type="range" min="1" max="250" value="20" step="1" />
+        </div>
+      </div>
+      <div class="dial-strip">
+        <div class="dial">
+          <label for="delay-jump">
+            <span>Max jump</span>
+            <span id="delay-jump-value">50 ms</span>
+          </label>
+          <input id="delay-jump" type="range" min="1" max="250" value="50" step="1" />
+        </div>
+        <div class="dial">
+          <label for="delay-fallback">
+            <span>Fallback</span>
+            <span id="delay-fallback-value">dualStrideCrossfade</span>
+          </label>
+          <input id="delay-fallback" type="range" min="0" max="2" value="1" step="1" />
+        </div>
+      </div>
+      <hr style="width: 100%; opacity: 0.125"/>
+       <div class="row">
         <label for="crunch-drive">
           <span>Crunch drive</span>
           <span id="crunch-drive-value">4.0x</span>
@@ -179,11 +246,11 @@ app.innerHTML = `
         </label>
         <input id="crunch-out" type="range" min="0.1" max="2.0" value="1" step="0.01" />
       </div>
-      <div class="row">
-        <label class="toggle-row" for="crunch-enable">
+      <div class="row toggle-row">
+        <label class="toggle-label" for="crunch-enable">
           <span>Enable crunch</span>
         </label>
-        <input id="crunch-enable" type="checkbox" checked />
+        <input id="crunch-enable" class="toggle-input" type="checkbox" checked />
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
       <button id="start">Start audio</button>
@@ -198,6 +265,18 @@ const frequencySlider = mustQuery<HTMLInputElement>(app, "#frequency");
 const frequencyValue = mustQuery<HTMLSpanElement>(app, "#frequency-value");
 const driveLimiterSlider = mustQuery<HTMLInputElement>(app, "#drive-limiter");
 const driveLimiterValue = mustQuery<HTMLSpanElement>(app, "#drive-limiter-value");
+const delayTimeSlider = mustQuery<HTMLInputElement>(app, "#delay-time");
+const delayTimeValue = mustQuery<HTMLSpanElement>(app, "#delay-time-value");
+const delayFeedbackSlider = mustQuery<HTMLInputElement>(app, "#delay-feedback");
+const delayFeedbackValue = mustQuery<HTMLSpanElement>(app, "#delay-feedback-value");
+const delayStrideSlider = mustQuery<HTMLInputElement>(app, "#delay-stride");
+const delayStrideValue = mustQuery<HTMLSpanElement>(app, "#delay-stride-value");
+const delayTransitionSlider = mustQuery<HTMLInputElement>(app, "#delay-transition");
+const delayTransitionValue = mustQuery<HTMLSpanElement>(app, "#delay-transition-value");
+const delayJumpSlider = mustQuery<HTMLInputElement>(app, "#delay-jump");
+const delayJumpValue = mustQuery<HTMLSpanElement>(app, "#delay-jump-value");
+const delayFallbackSlider = mustQuery<HTMLInputElement>(app, "#delay-fallback");
+const delayFallbackValue = mustQuery<HTMLSpanElement>(app, "#delay-fallback-value");
 const limiterEnable = mustQuery<HTMLInputElement>(app, "#limiter-enable");
 const crunchDriveSlider = mustQuery<HTMLInputElement>(app, "#crunch-drive");
 const crunchDriveValue = mustQuery<HTMLSpanElement>(app, "#crunch-drive-value");
@@ -223,6 +302,12 @@ function updateSliderValues() {
     crunchCutValue.textContent = `${Number(crunchCutSlider.value)} Hz`;
     crunchOutValue.textContent = `${Number(crunchOutSlider.value).toFixed(2)}x`;
     driveLimiterValue.textContent = `${Number(driveLimiterSlider.value).toFixed(1)}x`;
+    delayTimeValue.textContent = `${Number(delayTimeSlider.value)} ms`;
+    delayFeedbackValue.textContent = `${Number(delayFeedbackSlider.value)}%`;
+    delayStrideValue.textContent = `${Number(delayStrideSlider.value)} ms`;
+    delayTransitionValue.textContent = `${Number(delayTransitionSlider.value)} ms`;
+    delayJumpValue.textContent = `${Number(delayJumpSlider.value)} ms`;
+    delayFallbackValue.textContent = ["linear", "dualStrideCrossfade", "step"][Number(delayFallbackSlider.value)] ?? "dualStrideCrossfade";
 }
 
 const controls = [
@@ -234,8 +319,53 @@ const controls = [
     crunchEnable,
     driveLimiterSlider,
     limiterEnable,
+    delayTimeSlider,
+    delayFeedbackSlider,
+    delayStrideSlider,
+    delayTransitionSlider,
+    delayJumpSlider,
+    delayFallbackSlider,
     frequencySlider
 ];
+
+const resetValues = new Map<HTMLInputElement, string>([
+    [frequencySlider, "220"],
+    [driveLimiterSlider, "1"],
+    [delayTimeSlider, "250"],
+    [delayFeedbackSlider, "0"],
+    [delayStrideSlider, "8"],
+    [delayTransitionSlider, "20"],
+    [delayJumpSlider, "50"],
+    [delayFallbackSlider, "1"],
+    [crunchDriveSlider, "4"],
+    [crunchFuzzSlider, "0"],
+    [crunchToneSlider, "2000"],
+    [crunchCutSlider, "50"],
+    [crunchOutSlider, "1"],
+]);
+
+const resetChecks = new Map<HTMLInputElement, boolean>([
+    [limiterEnable, true],
+    [crunchEnable, true],
+]);
+
+function resetControl(control: HTMLInputElement) {
+    if (control.type === "checkbox") {
+        control.checked = resetChecks.get(control) ?? control.checked;
+    } else {
+        const value = resetValues.get(control);
+
+        if (value !== undefined) {
+            control.value = value;
+        }
+    }
+
+    updateSliderValues();
+
+    if (renderer && audioContext?.state === "running") {
+        void renderCurrentGraph();
+    }
+}
 
 controls.forEach((control) => {
     control.addEventListener("input", () => {
@@ -244,6 +374,11 @@ controls.forEach((control) => {
         if (renderer && audioContext?.state === "running") {
             void renderCurrentGraph();
         }
+    });
+
+    control.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        resetControl(control);
     });
 });
 
@@ -291,4 +426,3 @@ function formatError(error: unknown): string {
         return String(error);
     }
 }
-
