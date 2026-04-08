@@ -185,8 +185,8 @@ export interface StrideDelayProps extends Record<string, unknown> {
   fb?: number;
   /** Crossfade length in milliseconds. */
   transitionMs?: number;
-  /** Large-jump interpolation method. */
-  method?: StrideDelayMethod;
+  /** Large-jump interpolation mode. */
+  mode?: StrideDelayMethod;
 }
 
 /**
@@ -217,7 +217,7 @@ export function strideDelay(
     delayMs,
     fb = 0,
     transitionMs = 100,
-    method = "dualStride",
+    mode = "dualStride",
     ...other
   } = props;
 
@@ -227,7 +227,7 @@ export function strideDelay(
     delayMs,
     fb,
     transitionMs,
-    method,
+    mode,
   };
 
   if (right === undefined) {

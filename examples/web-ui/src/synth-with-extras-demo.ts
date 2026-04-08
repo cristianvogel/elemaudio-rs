@@ -34,7 +34,7 @@ let lpf = (vn: number = 1, f: number, x: NodeRepr_t) =>
 let strideDelay = (vn: number = 1, x: NodeRepr_t ) =>
     el.extra.strideDelay( {
         key: "stride-delay-" + vn,
-        method: delayMethodSlider.value as StrideDelayMethod,
+        mode: delayMethodSlider.value as StrideDelayMethod,
         fb: Number(delayFeedbackSlider.value) / 100,
         delayMs: Number(delayTimeSlider.value),
         transitionMs: Number(delayTransitionSlider.value),
@@ -187,7 +187,7 @@ app.innerHTML = `
         </div>
         <div class="dial">
           <label for="delay-method">
-            <span>Method</span>
+            <span>Mode</span>
             <span id="delay-method-value">dualStride</span>
           </label>
           <input id="delay-method" type="range" min="0" max="2" value="1" step="1" />

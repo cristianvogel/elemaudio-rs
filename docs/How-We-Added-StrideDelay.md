@@ -15,7 +15,7 @@ Core ideas taken from the article:
 - Smooth delay slides detune the signal.
 - Crossfading between two delay times avoids detuning but adds comb filtering.
 - Stride-interpolated delay uses several delay taps spaced from the transition time, then interpolates between those taps.
-- Large jumps need a method so the delay line never reads future samples.
+- Large jumps need a mode so the delay line never reads future samples.
 
 ## API Surface
 
@@ -35,10 +35,10 @@ Core ideas taken from the article:
 | `fb` | `number` | `0` | Feedback amount |
 | `maxDelayMs` | `number` | `1000` | Maximum delay buffer length in milliseconds |
 | `transitionMs` | `number` | `100` | Crossfade length during a delay transition |
-| `method` | `"linear" | "dualStride" | "step"` | `"dualStride"` | Large-jump strategy |
+| `mode` | `"linear" | "dualStride" | "step"` | `"dualStride"` | Large-jump strategy |
 | `key` | `string` | none | Stable identity for repeated renders |
 
-## Method Modes
+## Mode Modes
 
 ### `linear`
 
@@ -48,7 +48,7 @@ Use a simple linear interpolation path for larger jumps.
 
 Render two strided delay paths around the old and new delay times, then crossfade between them.
 
-This keeps the transition closer to the article's stride method than a plain crossfade.
+This keeps the transition closer to the article's stride mode than a plain crossfade.
 
 ### `step`
 
@@ -83,7 +83,7 @@ Implementation details:
 - Supports feedback as a first-class prop.
 - Reconfigures the delay buffer when `maxDelayMs` changes.
 - Derives the internal stride from `transitionMs` using an internal heuristic.
-- Uses the selected method when a target change is too large for the stride path.
+- Uses the selected mode when a target change is too large for the stride path.
 
 ## Practical Notes
 
@@ -92,7 +92,7 @@ Implementation details:
 - `maxDelayMs` is a buffer capacity, not the audible delay time.
 - The large-jump threshold is fixed in the native vendor code at 1000 ms and is not exposed in the public API.
 - The internal stride is derived from `transitionMs` and is not exposed in the public API.
-- The `dualStride` method is the default because it stays closest to the article's core idea while keeping jumps practical.
+- The `dualStride` mode is the default because it stays closest to the article's core idea while keeping jumps practical.
 
 ## Demo Surface
 
@@ -101,7 +101,7 @@ The web demo exposes the control row for:
 - delay time
 - feedback
 - transition length
-- method
+- mode
 
 The demo keeps `maxDelayMs` fixed at 1000 ms.
 

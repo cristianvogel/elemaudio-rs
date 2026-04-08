@@ -38,7 +38,7 @@ namespace elem
             } else if (key == "transitionMs") {
                 if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
                 transitionMsTarget.store(std::max<Sample>(0, static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
-            } else if (key == "method") {
+            } else if (key == "mode") {
                 if (!val.isString()) return ReturnCode::InvalidPropertyType();
                 methodTarget.store(static_cast<int>(parseMethod(val.toString())), std::memory_order_relaxed);
             }
