@@ -1,24 +1,24 @@
-import type { NodeRepr_t } from "@elem-rs/core";
-import { el } from "@elem-rs/core";
+import type {NodeRepr_t} from "@elem-rs/core";
+import {el} from "@elem-rs/core";
 import WebRenderer from "./WebRenderer";
 import "./style.css";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (!app) {
-  throw new Error("Missing app root");
+    throw new Error("Missing app root");
 }
 
 const root = app;
 
 function mustQuery<T extends Element>(selector: string): T {
-  const element = root.querySelector<T>(selector);
+    const element = root.querySelector<T>(selector);
 
-  if (!element) {
-    throw new Error(`Missing control: ${selector}`);
-  }
+    if (!element) {
+        throw new Error(`Missing control: ${selector}`);
+    }
 
-  return element;
+    return element;
 }
 
 app.innerHTML = `
@@ -34,22 +34,22 @@ app.innerHTML = `
           <span>Window</span>
           <span id="window-hz-value">0 Hz</span>
         </label>
-        <input id="window-hz" type="range" min="0" max="60" value="0.1" step="0.001" />
+        <input id="window-hz" type="range" min="0.001" max="60" value="0.1" step="0.001" />
       </div>
       <div class="row">
         <label for="center-hz">
-          <span>Center cutoff</span>
-          <span id="center-hz-value">900 Hz</span>
+          <span>Mod Range</span>
+          <span id="box-range-value">x10</span>
         </label>
-        <input id="center-hz" type="range" min="80" max="5000" value="900" step="1" />
+        <input id="box-range" type="range" min="1" max="10" value="1" step="0.01" />
       </div>
 
       <div class="row">
         <label for="tone-hz">
           <span>Tone</span>
-          <span id="tone-hz-value">180 Hz</span>
+          <span id="tone-hz-value">200 Hz</span>
         </label>
-        <input id="tone-hz" type="range" min="60" max="900" value="180" step="1" />
+        <input id="tone-hz" type="range" min="60" max="900" value="200" step="1" />
       </div>
       <div class="status" id="status">Idle</div>
     </div>
@@ -58,10 +58,10 @@ app.innerHTML = `
 
 const startButton = mustQuery<HTMLButtonElement>("#start");
 const windowHzSlider = mustQuery<HTMLInputElement>("#window-hz");
-const centerHzSlider = mustQuery<HTMLInputElement>("#center-hz");
-const toneHzSlider = mustQuery<HTMLInputElement>("#tone-hz");
 const windowHzValue = mustQuery<HTMLSpanElement>("#window-hz-value");
-const centerHzValue = mustQuery<HTMLSpanElement>("#center-hz-value");
+const boxModRangeSlider = mustQuery<HTMLInputElement>("#box-range");
+const boxModRangeValue = mustQuery<HTMLSpanElement>("#box-range-value");
+const toneHzSlider = mustQuery<HTMLInputElement>("#tone-hz");
 const toneHzValue = mustQuery<HTMLSpanElement>("#tone-hz-value");
 const status = mustQuery<HTMLDivElement>("#status");
 
@@ -69,82 +69,81 @@ let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 
 function updateSliderValues() {
-  windowHzValue.textContent = `${Number(windowHzSlider.value)} Hz`;
-  centerHzValue.textContent = `${Number(centerHzSlider.value)} Hz`;
-  toneHzValue.textContent = `${Number(toneHzSlider.value)} Hz`;
+    windowHzValue.textContent = `${Number(windowHzSlider.value)} Hz`;
+    toneHzValue.textContent = `${Number(toneHzSlider.value)} Hz`;
+    boxModRangeValue.textContent = `x${Number(boxModRangeSlider.value)}`;
 }
 
 function buildGraph(): NodeRepr_t[] {
-  const noise = el.noise({ key: "boxsum:noise", seed: 7 }) ;
-  const box = el.extra.boxSum({ key: "boxsum:filt", windowHz: Number(windowHzSlider.value) }, noise);
-  const center = el.const({ key:'center', value: Number(centerHzSlider.value) });
-  const low = el.const({ value: 303 });
-  const high = el.const({ value: 8000 });
-  const cutoff = el.max(
-    low,
-    el.min(high, el.add(center, el.mul( box, 202))),
-  );
+    const noise = el.noise({key: "boxsum:noise", seed: 7});
+    const box = el.extra.boxSum({windowHz: Number(windowHzSlider.value)}, noise);
+    const toneBases = [
+        el.const({key: 'blep:0', value: Number(toneHzSlider.value)}),
+        el.const({key: 'blep:1', value: Number(toneHzSlider.value) * 1.01})
+    ];
+    const modRange = el.const({
+        key: 'boxModRange',
+        value: Number(boxModRangeSlider.value)
+    });
 
-  const left = el.mul(
-    0.32,
-    el.lowpass(cutoff, 1, el.blepsaw(el.const({ key: 'blep:0', value: Number(toneHzSlider.value) }))),
-  );
+    const left = el.mul(
+        0.25,
+        el.blepsaw(el.abs(el.add(toneBases[0], el.mul(box, modRange)))));
 
-  const right = el.mul(
-    0.32,
-    el.lowpass(cutoff, 1, el.blepsaw(el.const({ key: 'blep:1', value: Number(toneHzSlider.value) * 1.01 }))),
-  );
+    const right = el.mul(
+        0.25,
+        el.blepsaw(el.abs(el.sub( el.mul(box, modRange) , toneBases[1]))));
 
-  return [left, right];
+    return [left, right];
 }
 
 async function renderCurrentGraph() {
-  if (!renderer || !audioContext) {
-    return;
-  }
+    if (!renderer || !audioContext) {
+        return;
+    }
 
-  await audioContext.resume();
-  await renderer.render(...buildGraph());
-  updateSliderValues();
-  status.textContent = "Playing box-sum demo";
+    await audioContext.resume();
+    await renderer.render(...buildGraph());
+    updateSliderValues();
+    status.textContent = "Playing box-sum demo";
 }
 
 async function ensureAudio() {
-  if (audioContext && renderer) {
-    return;
-  }
+    if (audioContext && renderer) {
+        return;
+    }
 
-  audioContext = new AudioContext();
-  renderer = new WebRenderer();
+    audioContext = new AudioContext();
+    renderer = new WebRenderer();
 
-  const worklet = await renderer.initialize(audioContext);
-  worklet.connect(audioContext.destination);
+    const worklet = await renderer.initialize(audioContext);
+    worklet.connect(audioContext.destination);
 }
 
-const controls = [windowHzSlider, centerHzSlider, toneHzSlider];
+const controls = [windowHzSlider, boxModRangeSlider, toneHzSlider];
 
 controls.forEach((control) => {
-  control.addEventListener("input", () => {
-    updateSliderValues();
+    control.addEventListener("input", () => {
+        updateSliderValues();
 
-    if (renderer && audioContext?.state === "running") {
-      void renderCurrentGraph();
-    }
-  });
+        if (renderer && audioContext?.state === "running") {
+            void renderCurrentGraph();
+        }
+    });
 });
 
 startButton.addEventListener("click", async () => {
-  startButton.disabled = true;
-  status.textContent = "Starting audio...";
+    startButton.disabled = true;
+    status.textContent = "Starting audio...";
 
-  try {
-    await ensureAudio();
-    await renderCurrentGraph();
-    status.textContent = "Audio running";
-  } catch (error) {
-    status.textContent = `Failed to start audio: ${error instanceof Error ? error.message : String(error)}`;
-    startButton.disabled = false;
-  }
+    try {
+        await ensureAudio();
+        await renderCurrentGraph();
+        status.textContent = "Audio running";
+    } catch (error) {
+        status.textContent = `Failed to start audio: ${error instanceof Error ? error.message : String(error)}`;
+        startButton.disabled = false;
+    }
 });
 
 updateSliderValues();
