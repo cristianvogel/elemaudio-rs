@@ -49,7 +49,6 @@ if (!resourceFeatureEnabled) {
     <div class="panel">
       <h1>elemaudio-rs resource manager demo</h1>
       <p>This demo is disabled in the base build. Re-run the app with the resource feature enabled to use Rust-managed resources.</p>
-      <p class="demo-link"><a href="/index.html">Back to the graph demo</a></p>
     </div>
   `;
   throw new Error("elemaudio-resources feature disabled");
@@ -59,7 +58,6 @@ app.innerHTML = `
   <div class="panel">
     <h1>elemaudio-rs resource manager demo</h1>
     <p>Uploads browser files into the Rust resource manager, then mirrors the selected Rust resource into the browser VFS for playback.</p>
-    <p class="demo-link"><a href="/index.html">Back to the graph demo</a></p>
     <div class="controls">
       <div class="row">
         <label>

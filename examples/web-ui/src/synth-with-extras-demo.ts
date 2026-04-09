@@ -116,8 +116,6 @@ async function renderCurrentGraph() {
 ///////////////////////////////////////////////////
 //== DOM, Audio and reactivity support from here on
 const app = document.querySelector<HTMLDivElement>("#app");
-const sampleDemoHref = "/sample.html";
-const resourceManagerHref = "/resource-manager.html";
 
 if (!app) {
     throw new Error("Missing app root");
@@ -135,11 +133,8 @@ function mustQuery<T extends Element>(app: HTMLDivElement, selector: string): T 
 
 app.innerHTML = `
   <div class="panel">
-    <h1>elemaudio-rs demo</h1>
+    <h1>Synth + Extras</h1>
     <p>Click start to open the browser audio engine, build a JS graph, and stream it into the runtime.</p>
-    <p class="demo-link"><a href="${sampleDemoHref}">Open the sample-file demo</a></p>
-    <p class="demo-link"><a href="${resourceManagerHref}">Open the Rust resource manager demo</a></p>
-    <p class="demo-link"><a href="/boxsum.html">Open the box-sum demo</a></p>
     <div class="controls">
       <button id="start" class="start-button">Start audio</button>
       <div class="row">

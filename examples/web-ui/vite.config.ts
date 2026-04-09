@@ -40,8 +40,10 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, "index.html"),
+        synth: resolve(__dirname, "synth.html"),
         sample: resolve(__dirname, "sample.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
+        waveshaper: resolve(__dirname, "waveshaper.html"),
         resource: resolve(__dirname, "resource-manager.html"),
       },
     },
