@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["crunch","freqshift"]};
+window.SIDEBAR_ITEMS = {"fn":["box_average","box_sum","crunch","freqshift","limiter","stride_delay"]};
