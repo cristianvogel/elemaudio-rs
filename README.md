@@ -13,6 +13,8 @@ At this point, Elemaudio-rs is a still a work in progress, but the core dsp bloc
 
 Publishing Rust API docs on GitHub Pages
 - `https://cristianvogel.github.io/elemaudio-rs/`
+- `docs/How-We-Added-StrideDelay.md`
+- `docs/How-We-Added-BoxSum.md`
 
 ## Authoring Surfaces
 

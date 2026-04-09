@@ -98,12 +98,24 @@ export function crunch(
   return unpack(createNode("crunch", other, [resolve(x)]), channels);
 }
 
+/**
+ * Native lookahead limiter helper for a mono source node.
+ */
 export function limiter(props: LimiterProps, x: ElemNode): NodeRepr_t;
+/**
+ * Stereo alias for `el.extra.limiter(...)`.
+ */
 export function limiter(
   props: LimiterProps,
   left: ElemNode,
   right: ElemNode,
 ): Array<NodeRepr_t>;
+/**
+ * Native lookahead limiter helper.
+ *
+ * Use the mono overload for `el` nodes, or the stereo overload for left/right
+ * pairs.
+ */
 export function limiter(
   props: LimiterProps,
   x: ElemNode,
@@ -152,4 +164,107 @@ export function stereoLimiter(
   right: ElemNode,
 ): Array<NodeRepr_t> {
   return limiter(props, left, right) as Array<NodeRepr_t>;
+}
+
+/**
+ * Raw variable-width box sum for a mono source node.
+ *
+ * The first child specifies the window length in samples and can be a node or a value.
+ */
+export function boxSum(windowSamples: ElemNode, x: ElemNode): NodeRepr_t {
+  return createNode("boxsum", {}, [resolve(windowSamples), resolve(x)]);
+}
+
+/**
+ * Raw variable-width box average for a mono source node.
+ *
+ * The first child specifies the window length in samples and can be a node or a value.
+ */
+export function boxAverage(windowSamples: ElemNode, x: ElemNode): NodeRepr_t {
+  return createNode("boxaverage", {}, [resolve(windowSamples), resolve(x)]);
+}
+
+/**
+ * Modes for `el.extra.strideDelay(...)`.
+ */
+export type StrideDelayMode = "linear" | "dualStride" | "step";
+
+/**
+ * Props for `el.extra.strideDelay(...)`.
+ */
+export interface StrideDelayProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Maximum delay buffer length in milliseconds. */
+  maxDelayMs?: number;
+  /** Target delay time in milliseconds. */
+  delayMs: number;
+  /** Feedback amount. */
+  fb?: number;
+  /** Crossfade length in milliseconds. */
+  transitionMs?: number;
+  /** Large-jump interpolation mode. */
+  mode?: StrideDelayMode;
+}
+
+/**
+ * Stride-interpolated delay for a mono source node.
+ */
+export function strideDelay(props: StrideDelayProps, x: ElemNode): NodeRepr_t;
+/**
+ * Stereo alias for `el.extra.strideDelay(...)`.
+ */
+export function strideDelay(
+  props: StrideDelayProps,
+  left: ElemNode,
+  right: ElemNode,
+): Array<NodeRepr_t>;
+/**
+ * Stride-interpolated delay.
+ *
+ * The mono overload accepts a single `el` node. The stereo overload accepts
+ * explicit left/right inputs.
+ */
+export function strideDelay(
+  props: StrideDelayProps,
+  x: ElemNode,
+  right?: ElemNode,
+): NodeRepr_t | Array<NodeRepr_t> {
+  const {
+    maxDelayMs = 1000,
+    delayMs,
+    fb = 0,
+    transitionMs = 100,
+    mode = "dualStride",
+    ...other
+  } = props;
+
+  const resolvedProps = {
+    ...other,
+    maxDelayMs,
+    delayMs,
+    fb,
+    transitionMs,
+    mode,
+  };
+
+  if (right === undefined) {
+    return createNode("stridedelay", resolvedProps, [resolve(x)]);
+  }
+
+  return unpack(
+    createNode("stridedelay", resolvedProps, [resolve(x), resolve(right)]),
+    2,
+  );
+}
+
+/**
+ * Stereo alias for `el.extra.strideDelay(...)`.
+ */
+export function stereoStrideDelay(
+  props: StrideDelayProps,
+  left: ElemNode,
+  right: ElemNode,
+): Array<NodeRepr_t> {
+  return strideDelay(props, left, right) as Array<NodeRepr_t>;
 }

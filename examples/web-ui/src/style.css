@@ -11,22 +11,60 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 90vh;
   display: grid;
   place-items: center;
+    font-size: 0.9rem;
   background:
     radial-gradient(circle at top, rgba(74, 144, 226, 0.18), transparent 30%),
     linear-gradient(180deg, #0b0f14 0%, #111722 100%);
 }
 
+a {
+    padding: 3px;
+    border: 1px solid #585a56;
+    border-radius: 6px;
+    color: #48fae2;
+    font-family: monospace;
+    font-size: smaller;
+}
+
+code {
+    font-family: Menlo, Monaco, Lucida Console, Liberation Mono, DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace, serif;
+    color: #0de818;
+    font-size: smaller;
+}
+
 .panel {
-  width: min(92vw, 560px);
+  width: min(92vw, 860px);
   padding: 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
   background: rgba(15, 20, 29, 0.9);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
+
+#scope-canvas {
+    width: 80%;
+    height: 160px;
+    margin-bottom: 10px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.scope-title {
+    position: absolute;
+    top: 1em;
+
+  margin-bottom: 8px;
+  color: #9fb0c3;
+    z-index: 10;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 
 h1 {
   margin: 0 0 8px;
@@ -66,6 +104,68 @@ p {
 .row {
   display: grid;
   gap: 8px;
+}
+
+.dial-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.dial {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dial label {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.dial label span:last-child {
+  color: #9fb0c3;
+  font-size: 11px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.toggle-input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #8b5cf6;
+}
+
+.toggle-select {
+  min-width: 120px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e6edf3;
 }
 
 .resource-row {
@@ -108,8 +208,9 @@ button:disabled {
 
 .status {
   min-height: 1.5em;
-  font-size: 14px;
-  color: #9fd3a8;
+  font-size: 0.75em;
+    font-family: monospace;
+  color: #898989;
 }
 
 .resource-status {

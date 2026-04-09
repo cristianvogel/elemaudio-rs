@@ -130,3 +130,22 @@ export function limiter(
 
   return unpack(createNode("limiter", props, x.map(resolve)), x.length);
 }
+
+/**
+ * Multichannel stride-interpolated delay.
+ */
+export function strideDelay(
+  props: {
+    key?: string;
+    maxDelayMs?: number;
+    delayMs: number;
+    fb?: number;
+    transitionMs?: number;
+    mode?: "linear" | "dualStride" | "step";
+  },
+  x: Array<ElemNode>,
+): Array<NodeRepr_t> {
+  invariant(x.length > 0, "mc.strideDelay requires at least one channel");
+
+  return unpack(createNode("stridedelay", props, x.map(resolve)), x.length);
+}

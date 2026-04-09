@@ -41,6 +41,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         sample: resolve(__dirname, "sample.html"),
+        boxsum: resolve(__dirname, "boxsum.html"),
         resource: resolve(__dirname, "resource-manager.html"),
       },
     },
