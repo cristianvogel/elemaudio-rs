@@ -65,6 +65,10 @@ public:
             return std::make_shared<elem::BoxSumNode<double>>(id, fs, bs);
         });
 
+        runtime->registerNodeType("boxaverage", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::BoxAverageNode<double>>(id, fs, bs);
+        });
+
         runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });

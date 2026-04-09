@@ -43,6 +43,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::BoxSumNode<double>>(id, fs, bs);
         });
 
+        handle->runtime->registerNodeType("boxaverage", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::BoxAverageNode<double>>(id, fs, bs);
+        });
+
         handle->runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });

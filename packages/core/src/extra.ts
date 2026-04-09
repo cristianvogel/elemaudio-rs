@@ -69,16 +69,6 @@ export interface LimiterProps extends Record<string, unknown> {
 }
 
 /**
- * Props for `el.extra.boxSum(...)`.
- */
-export interface BoxSumProps extends Record<string, unknown> {
-  /** Optional authoring key used for stable identity. */
-  key?: string;
-  /** Box window width in Hz. */
-  windowHz: number;
-}
-
-/**
  * Native frequency shifter helper.
  *
  * Returns two outputs in order: down-shifted, then up-shifted.
@@ -178,9 +168,20 @@ export function stereoLimiter(
 
 /**
  * Raw variable-width box sum for a mono source node.
+ *
+ * The first child specifies the window length in samples and can be a node or a value.
  */
-export function boxSum(props: BoxSumProps, x: ElemNode): NodeRepr_t {
-  return createNode("boxsum", props, [resolve(x)]);
+export function boxSum(windowSamples: ElemNode, x: ElemNode): NodeRepr_t {
+  return createNode("boxsum", {}, [resolve(windowSamples), resolve(x)]);
+}
+
+/**
+ * Raw variable-width box average for a mono source node.
+ *
+ * The first child specifies the window length in samples and can be a node or a value.
+ */
+export function boxAverage(windowSamples: ElemNode, x: ElemNode): NodeRepr_t {
+  return createNode("boxaverage", {}, [resolve(windowSamples), resolve(x)]);
 }
 
 /**

@@ -36,7 +36,7 @@ code {
 }
 
 .panel {
-  width: min(92vw, 560px);
+  width: min(92vw, 860px);
   padding: 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
@@ -135,6 +135,15 @@ p {
   height: 18px;
   margin: 0;
   accent-color: #8b5cf6;
+}
+
+.toggle-select {
+  min-width: 120px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e6edf3;
 }
 
 .resource-row {

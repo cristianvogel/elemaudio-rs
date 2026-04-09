@@ -4,7 +4,7 @@ Date: 2026-04-08
 
 ## Goal
 
-Add `strideDelay` as a first-party extra that follows Geraint Luff's stride-interpolated delay approach, with first-class feedback and explicit interpolation methods for larger delay jumps.
+Add `strideDelay` as a first-party extra that follows Geraint Luff's stride-interpolated delay approach, with first-class feedback and explicit interpolation modes for larger delay jumps.
 
 ## Source Material
 
@@ -24,7 +24,6 @@ Core ideas taken from the article:
 `@elem-rs/core` exposes:
 
 - `el.extra.strideDelay(props, x)` for mono nodes
-- `el.extra.stereoStrideDelay(props, left, right)` as a stereo alias
 - `el.mc.strideDelay(props, mc)` for multichannel arrays
 
 ### Props
@@ -38,7 +37,7 @@ Core ideas taken from the article:
 | `mode` | `"linear" | "dualStride" | "step"` | `"dualStride"` | Large-jump strategy |
 | `key` | `string` | none | Stable identity for repeated renders |
 
-## Mode Modes
+## Modes
 
 ### `linear`
 
