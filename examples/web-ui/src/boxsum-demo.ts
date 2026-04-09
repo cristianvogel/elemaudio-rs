@@ -15,17 +15,18 @@ function buildGraph(): NodeRepr_t[] {
     const toneBaseFreq = el.const({ key: 'oscFreq:0', value: Number(toneHzSlider.value) });
 
     const modRange = el.const({ key: 'boxModRange', value: Number(boxModRangeSlider.value) });
+    const boxsumAttenuation = el.const({ key: 'boxsum:attenuation', value: Number(boxsumAttenuationSlider.value) });
 
     const boxedNoise = el.select(
-        modeSelect.value === "average" ? 0 : 1,
-        el.extra.boxSum(windowLength, el.mul( el.div(1, windowLength), noise)),
-        el.extra.boxAverage(windowLength, noise)
-
+        modeSelect.value === "average" ? 1 : 0,
+        el.extra.boxAverage(windowLength, noise),
+        el.mul(boxsumAttenuation, el.extra.boxSum(windowLength, noise))
     );
 
     const scaledBoxedNoise = el.mul(modRange, boxedNoise);
 
-    const metered = el.scope({ name: "boxsum-scope", size: 512, channels: 1 }, boxedNoise );
+    const scoped = el.scope({ name: "boxsum-scope", size: 512, channels: 1 }, boxedNoise );
+    const selectedMode = modeSelect.value;
 
     const left = el.mul(
         0.25,
@@ -37,7 +38,7 @@ function buildGraph(): NodeRepr_t[] {
         el.blepsaw(el.abs(el.sub(toneBaseFreq, scaledBoxedNoise)))
     );
 
-    return [left, el.add( right, el.mul(0, metered))];
+    return [left, el.add( right, el.mul(0, scoped))];
 }
 
 async function renderCurrentGraph() {
@@ -106,6 +107,14 @@ app.innerHTML = `
       </div>
 
       <div class="row">
+        <label for="boxsum-attenuation">
+          <span>Boxsum atten</span>
+          <span id="boxsum-attenuation-value">0.010</span>
+        </label>
+        <input id="boxsum-attenuation" type="range" min="0.001" max="0.1" value="0.01" step="0.001" />
+      </div>
+
+      <div class="row">
         <label for="tone-hz">
           <span>Tone</span>
           <span id="tone-hz-value">200 Hz</span>
@@ -124,6 +133,8 @@ const windowLengthSlider = mustQuery<HTMLInputElement>("#window-hz");
 const windowHzValue = mustQuery<HTMLSpanElement>("#window-hz-value");
 const boxModRangeSlider = mustQuery<HTMLInputElement>("#box-range");
 const boxModRangeValue = mustQuery<HTMLSpanElement>("#box-range-value");
+const boxsumAttenuationSlider = mustQuery<HTMLInputElement>("#boxsum-attenuation");
+const boxsumAttenuationValue = mustQuery<HTMLSpanElement>("#boxsum-attenuation-value");
 const toneHzSlider = mustQuery<HTMLInputElement>("#tone-hz");
 const toneHzValue = mustQuery<HTMLSpanElement>("#tone-hz-value");
 const status = mustQuery<HTMLDivElement>("#status");
@@ -137,6 +148,7 @@ function updateSliderValues() {
     windowHzValue.textContent = `${Number(windowLengthSlider.value)}`;
     toneHzValue.textContent = `${Number(toneHzSlider.value)} Hz`;
     boxModRangeValue.textContent = `x${Number(boxModRangeSlider.value)}`;
+    boxsumAttenuationValue.textContent = `${Number(boxsumAttenuationSlider.value).toFixed(3)}`;
 }
 
 async function ensureAudio() {
@@ -162,7 +174,7 @@ async function ensureAudio() {
     worklet.connect(audioContext.destination);
 }
 
-const controls = [modeSelect, windowLengthSlider, boxModRangeSlider, toneHzSlider];
+const controls = [modeSelect, windowLengthSlider, boxModRangeSlider, boxsumAttenuationSlider, toneHzSlider];
 
 controls.forEach((control) => {
     control.addEventListener("input", () => {
