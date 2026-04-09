@@ -25,8 +25,7 @@ function buildGraph(): NodeRepr_t[] {
 
     const scaledBoxedNoise = el.mul(modRange, boxedNoise);
 
-    const scoped = el.scope({ name: "boxsum-scope", size: 512, channels: 1 }, boxedNoise );
-    const selectedMode = modeSelect.value;
+    const scopeInsert = el.scope({ name: "boxsum-scope", size: 512, channels: 1 }, boxedNoise );
 
     const left = el.mul(
         0.25,
@@ -38,7 +37,7 @@ function buildGraph(): NodeRepr_t[] {
         el.blepsaw(el.abs(el.sub(toneBaseFreq, scaledBoxedNoise)))
     );
 
-    return [left, el.add( right, el.mul(0, scoped))];
+    return [left, el.add( right, el.mul(0, scopeInsert))];
 }
 
 async function renderCurrentGraph() {
@@ -73,12 +72,12 @@ function mustQuery<T extends Element>(selector: string): T {
 }
 
 app.innerHTML = `
-  <elemaudio-oscilloscope id="scope" width="340" height="160" color="#6ea8fe" style="position: fixed; top: 10px; left: 10px"></elemaudio-oscilloscope>
+  <elemaudio-oscilloscope id="scope" ></elemaudio-oscilloscope>
   <div class="panel">
     <h1>elemaudio-rs</h1>
     <h3>box-sum modulation demo</h3>
     <p>Uses <code>el.extra.boxSum(windowSamplesNode, x)</code> or <code>el.extra.boxAverage(windowSamplesNode, x)</code> to smooth white noise, then turns that moving sum into an audible tone modulation.</p>
-    <p class="demo-link"><a href="/index.html">Back to the graph demo</a></p>
+    <p class="demo-link"><a href="../index.html">Back to the graph demo</a></p>
     <div class="controls">
       <button id="start" class="start-button">Start audio</button>
       <div class="row toggle-row">
@@ -164,7 +163,6 @@ async function ensureAudio() {
             const firstBlock = event.data?.[0];
             // firstBlock is expected to be the sample buffer for channels=1.
             if (firstBlock) {
-                console.log("scope firstBlock", firstBlock);
                 oscilloscope.data = Array.from(firstBlock as Float32Array);
             }
         }

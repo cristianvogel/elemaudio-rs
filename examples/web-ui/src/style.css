@@ -11,7 +11,7 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 90vh;
   display: grid;
   place-items: center;
     font-size: 0.9rem;
@@ -44,63 +44,24 @@ code {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 
-.scope-overlay {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 20;
-  width: 340px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(10, 14, 20, 0.85);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+#scope-canvas {
+    width: 80%;
+    height: 160px;
+    margin-bottom: 10px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .scope-title {
   margin-bottom: 8px;
   color: #9fb0c3;
+    z-index: 10;
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-#scope-canvas {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.scope-overlay {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 20;
-  width: 340px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(10, 14, 20, 0.85);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
-}
-
-.scope-title {
-  margin-bottom: 8px;
-  color: #9fb0c3;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-#scope-canvas {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
 
 h1 {
   margin: 0 0 8px;
@@ -244,8 +205,9 @@ button:disabled {
 
 .status {
   min-height: 1.5em;
-  font-size: 14px;
-  color: #9fd3a8;
+  font-size: 0.75em;
+    font-family: monospace;
+  color: #898989;
 }
 
 .resource-status {
