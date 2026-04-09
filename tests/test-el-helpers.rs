@@ -860,6 +860,12 @@ fn covers_extra_helpers() {
         }),
         1,
     );
+
+    let foldback_node = extra::foldback(
+        serde_json::json!({"thresh": 1.0, "amp": 0.5}),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(&foldback_node, "mul", serde_json::Value::Null, 2);
 }
 
 #[test]

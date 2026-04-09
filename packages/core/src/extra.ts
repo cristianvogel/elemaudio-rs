@@ -45,6 +45,18 @@ export interface CrunchProps extends Record<string, unknown> {
 }
 
 /**
+ * Props for `el.extra.foldback(...)`.
+ */
+export interface FoldbackProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fold threshold. Must be positive. */
+  thresh: number;
+  /** Post amplification. Defaults to `1 / thresh`. */
+  amp?: number;
+}
+
+/**
  * Props for `el.extra.limiter(...)`.
  */
 export interface LimiterProps extends Record<string, unknown> {
@@ -96,6 +108,44 @@ export function crunch(
   }
 
   return unpack(createNode("crunch", other, [resolve(x)]), channels);
+}
+
+/**
+ * Recursive foldback shaper helper.
+ */
+export function foldback(props: FoldbackProps, x: ElemNode): NodeRepr_t {
+  const { thresh, amp = 1 / thresh, ...other } = props;
+
+  if (!Number.isFinite(thresh) || thresh <= 0) {
+    throw new Error("foldback requires a positive thresh prop");
+  }
+
+  const threshNode = createNode("const", { value: thresh }, []);
+  const ampNode = createNode("const", { value: amp }, []);
+  const one = createNode("const", { value: 1 }, []);
+  const folded = createNode("sub", {}, [
+    createNode("abs", {}, [
+      createNode("sub", {}, [
+        createNode("abs", {}, [
+          createNode("mod", {}, [
+            createNode("sub", {}, [resolve(x), threshNode]),
+            createNode("mul", {}, [createNode("const", { value: 4 }, []), threshNode]),
+          ]),
+        ]),
+        createNode("mul", {}, [createNode("const", { value: 2 }, []), threshNode]),
+      ]),
+    ]),
+    threshNode,
+  ]);
+  const shouldFold = createNode("ge", {}, [createNode("abs", {}, [resolve(x)]), threshNode]);
+
+  // select(g, a, b) = add(mul(g, a), mul(sub(1, g), b))
+  const selected = createNode("add", {}, [
+    createNode("mul", {}, [shouldFold, folded]),
+    createNode("mul", {}, [createNode("sub", {}, [one, shouldFold]), resolve(x)]),
+  ]);
+
+  return createNode("mul", other, [ampNode, selected]);
 }
 
 /**

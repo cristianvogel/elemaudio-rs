@@ -360,7 +360,7 @@ pub mod mc {
 
 /// Extended helpers for native DSP nodes.
 pub mod extra {
-    use super::Node;
+    use super::{el, Node};
     use crate::{resolve, unpack, ElemNode};
 
     fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value) {
@@ -406,6 +406,56 @@ pub mod extra {
     pub fn crunch(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
         let (channels, props) = channels_and_props(props);
         unpack(Node::new("crunch", props, vec![resolve(x)]), channels)
+    }
+
+    /// Recursive foldback shaper helper.
+    ///
+    /// Props:
+    /// - `thresh`: fold threshold, must be positive
+    /// - `amp`: output gain, defaults to `1 / thresh`
+    /// - `key`: optional stable identity key
+    pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+        let mut props = props;
+        let thresh = props
+            .get("thresh")
+            .and_then(|value| value.as_f64())
+            .expect("foldback helper props must include a positive `thresh` value");
+
+        if !(thresh.is_finite() && thresh > 0.0) {
+            panic!("foldback helper props must include a positive `thresh` value");
+        }
+
+        let amp = props
+            .get("amp")
+            .and_then(|value| value.as_f64())
+            .filter(|value| value.is_finite())
+            .unwrap_or(1.0 / thresh);
+
+        if let serde_json::Value::Object(map) = &mut props {
+            map.remove("thresh");
+            map.remove("amp");
+        }
+
+        let x = resolve(x);
+        let thresh_node = el::const_(thresh);
+        let amp_node = el::const_(amp);
+        let folded = el::sub([
+            el::abs(el::sub([
+                el::abs(el::r#mod(
+                    el::sub([x.clone(), thresh_node.clone()]),
+                    el::mul([el::const_(4.0), thresh_node.clone()]),
+                )),
+                el::mul([el::const_(2.0), thresh_node.clone()]),
+            ])),
+            thresh_node.clone(),
+        ]);
+        let should_fold = el::ge(el::abs(x.clone()), thresh_node);
+
+        Node::new(
+            "mul",
+            serde_json::Value::Null,
+            vec![amp_node, el::select(should_fold, folded, x)],
+        )
     }
 
     /// Raw variable-width box sum helper.
