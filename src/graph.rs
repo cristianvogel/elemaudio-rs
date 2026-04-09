@@ -407,6 +407,51 @@ pub mod extra {
         let (channels, props) = channels_and_props(props);
         unpack(Node::new("crunch", props, vec![resolve(x)]), channels)
     }
+
+    /// Raw variable-width box sum helper.
+    ///
+    /// Expects 2 children: window length in samples, then the signal to sum.
+    pub fn box_sum(window_samples: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        Node::new(
+            "boxsum",
+            serde_json::Value::Null,
+            vec![resolve(window_samples), resolve(x)],
+        )
+    }
+
+    /// Raw variable-width box average helper.
+    ///
+    /// Expects 2 children: window length in samples, then the signal to average.
+    pub fn box_average(window_samples: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+        Node::new(
+            "boxaverage",
+            serde_json::Value::Null,
+            vec![resolve(window_samples), resolve(x)],
+        )
+    }
+
+    /// Native lookahead limiter helper.
+    ///
+    /// Expects 1 child for mono input or 2 children for stereo input.
+    pub fn limiter(
+        props: serde_json::Value,
+        args: impl IntoIterator<Item = impl Into<ElemNode>>,
+    ) -> Vec<Node> {
+        let args: Vec<ElemNode> = args.into_iter().map(Into::into).collect();
+        let node = Node::new("limiter", props, args.into_iter().map(resolve).collect());
+        vec![node]
+    }
+
+    /// Stride-interpolated delay helper.
+    ///
+    /// Expects 2 children: delay window and source signal.
+    pub fn stride_delay(
+        props: serde_json::Value,
+        window: impl Into<ElemNode>,
+        x: impl Into<ElemNode>,
+    ) -> Node {
+        Node::new("stridedelay", props, vec![resolve(window), resolve(x)])
+    }
 }
 
 /// Functional helpers mirroring Elementary's `el.*` style.
