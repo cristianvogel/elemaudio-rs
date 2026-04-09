@@ -224,7 +224,7 @@ export function highshelf(
  * @returns {NodeRepr_t}
  */
 export function pink(x: ElemNode): NodeRepr_t {
-  let clip = (min, max, x) => el.min(max, el.max(min, x));
+  const clip = (min: ElemNode, max: ElemNode, x: ElemNode) => el.min(max, el.max(min, x));
 
   return clip(
     -1,

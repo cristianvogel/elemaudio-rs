@@ -26,7 +26,7 @@ export function isNode(n: unknown): n is NodeRepr_t {
 
 export function createNode(
   kind: string,
-  props,
+  props: Record<string, unknown>,
   children: Array<ElemNode>
 ): NodeRepr_t {
   return create(kind, props, children.map(resolve));
@@ -34,7 +34,7 @@ export function createNode(
 
 // Utility function for addressing multiple output channels from a given graph node
 export function unpack(node: NodeRepr_t, numChannels: number): Array<NodeRepr_t> {
-  return Array.from({length: numChannels}, (v, i) => {
+  return Array.from({length: numChannels}, (_v: unknown, i: number) => {
     return {
       ...node,
       outputChannel: i,

@@ -51,15 +51,27 @@ const InstructionTypes = {
 // A default render delegate which batches instruction sets while recording
 // stats about the render pass.
 class Delegate {
-  public nodesAdded: number;
-  public nodesRemoved: number;
-  public edgesAdded: number;
-  public propsWritten: number;
+  public nodesAdded = 0;
+  public nodesRemoved = 0;
+  public edgesAdded = 0;
+  public propsWritten = 0;
 
-  public nodeMap: Map<number, any>;
+  public nodeMap: Map<number, { props: Record<string, unknown> }>;
 
   private currentActiveRoots: Set<number>;
-  private batch: any;
+  private batch: {
+    createNode: Array<[number, number, string]>;
+    appendChild: Array<[number, number, number, number]>;
+    setProperty: Array<[number, number, string, unknown]>;
+    activateRoots: Array<[number, number[]]>;
+    commitUpdates: Array<[number]>;
+  } = {
+    createNode: [],
+    appendChild: [],
+    setProperty: [],
+    activateRoots: [],
+    commitUpdates: [],
+  };
 
   constructor() {
     this.nodeMap = new Map();
@@ -85,29 +97,29 @@ class Delegate {
 
   getNodeMap() { return this.nodeMap; }
 
-  createNode(hash, type) {
+  createNode(hash: number, type: string) {
     this.nodesAdded++;
     this.batch.createNode.push([InstructionTypes.CREATE_NODE, hash, type]);
   }
 
-  appendChild(parentHash, childHash, childOutputChannel) {
+  appendChild(parentHash: number, childHash: number, childOutputChannel: number) {
     this.edgesAdded++;
     this.batch.appendChild.push([InstructionTypes.APPEND_CHILD, parentHash, childHash, childOutputChannel]);
   }
 
-  setProperty(hash, key, value) {
+  setProperty(hash: number, key: string, value: unknown) {
     this.propsWritten++;
     this.batch.setProperty.push([InstructionTypes.SET_PROPERTY, hash, key, value]);
   }
 
-  activateRoots(roots) {
+  activateRoots(roots: number[]) {
     // If we're asked to activate exactly the roots that are already active,
     // no need to push the instruction. We need the length/size check though
     // because it may be that we're asked to activate a subset of the current
     // active roots, in which case we need the instruction to prompt the engine
     // to deactivate the now excluded roots.
     let alreadyActive = roots.length === this.currentActiveRoots.size &&
-      roots.every((root) => this.currentActiveRoots.has(root));
+      roots.every((root: number) => this.currentActiveRoots.has(root));
 
     if (!alreadyActive) {
       this.batch.activateRoots.push([InstructionTypes.ACTIVATE_ROOTS, roots]);
@@ -149,10 +161,10 @@ function now() {
 // or their own Delegate.
 class Renderer {
   private _delegate: Delegate;
-  private _sendMessage: Function;
+  private _sendMessage: (instructions: unknown[]) => unknown;
   private _nextRefId: number;
 
-  constructor(sendMessage) {
+  constructor(sendMessage: (instructions: unknown[]) => unknown) {
     this._delegate = new Delegate();
     this._sendMessage = sendMessage;
     this._nextRefId = 0;
@@ -174,11 +186,11 @@ class Renderer {
   //
   // Note: refs should only be rendered by the Renderer instance from which they were created.
   // In other words, don't share refs between different renderer instances.
-  createRef(kind, props, children) {
+  createRef(kind: string, props: Record<string, unknown>, children: Array<NodeRepr_t | number>) {
     let key = `__refKey:${this._nextRefId++}`;
     let node = createNode(kind, Object.assign({key}, props), children);
 
-    let setter = (newProps) => {
+    let setter = (newProps: Record<string, unknown>) => {
       if (!this._delegate.nodeMap.has(node.hash)) {
         throw new Error('Cannot update a ref that has not been mounted; make sure you render your node first')
       }
@@ -186,7 +198,7 @@ class Renderer {
       const nodeMapCopy = this._delegate.nodeMap.get(node.hash);
 
       this._delegate.clear();
-      updateNodeProps(this._delegate, node.hash, nodeMapCopy.props, newProps);
+      updateNodeProps(this._delegate, node.hash, nodeMapCopy!.props, newProps);
       this._delegate.commitUpdates();
 
       // Invoke message passing
@@ -198,11 +210,11 @@ class Renderer {
     return [node, setter];
   }
 
-  render(...args) {
+  render(...args: Array<NodeRepr_t | number>) {
     return this.renderWithOptions({ rootFadeInMs: 20, rootFadeOutMs: 20 }, ...args);
   }
 
-  renderWithOptions(options: { rootFadeInMs: number, rootFadeOutMs: number }, ...args) {
+  renderWithOptions(options: { rootFadeInMs: number, rootFadeOutMs: number }, ...args: Array<NodeRepr_t | number>) {
     const t0 = now();
 
     this._delegate.clear();
@@ -213,7 +225,7 @@ class Renderer {
     // Invoke message passing
     const instructions = this._delegate.getPackedInstructions();
 
-    return Promise.resolve(this._sendMessage(instructions)).then((result) => {
+    return Promise.resolve(this._sendMessage(instructions)).then((result: unknown) => {
       // Pack render stats with the result of the message passing
       return {
         result,
@@ -225,8 +237,8 @@ class Renderer {
     });
   }
 
-  prune(nodeIds) {
-    nodeIds.forEach((n) => {
+  prune(nodeIds: Array<number>) {
+    nodeIds.forEach((n: number) => {
       this._delegate.nodeMap.delete(n);
     });
   }
