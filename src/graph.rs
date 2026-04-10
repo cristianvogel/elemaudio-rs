@@ -42,6 +42,30 @@ impl<const N: usize> From<[Node; N]> for GraphRoots {
 ///
 /// This is the Rust-native fast path: keep the handle around and update the
 /// mounted node directly instead of rebuilding and reconciling a new graph.
+///
+/// # Fast-Path Updates
+///
+/// To enable efficient parameter updates:
+/// 1. Create a graph with keyed nodes: `el::const_with_key("my_param", value)`
+/// 2. Mount the graph: `mounted = graph.mount()`
+/// 3. Retrieve the node by key: `mounted.node_with_key("my_param")?`
+/// 4. Send direct updates: `mounted.node.set_const_value(new_value)`
+///
+/// This avoids rebuilding and reconciling the entire graph on each parameter change.
+///
+/// # Example
+///
+/// ```ignore
+/// let mounted = Graph::new()
+///     .render(el::const_with_key("freq", 440.0))
+///     .mount();
+///
+/// // Update frequency without graph rebuild
+/// if let Some(freq_node) = mounted.node_with_key("freq") {
+///     let update = freq_node.set_const_value(880.0);
+///     runtime.execute(&update);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct MountedNode {
     node_id: NodeId,

@@ -49,12 +49,57 @@ pub fn crunch(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
 
 /// Recursive foldback shaper helper.
 ///
+/// Computes a recursive soft-saturation using fold-back distortion. The shape
+/// depends on the threshold and gain parameters.
+///
+/// For best performance with the fast-path update system, supply a `key` prefix.
+/// This allows threshold and amplitude to be updated **without rebuilding the graph**.
+///
 /// Props:
+/// - `key`: optional prefix for stable node identity; enables direct updates via
+///   `mounted.node_with_key("{key}_thresh")` and `mounted.node_with_key("{key}_amp")`
 /// - `thresh`: fold threshold, must be positive
 /// - `amp`: output gain, defaults to `1 / thresh`
-/// - `key`: optional stable identity key
+///
+/// # Example: Keyed foldback with parameter updates
+///
+/// ```ignore
+/// use elemaudio_rs::{Graph, el, extra};
+/// use serde_json::json;
+///
+/// // Create a graph with a keyed foldback
+/// let graph = Graph::new().render(
+///     extra::foldback(
+///         json!({
+///             "key": "shaper",
+///             "thresh": 0.5,
+///             "amp": 2.0,
+///         }),
+///         el::cycle(el::const_(440.0)),
+///     )
+/// );
+///
+/// // Mount the graph and get handles for direct updates
+/// let mounted = graph.mount();
+/// let batch = mounted.into_batch();
+/// runtime.execute(&batch);
+///
+/// // Later, update threshold WITHOUT rebuilding the entire graph
+/// if let Some(thresh_node) = mounted.node_with_key("shaper_thresh") {
+///     let update = thresh_node.set_const_value(0.7);
+///     runtime.execute(&update);
+/// }
+///
+/// // Similarly for amplitude
+/// if let Some(amp_node) = mounted.node_with_key("shaper_amp") {
+///     let update = amp_node.set_const_value(1.5);
+///     runtime.execute(&update);
+/// }
+/// ```
 pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     let mut props = props;
+
+    // Extract and validate threshold
     let thresh = props
         .get("thresh")
         .and_then(|value| value.as_f64())
@@ -64,20 +109,40 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
         panic!("foldback helper props must include a positive `thresh` value");
     }
 
+    // Extract amplitude, defaulting to 1 / thresh
     let amp = props
         .get("amp")
         .and_then(|value| value.as_f64())
         .filter(|value| value.is_finite())
         .unwrap_or(1.0 / thresh);
 
+    // Extract optional key prefix for fast-path updates
+    let key_prefix = props
+        .get("key")
+        .and_then(|value| value.as_str())
+        .map(|k| k.to_string());
+
+    // Remove control props before constructing the graph
     if let serde_json::Value::Object(map) = &mut props {
         map.remove("thresh");
         map.remove("amp");
+        map.remove("key");
     }
 
     let x = resolve(x);
-    let thresh_node = el::const_(thresh);
-    let amp_node = el::const_(amp);
+
+    // Create const nodes with keys if a prefix was supplied
+    let thresh_node = match &key_prefix {
+        Some(prefix) => el::const_with_key(&format!("{}_thresh", prefix), thresh),
+        None => el::const_(thresh),
+    };
+
+    let amp_node = match &key_prefix {
+        Some(prefix) => el::const_with_key(&format!("{}_amp", prefix), amp),
+        None => el::const_(amp),
+    };
+
+    // Build the foldback computation graph
     let folded = el::sub([
         el::abs(el::sub([
             el::abs(el::r#mod(
@@ -99,24 +164,140 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 
 /// Raw variable-width box sum helper.
 ///
-/// Expects 2 children: window length in samples, then the signal to sum.
-pub fn box_sum(window_samples: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
-    Node::new(
-        "boxsum",
-        serde_json::Value::Null,
-        vec![resolve(window_samples), resolve(x)],
-    )
+/// Computes a box-filter sum over a configurable window length.
+///
+/// For best performance with the fast-path update system, supply a `key` prefix
+/// and a `window` parameter. This allows the window length to be updated without
+/// rebuilding the graph.
+///
+/// Props:
+/// - `key`: optional prefix for stable node identity (enables fast window updates)
+/// - `window`: window length in samples (required)
+///
+/// # Example: Keyed box sum with dynamic window
+///
+/// ```ignore
+/// use elemaudio_rs::{Graph, el, extra};
+/// use serde_json::json;
+///
+/// let graph = Graph::new().render(
+///     extra::box_sum(
+///         json!({ "key": "boxfilter", "window": 256.0 }),
+///         el::cycle(el::const_(440.0)),
+///     )
+/// );
+///
+/// let mounted = graph.mount();
+/// let batch = mounted.into_batch();
+/// runtime.execute(&batch);
+///
+/// // Later, update window size without rebuilding the graph
+/// if let Some(window_node) = mounted.node_with_key("boxfilter_window") {
+///     let update = window_node.set_const_value(512.0);
+///     runtime.execute(&update);
+/// }
+/// ```
+pub fn box_sum(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+    let mut props = props;
+
+    // Extract and validate window length
+    let window = props
+        .get("window")
+        .and_then(|value| value.as_f64())
+        .expect("box_sum helper props must include a positive numeric `window` value");
+
+    if !(window.is_finite() && window > 0.0) {
+        panic!("box_sum helper props must include a positive numeric `window` value");
+    }
+
+    // Extract optional key prefix for fast-path updates
+    let key_prefix = props
+        .get("key")
+        .and_then(|value| value.as_str())
+        .map(|k| k.to_string());
+
+    // Remove control props before constructing the graph
+    if let serde_json::Value::Object(map) = &mut props {
+        map.remove("window");
+        map.remove("key");
+    }
+
+    // Create window node with key if a prefix was supplied
+    let window_node = match &key_prefix {
+        Some(prefix) => el::const_with_key(&format!("{}_window", prefix), window),
+        None => el::const_(window),
+    };
+
+    Node::new("boxsum", props, vec![window_node, resolve(x)])
 }
 
 /// Raw variable-width box average helper.
 ///
-/// Expects 2 children: window length in samples, then the signal to average.
-pub fn box_average(window_samples: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
-    Node::new(
-        "boxaverage",
-        serde_json::Value::Null,
-        vec![resolve(window_samples), resolve(x)],
-    )
+/// Computes a box-filter average over a configurable window length.
+///
+/// For best performance with the fast-path update system, supply a `key` prefix
+/// and a `window` parameter. This allows the window length to be updated without
+/// rebuilding the graph.
+///
+/// Props:
+/// - `key`: optional prefix for stable node identity (enables fast window updates)
+/// - `window`: window length in samples (required)
+///
+/// # Example: Keyed box average with dynamic window
+///
+/// ```ignore
+/// use elemaudio_rs::{Graph, el, extra};
+/// use serde_json::json;
+///
+/// let graph = Graph::new().render(
+///     extra::box_average(
+///         json!({ "key": "boxavg", "window": 256.0 }),
+///         el::cycle(el::const_(440.0)),
+///     )
+/// );
+///
+/// let mounted = graph.mount();
+/// let batch = mounted.into_batch();
+/// runtime.execute(&batch);
+///
+/// // Later, update window size without rebuilding the graph
+/// if let Some(window_node) = mounted.node_with_key("boxavg_window") {
+///     let update = window_node.set_const_value(512.0);
+///     runtime.execute(&update);
+/// }
+/// ```
+pub fn box_average(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+    let mut props = props;
+
+    // Extract and validate window length
+    let window = props
+        .get("window")
+        .and_then(|value| value.as_f64())
+        .expect("box_average helper props must include a positive numeric `window` value");
+
+    if !(window.is_finite() && window > 0.0) {
+        panic!("box_average helper props must include a positive numeric `window` value");
+    }
+
+    // Extract optional key prefix for fast-path updates
+    let key_prefix = props
+        .get("key")
+        .and_then(|value| value.as_str())
+        .map(|k| k.to_string());
+
+    // Remove control props before constructing the graph
+    if let serde_json::Value::Object(map) = &mut props {
+        map.remove("window");
+        map.remove("key");
+    }
+
+    // Create window node with key if a prefix was supplied
+    let window_node = match &key_prefix {
+        Some(prefix) => el::const_with_key(&format!("{}_window", prefix), window),
+        None => el::const_(window),
+    };
+
+    Node::new("boxaverage", props, vec![window_node, resolve(x)])
 }
 
 /// Native lookahead limiter helper.
@@ -133,11 +314,69 @@ pub fn limiter(
 
 /// Stride-interpolated delay helper.
 ///
-/// Expects 2 children: delay window and source signal.
-pub fn stride_delay(
-    props: serde_json::Value,
-    window: impl Into<ElemNode>,
-    x: impl Into<ElemNode>,
-) -> Node {
-    Node::new("stridedelay", props, vec![resolve(window), resolve(x)])
+/// Applies a stride-interpolated delay with configurable window length.
+///
+/// For best performance with the fast-path update system, supply a `key` prefix
+/// and a `window` parameter. This allows the delay time to be updated without
+/// rebuilding the graph.
+///
+/// Props:
+/// - `key`: optional prefix for stable node identity (enables fast delay updates)
+/// - `window`: delay buffer size in samples (required)
+///
+/// # Example: Keyed stride delay with dynamic timing
+///
+/// ```ignore
+/// use elemaudio_rs::{Graph, el, extra};
+/// use serde_json::json;
+///
+/// let graph = Graph::new().render(
+///     extra::stride_delay(
+///         json!({ "key": "delay", "window": 44100.0 }),  // 1 second at 44.1kHz
+///         el::cycle(el::const_(440.0)),
+///     )
+/// );
+///
+/// let mounted = graph.mount();
+/// let batch = mounted.into_batch();
+/// runtime.execute(&batch);
+///
+/// // Later, update delay time without rebuilding the graph
+/// if let Some(delay_node) = mounted.node_with_key("delay_window") {
+///     let update = delay_node.set_const_value(22050.0);  // Now 0.5 seconds
+///     runtime.execute(&update);
+/// }
+/// ```
+pub fn stride_delay(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+    let mut props = props;
+
+    // Extract and validate window length
+    let window = props
+        .get("window")
+        .and_then(|value| value.as_f64())
+        .expect("stride_delay helper props must include a positive numeric `window` value");
+
+    if !(window.is_finite() && window > 0.0) {
+        panic!("stride_delay helper props must include a positive numeric `window` value");
+    }
+
+    // Extract optional key prefix for fast-path updates
+    let key_prefix = props
+        .get("key")
+        .and_then(|value| value.as_str())
+        .map(|k| k.to_string());
+
+    // Remove control props before constructing the graph
+    if let serde_json::Value::Object(map) = &mut props {
+        map.remove("window");
+        map.remove("key");
+    }
+
+    // Create window node with key if a prefix was supplied
+    let window_node = match &key_prefix {
+        Some(prefix) => el::const_with_key(&format!("{}_window", prefix), window),
+        None => el::const_(window),
+    };
+
+    Node::new("stridedelay", props, vec![window_node, resolve(x)])
 }
