@@ -1,7 +1,6 @@
 use super::el;
 use crate::graph::Node;
 use crate::{resolve, unpack, ElemNode};
-use serde_json::json;
 
 /// Internal enum for box_sum window input (props or signal).
 enum BoxSumWindowInput {

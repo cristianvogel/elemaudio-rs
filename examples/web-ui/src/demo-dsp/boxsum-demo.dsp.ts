@@ -10,7 +10,7 @@ export const SCOPE_NAME = "boxsum-scope";
 
 export interface BoxsumParams {
   mode: "sum" | "average";
-  windowLength: number;
+  windowLength: NodeRepr_t;
   toneHz: number;
   modRange: number;
   attenuation: number;
@@ -22,11 +22,10 @@ export function buildGraph(p: BoxsumParams): NodeRepr_t[] {
   const modRange = el.const({ key: "boxModRange", value: p.modRange });
   const boxsumAttenuation = el.const({ key: "boxsum:attenuation", value: p.attenuation });
 
-  const boxedNoise = el.select(
-    p.mode === "average" ? 1 : 0,
-    el.extra.boxAverage({ key: "boxsum", window: p.windowLength }, noise),
-    el.mul(boxsumAttenuation, el.extra.boxSum({ key: "boxsum", window: p.windowLength }, noise))
-  );
+  const boxedNoise =
+    p.mode === "average"
+      ? el.extra.boxAverage(p.windowLength, noise)
+      : el.mul(boxsumAttenuation, el.extra.boxSum(p.windowLength, noise));
 
   const scaledBoxedNoise = el.mul(modRange, boxedNoise);
   const scopeInsert = el.scope({ name: SCOPE_NAME, size: TIME_SCALE, channels: 1 }, boxedNoise);
