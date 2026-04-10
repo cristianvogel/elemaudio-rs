@@ -7,7 +7,6 @@
 
 import { buildGraph as dspBuildGraph, SCOPE_NAME } from "../demo-dsp/boxsum-demo.dsp";
 import { initDemo } from "./demo-harness";
-import { el } from "@elem-rs/core";
 import "../components/Oscilloscope";
 
 // ---- layout -----------------------------------------------------------
@@ -18,7 +17,7 @@ const layout = `
   <div class="panel">
     <h1>elemaudio-rs</h1>
     <h3>box-sum modulation demo</h3>
-    <p>Uses <code>el.extra.boxSum(window, x)</code> or <code>el.extra.boxAverage(window, x)</code> with a keyed window node to smooth white noise and modulate oscillator frequency.</p>
+    <p>Uses <code>el.extra.boxSum(windowSamplesNode, x)</code> or <code>el.extra.boxAverage(windowSamplesNode, x)</code> to smooth white noise and modulate oscillator frequency.</p>
     <div class="controls">
       <button id="start" class="start-button">Start audio</button>
       <div class="row toggle-row">
@@ -82,7 +81,7 @@ const { mustQuery: q, wireControls } = initDemo({
   layout,
   buildGraph: () => dspBuildGraph({
     mode: modeSelect.value as "sum" | "average",
-    windowLength: el.const({ key: "boxsum:windowLength", value: Number(windowLengthSlider.value) }),
+    windowLength: Number(windowLengthSlider.value),
     toneHz: Number(toneHzSlider.value),
     modRange: Number(boxModRangeSlider.value),
     attenuation: Number(boxsumAttenuationSlider.value),
