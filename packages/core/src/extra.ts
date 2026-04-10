@@ -46,14 +46,49 @@ export interface CrunchProps extends Record<string, unknown> {
 
 /**
  * Props for `el.extra.foldback(...)`.
+ *
+ * Supports the fast-path keying system for parameter updates:
+ * - `key`: Optional prefix for stable node identity
+ * - Derived keys: `{key}_thresh`, `{key}_amp`
+ * - Fast-path updates: `mounted.node_with_key("{key}_thresh")`
  */
 export interface FoldbackProps extends Record<string, unknown> {
-  /** Optional authoring key used for stable identity. */
+  /** Optional authoring key used for stable identity (enables fast-path updates). */
   key?: string;
   /** Fold threshold. Must be positive. */
   thresh: number;
   /** Post amplification. Defaults to `1 / thresh`. */
   amp?: number;
+}
+
+/**
+ * Props for `el.extra.boxSum(...)`.
+ *
+ * Supports the fast-path keying system for parameter updates:
+ * - `key`: Optional prefix for stable node identity
+ * - Derived keys: `{key}_window`
+ * - Fast-path updates: `mounted.node_with_key("{key}_window")`
+ */
+export interface BoxSumProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity (enables fast-path updates). */
+  key?: string;
+  /** Window length in samples. Must be positive. */
+  window: number;
+}
+
+/**
+ * Props for `el.extra.boxAverage(...)`.
+ *
+ * Supports the fast-path keying system for parameter updates:
+ * - `key`: Optional prefix for stable node identity
+ * - Derived keys: `{key}_window`
+ * - Fast-path updates: `mounted.node_with_key("{key}_window")`
+ */
+export interface BoxAverageProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity (enables fast-path updates). */
+  key?: string;
+  /** Window length in samples. Must be positive. */
+  window: number;
 }
 
 /**
@@ -112,16 +147,44 @@ export function crunch(
 
 /**
  * Recursive foldback shaper helper.
+ *
+ * Supports the fast-path keying system for parameter updates without graph rebuild.
+ *
+ * @example
+ * ```typescript
+ * const graph = el.Graph().render(
+ *   el.extra.foldback(
+ *     { key: "shaper", thresh: 0.5, amp: 2.0 },
+ *     el.cycle(el.const_(440))
+ *   )
+ * );
+ *
+ * const mounted = graph.mount();
+ * runtime.execute(mounted.batch());
+ *
+ * // Later, update threshold without graph rebuild
+ * const threshNode = mounted.node_with_key("shaper_thresh");
+ * if (threshNode) {
+ *   runtime.execute(threshNode.set_const_value(0.7));
+ * }
+ * ```
  */
 export function foldback(props: FoldbackProps, x: ElemNode): NodeRepr_t {
-  const { thresh, amp = 1 / thresh, ...other } = props;
+  const { key, thresh, amp = 1 / thresh, ...other } = props;
 
   if (!Number.isFinite(thresh) || thresh <= 0) {
     throw new Error("foldback requires a positive thresh prop");
   }
 
-  const threshNode = createNode("const", { value: thresh }, []);
-  const ampNode = createNode("const", { value: amp }, []);
+  // Create keyed or unnamed const nodes based on whether a key prefix was supplied
+  const threshNode = key
+    ? createNode("const", { key: `${key}_thresh`, value: thresh }, [])
+    : createNode("const", { value: thresh }, []);
+
+  const ampNode = key
+    ? createNode("const", { key: `${key}_amp`, value: amp }, [])
+    : createNode("const", { value: amp }, []);
+
   const one = createNode("const", { value: 1 }, []);
   const folded = createNode("sub", {}, [
     createNode("abs", {}, [
@@ -217,21 +280,167 @@ export function stereoLimiter(
 }
 
 /**
- * Raw variable-width box sum for a mono source node.
- *
- * The first child specifies the window length in samples and can be a node or a value.
+ * Raw variable-width box sum helper with static window (keying support).
  */
-export function boxSum(windowSamples: ElemNode, x: ElemNode): NodeRepr_t {
-  return createNode("boxsum", {}, [resolve(windowSamples), resolve(x)]);
+export function boxSum(props: BoxSumProps, x: ElemNode): NodeRepr_t;
+/**
+ * Raw variable-width box sum helper with dynamic window signal.
+ */
+export function boxSum(window: ElemNode, x: ElemNode): NodeRepr_t;
+/**
+ * Raw variable-width box sum helper.
+ *
+ * Computes a box-filter sum over a configurable window length.
+ *
+ * Supports two usage patterns:
+ * 1. **Static window with keying**: Pass props with `window` and `key` for fast-path updates
+ * 2. **Dynamic window signal**: Pass a signal node for sample-rate accurate modulation
+ *
+ * @example
+ * ```typescript
+ * // Static window with keying
+ * const graph = el.Graph().render(
+ *   el.extra.boxSum(
+ *     { key: "filter", window: 256 },
+ *     el.cycle(el.const_(440))
+ *   )
+ * );
+ *
+ * const mounted = graph.mount();
+ * runtime.execute(mounted.batch());
+ *
+ * // Later, update window size without graph rebuild
+ * const windowNode = mounted.node_with_key("filter_window");
+ * if (windowNode) {
+ *   runtime.execute(windowNode.set_const_value(512));
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Dynamic window signal for sample-rate modulation
+ * const windowLfo = el.mul(
+ *   el.add(el.const_(256), el.const_(128)),
+ *   el.cycle(el.const_(0.5))  // 0.5 Hz LFO
+ * );
+ *
+ * const graph = el.Graph().render(
+ *   el.extra.boxSum(windowLfo, el.white())
+ * );
+ *
+ * const mounted = graph.mount();
+ * runtime.execute(mounted.batch());
+ * ```
+ */
+export function boxSum(
+  windowOrProps: BoxSumProps | ElemNode,
+  x: ElemNode
+): NodeRepr_t {
+  // Handle props (keying support)
+  if (
+    windowOrProps !== null &&
+    typeof windowOrProps === "object" &&
+    "window" in windowOrProps
+  ) {
+    const props = windowOrProps as BoxSumProps;
+    const { key, window, ...other } = props;
+
+    if (!Number.isFinite(window) || window <= 0) {
+      throw new Error("boxSum requires a positive window prop");
+    }
+
+    // Create keyed or unnamed const node based on whether a key prefix was supplied
+    const windowNode = key
+      ? createNode("const", { key: `${key}_window`, value: window }, [])
+      : createNode("const", { value: window }, []);
+
+    return createNode("boxsum", other, [windowNode, resolve(x)]);
+  }
+
+  // Handle signal (no keying support)
+  return createNode("boxsum", {}, [resolve(windowOrProps), resolve(x)]);
 }
 
 /**
- * Raw variable-width box average for a mono source node.
- *
- * The first child specifies the window length in samples and can be a node or a value.
+ * Raw variable-width box average helper with static window (keying support).
  */
-export function boxAverage(windowSamples: ElemNode, x: ElemNode): NodeRepr_t {
-  return createNode("boxaverage", {}, [resolve(windowSamples), resolve(x)]);
+export function boxAverage(props: BoxAverageProps, x: ElemNode): NodeRepr_t;
+/**
+ * Raw variable-width box average helper with dynamic window signal.
+ */
+export function boxAverage(window: ElemNode, x: ElemNode): NodeRepr_t;
+/**
+ * Raw variable-width box average helper.
+ *
+ * Computes a box-filter average over a configurable window length.
+ *
+ * Supports two usage patterns:
+ * 1. **Static window with keying**: Pass props with `window` and `key` for fast-path updates
+ * 2. **Dynamic window signal**: Pass a signal node for sample-rate accurate modulation
+ *
+ * @example
+ * ```typescript
+ * // Static window with keying
+ * const graph = el.Graph().render(
+ *   el.extra.boxAverage(
+ *     { key: "avg", window: 256 },
+ *     el.cycle(el.const_(440))
+ *   )
+ * );
+ *
+ * const mounted = graph.mount();
+ * runtime.execute(mounted.batch());
+ *
+ * // Later, update window size without graph rebuild
+ * const windowNode = mounted.node_with_key("avg_window");
+ * if (windowNode) {
+ *   runtime.execute(windowNode.set_const_value(512));
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Dynamic window signal for sample-rate modulation
+ * const windowEnvelope = el.mul(
+ *   el.const_(512),
+ *   el.ad(el.const_(100), el.const_(500), el.const_(0))
+ * );
+ *
+ * const graph = el.Graph().render(
+ *   el.extra.boxAverage(windowEnvelope, el.white())
+ * );
+ *
+ * const mounted = graph.mount();
+ * runtime.execute(mounted.batch());
+ * ```
+ */
+export function boxAverage(
+  windowOrProps: BoxAverageProps | ElemNode,
+  x: ElemNode
+): NodeRepr_t {
+  // Handle props (keying support)
+  if (
+    windowOrProps !== null &&
+    typeof windowOrProps === "object" &&
+    "window" in windowOrProps
+  ) {
+    const props = windowOrProps as BoxAverageProps;
+    const { key, window, ...other } = props;
+
+    if (!Number.isFinite(window) || window <= 0) {
+      throw new Error("boxAverage requires a positive window prop");
+    }
+
+    // Create keyed or unnamed const node based on whether a key prefix was supplied
+    const windowNode = key
+      ? createNode("const", { key: `${key}_window`, value: window }, [])
+      : createNode("const", { value: window }, []);
+
+    return createNode("boxaverage", other, [windowNode, resolve(x)]);
+  }
+
+  // Handle signal (no keying support)
+  return createNode("boxaverage", {}, [resolve(windowOrProps), resolve(x)]);
 }
 
 /**

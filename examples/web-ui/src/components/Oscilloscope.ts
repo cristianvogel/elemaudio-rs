@@ -5,6 +5,8 @@
 type MeterRange = { min: number; max: number };
 type ScopePoint = MeterRange | null | undefined;
 
+export const TIME_SCALE = 1024; // min 256
+
 class ElemaudioOscilloscope extends HTMLElement {
     private _canvas: HTMLCanvasElement | null = null;
     private _ctx: CanvasRenderingContext2D | null = null;
@@ -17,7 +19,7 @@ class ElemaudioOscilloscope extends HTMLElement {
     private _data: ScopePoint[] | number[] = [];
 
     private _sampleHistory: number[] = [];
-    private readonly _historyLength = 256 * 500;
+    private readonly _historyLength = TIME_SCALE ;
     private _blockCount = 0;
 
 
@@ -63,7 +65,7 @@ class ElemaudioOscilloscope extends HTMLElement {
             if (this._sampleHistory.length > this._historyLength) {
                 this._sampleHistory = this._sampleHistory.slice(-this._historyLength);
             }
-            this._blockCount = (this._blockCount + 1) % 500;
+            this._blockCount = (this._blockCount + 1) % TIME_SCALE;
         }
         this._scheduleDraw();
     }
@@ -126,7 +128,7 @@ class ElemaudioOscilloscope extends HTMLElement {
             waveGradient.addColorStop(1, color);
 
             ctx.strokeStyle = waveGradient;
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1;
             ctx.beginPath();
             for (let i = 0; i < ordered.length; i++) {
                 const x = i * sliceWidth;

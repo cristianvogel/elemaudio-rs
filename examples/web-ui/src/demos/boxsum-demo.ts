@@ -17,7 +17,7 @@ const layout = `
   <div class="panel">
     <h1>elemaudio-rs</h1>
     <h3>box-sum modulation demo</h3>
-    <p>Uses <code>el.extra.boxSum(windowSamplesNode, x)</code> or <code>el.extra.boxAverage(windowSamplesNode, x)</code> to smooth white noise and modulate oscillator frequency.</p>
+    <p>Uses <code>el.extra.boxSum({ key?, window }, x)</code> or <code>el.extra.boxAverage({ key?, window }, x)</code> to smooth white noise and modulate oscillator frequency.</p>
     <div class="controls">
       <button id="start" class="start-button">Start audio</button>
       <div class="row toggle-row">

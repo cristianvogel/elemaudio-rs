@@ -1,6 +1,33 @@
 use super::el;
 use crate::graph::Node;
 use crate::{resolve, unpack, ElemNode};
+use serde_json::json;
+
+/// Internal enum for box_sum window input (props or signal).
+enum BoxSumWindowInput {
+    /// Props object with static window and optional key
+    Props(serde_json::Value),
+    /// Dynamic signal node for sample-rate modulation
+    Signal(ElemNode),
+}
+
+impl From<serde_json::Value> for BoxSumWindowInput {
+    fn from(props: serde_json::Value) -> Self {
+        BoxSumWindowInput::Props(props)
+    }
+}
+
+impl From<Node> for BoxSumWindowInput {
+    fn from(node: Node) -> Self {
+        BoxSumWindowInput::Signal(ElemNode::Node(node))
+    }
+}
+
+impl From<f64> for BoxSumWindowInput {
+    fn from(value: f64) -> Self {
+        BoxSumWindowInput::Signal(ElemNode::Number(value))
+    }
+}
 
 fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value) {
     let channels = props
@@ -166,15 +193,17 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 ///
 /// Computes a box-filter sum over a configurable window length.
 ///
-/// For best performance with the fast-path update system, supply a `key` prefix
-/// and a `window` parameter. This allows the window length to be updated without
-/// rebuilding the graph.
+/// Supports two usage patterns:
 ///
-/// Props:
-/// - `key`: optional prefix for stable node identity (enables fast window updates)
-/// - `window`: window length in samples (required)
+/// 1. **Static window with keying** (for fast-path parameter updates):
+///    Pass props with `window` and `key`. The window can be updated via
+///    `mounted.node_with_key("{key}_window")` without rebuilding the graph.
 ///
-/// # Example: Keyed box sum with dynamic window
+/// 2. **Dynamic window signal** (for sample-rate modulation):
+///    Pass a signal node as the window parameter for runtime sample-rate control.
+///    No keying is available in this mode.
+///
+/// # Example: Keyed static window with fast-path updates
 ///
 /// ```ignore
 /// use elemaudio_rs::{Graph, el, extra};
@@ -197,7 +226,42 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 ///     runtime.execute(&update);
 /// }
 /// ```
-pub fn box_sum(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+///
+/// # Example: Dynamic signal window for sample-rate modulation
+///
+/// ```ignore
+/// use elemaudio_rs::{Graph, el, extra, WindowParam};
+/// use serde_json::json;
+///
+/// // Window size modulated by an LFO at sample rate
+/// let window_lfo = el::mul((
+///     el::add([el::const_(256.0), el::const_(128.0)]),
+///     el::cycle(el::const_(0.5)),  // 0.5 Hz LFO
+/// ));
+///
+/// let graph = Graph::new().render(
+///     extra::box_sum(
+///         WindowParam::Dynamic(window_lfo),
+///         el::cycle(el::const_(440.0)),
+///     )
+/// );
+///
+/// let mounted = graph.mount();
+/// runtime.execute(&mounted.into_batch());
+/// ```
+pub fn box_sum(window: impl Into<BoxSumWindowInput>, x: impl Into<ElemNode>) -> Node {
+    match window.into() {
+        BoxSumWindowInput::Props(props) => box_sum_from_props(props, x),
+        BoxSumWindowInput::Signal(window_signal) => Node::new(
+            "boxsum",
+            serde_json::Value::Null,
+            vec![resolve(window_signal), resolve(x)],
+        ),
+    }
+}
+
+/// Internal helper to construct box_sum from props with keying support.
+fn box_sum_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     let mut props = props;
 
     // Extract and validate window length
@@ -235,15 +299,17 @@ pub fn box_sum(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 ///
 /// Computes a box-filter average over a configurable window length.
 ///
-/// For best performance with the fast-path update system, supply a `key` prefix
-/// and a `window` parameter. This allows the window length to be updated without
-/// rebuilding the graph.
+/// Supports two usage patterns:
 ///
-/// Props:
-/// - `key`: optional prefix for stable node identity (enables fast window updates)
-/// - `window`: window length in samples (required)
+/// 1. **Static window with keying** (for fast-path parameter updates):
+///    Pass props with `window` and `key`. The window can be updated via
+///    `mounted.node_with_key("{key}_window")` without rebuilding the graph.
 ///
-/// # Example: Keyed box average with dynamic window
+/// 2. **Dynamic window signal** (for sample-rate modulation):
+///    Pass a signal node as the window parameter for runtime sample-rate control.
+///    No keying is available in this mode.
+///
+/// # Example: Keyed static window with fast-path updates
 ///
 /// ```ignore
 /// use elemaudio_rs::{Graph, el, extra};
@@ -266,7 +332,67 @@ pub fn box_sum(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 ///     runtime.execute(&update);
 /// }
 /// ```
-pub fn box_average(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+///
+/// # Example: Dynamic signal window for sample-rate modulation
+///
+/// ```ignore
+/// use elemaudio_rs::{Graph, el, extra};
+///
+/// // Window size modulated by an LFO at sample rate
+/// let window_lfo = el::mul((
+///     el::add([el::const_(256.0), el::const_(128.0)]),
+///     el::cycle(el::const_(0.5)),  // 0.5 Hz LFO
+/// ));
+///
+/// let graph = Graph::new().render(
+///     extra::box_average(
+///         window_lfo,
+///         el::white(),
+///     )
+/// );
+///
+/// let mounted = graph.mount();
+/// runtime.execute(&mounted.into_batch());
+/// ```
+pub fn box_average(window: impl Into<BoxAverageWindowInput>, x: impl Into<ElemNode>) -> Node {
+    match window.into() {
+        BoxAverageWindowInput::Props(props) => box_average_from_props(props, x),
+        BoxAverageWindowInput::Signal(window_signal) => Node::new(
+            "boxaverage",
+            serde_json::Value::Null,
+            vec![resolve(window_signal), resolve(x)],
+        ),
+    }
+}
+
+/// Internal enum for box_average window input (props or signal).
+enum BoxAverageWindowInput {
+    /// Props object with static window and optional key
+    Props(serde_json::Value),
+    /// Dynamic signal node for sample-rate modulation
+    Signal(ElemNode),
+}
+
+impl From<serde_json::Value> for BoxAverageWindowInput {
+    fn from(props: serde_json::Value) -> Self {
+        BoxAverageWindowInput::Props(props)
+    }
+}
+
+impl From<Node> for BoxAverageWindowInput {
+    fn from(node: Node) -> Self {
+        BoxAverageWindowInput::Signal(ElemNode::Node(node))
+    }
+}
+
+impl From<f64> for BoxAverageWindowInput {
+    fn from(value: f64) -> Self {
+        BoxAverageWindowInput::Signal(ElemNode::Number(value))
+    }
+}
+
+/// Internal helper to construct box_average from props with keying support.
+fn box_average_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     let mut props = props;
 
     // Extract and validate window length
@@ -316,15 +442,17 @@ pub fn limiter(
 ///
 /// Applies a stride-interpolated delay with configurable window length.
 ///
-/// For best performance with the fast-path update system, supply a `key` prefix
-/// and a `window` parameter. This allows the delay time to be updated without
-/// rebuilding the graph.
+/// Supports two usage patterns:
 ///
-/// Props:
-/// - `key`: optional prefix for stable node identity (enables fast delay updates)
-/// - `window`: delay buffer size in samples (required)
+/// 1. **Static window with keying** (for fast-path parameter updates):
+///    Pass props with `window` and `key`. The window can be updated via
+///    `mounted.node_with_key("{key}_window")` without rebuilding the graph.
 ///
-/// # Example: Keyed stride delay with dynamic timing
+/// 2. **Dynamic window signal** (for sample-rate modulation):
+///    Pass a signal node as the window parameter for runtime sample-rate control.
+///    No keying is available in this mode.
+///
+/// # Example: Keyed static window with fast-path updates
 ///
 /// ```ignore
 /// use elemaudio_rs::{Graph, el, extra};
@@ -347,7 +475,67 @@ pub fn limiter(
 ///     runtime.execute(&update);
 /// }
 /// ```
-pub fn stride_delay(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+///
+/// # Example: Dynamic signal window for sample-rate modulation
+///
+/// ```ignore
+/// use elemaudio_rs::{Graph, el, extra};
+///
+/// // Delay time modulated by an envelope
+/// let delay_envelope = el::mul((
+///     el::const_(44100.0),  // 1 second max
+///     el::ad(el::const_(100.0), el::const_(500.0), el::const_(0.0)),
+/// ));
+///
+/// let graph = Graph::new().render(
+///     extra::stride_delay(
+///         delay_envelope,
+///         el::cycle(el::const_(440.0)),
+///     )
+/// );
+///
+/// let mounted = graph.mount();
+/// runtime.execute(&mounted.into_batch());
+/// ```
+pub fn stride_delay(window: impl Into<StrideDelayWindowInput>, x: impl Into<ElemNode>) -> Node {
+    match window.into() {
+        StrideDelayWindowInput::Props(props) => stride_delay_from_props(props, x),
+        StrideDelayWindowInput::Signal(window_signal) => Node::new(
+            "stridedelay",
+            serde_json::Value::Null,
+            vec![resolve(window_signal), resolve(x)],
+        ),
+    }
+}
+
+/// Internal enum for stride_delay window input (props or signal).
+enum StrideDelayWindowInput {
+    /// Props object with static window and optional key
+    Props(serde_json::Value),
+    /// Dynamic signal node for sample-rate modulation
+    Signal(ElemNode),
+}
+
+impl From<serde_json::Value> for StrideDelayWindowInput {
+    fn from(props: serde_json::Value) -> Self {
+        StrideDelayWindowInput::Props(props)
+    }
+}
+
+impl From<Node> for StrideDelayWindowInput {
+    fn from(node: Node) -> Self {
+        StrideDelayWindowInput::Signal(ElemNode::Node(node))
+    }
+}
+
+impl From<f64> for StrideDelayWindowInput {
+    fn from(value: f64) -> Self {
+        StrideDelayWindowInput::Signal(ElemNode::Number(value))
+    }
+}
+
+/// Internal helper to construct stride_delay from props with keying support.
+fn stride_delay_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     let mut props = props;
 
     // Extract and validate window length
