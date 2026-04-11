@@ -14,6 +14,7 @@ export type SourceMode = "oscillator" | "sample";
 export interface WaveshaperParams {
   source: SourceMode;
   freq: number;
+  cutOff: number;
   drive: number;
   thresh: number;
   amp: number;
@@ -36,13 +37,18 @@ export function buildGraph(p: WaveshaperParams): NodeRepr_t[] {
   }
 
   const drive = el.const({ key: "waveshaper:drive", value: p.drive });
+
+  const cutoff = el.const({ key: "waveshaper:cutoff", value: p.cutOff });
+
   const mix = el.const({ key: "waveshaper:mix", value: p.mix });
 
   const source = el.mul(drive, raw);
 
   const shaped = el.extra.foldback({ key: "foldback:0", thresh: p.thresh, amp: p.amp }, source);
 
-  const mixed = el.mul(0.25, el.select( mix, shaped, source));
+  const filtered = el.extra.stateSpaceFilter( {  slope: 8, mode: "highpass"}, cutoff,  shaped)
+
+  const mixed = el.mul(0.25, el.select( mix, filtered, source));
 
   const scopeInsert = el.scope({ name: SCOPE_NAME, size: TIME_SCALE, channels: 1 }, shaped);
 

@@ -188,6 +188,27 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     )
 }
 
+/// State-space high/low-pass helper.
+///
+/// Matches the TS helper signature: `cutoff` is the second input and can be a
+/// literal or a signal node, while `x` is the source signal.
+pub fn state_space_filter(
+    props: serde_json::Value,
+    cutoff: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    let slope = props
+        .get("slope")
+        .and_then(|value| value.as_u64())
+        .expect("state_space_filter helper props must include `slope`") as usize;
+
+    if !(2..=8).contains(&slope) {
+        panic!("state_space_filter slope must be between 2 and 8");
+    }
+
+    Node::new("statespacefilter", props, vec![resolve(cutoff), resolve(x)])
+}
+
 /// Raw variable-width box sum helper.
 ///
 /// Computes a box-filter sum over a configurable window length.

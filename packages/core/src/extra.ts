@@ -116,6 +116,20 @@ export interface LimiterProps extends Record<string, unknown> {
 }
 
 /**
+ * Mode for `stateSpaceFilter(...)`.
+ */
+export type StateSpaceFilterType = "highpass" | "lowpass";
+
+/**
+ * Props for `el.extra.stateSpaceFilter(...)`.
+ */
+export interface StateSpaceFilterProps extends Record<string, unknown> {
+  /** Filter slope in dB/oct; supported values are 2 through 8. */
+  slope: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  filterType?: StateSpaceFilterType;
+}
+
+/**
  * Native frequency shifter helper.
  *
  * Returns two outputs in order: down-shifted, then up-shifted.
@@ -277,6 +291,30 @@ export function stereoLimiter(
   right: ElemNode,
 ): Array<NodeRepr_t> {
   return limiter(props, left, right) as Array<NodeRepr_t>;
+}
+
+/**
+ * Native state-space high/low-pass filter helper.
+ */
+export function stateSpaceFilter(
+  props: StateSpaceFilterProps,
+  cutoff: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  const { slope, ...other } = props;
+
+  if (![2, 3, 4, 5, 6, 7, 8].includes(slope)) {
+    throw new Error("stateSpaceFilter requires slope between 2 and 8");
+  }
+
+  return createNode(
+    "statespacefilter",
+    {
+      ...other,
+      slope,
+    },
+      [resolve(cutoff), resolve(x)]
+  );
 }
 
 /**
