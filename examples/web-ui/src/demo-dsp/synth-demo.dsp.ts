@@ -4,7 +4,7 @@
 
 import type { NodeRepr_t } from "@elem-rs/core";
 import { el } from "@elem-rs/core";
-import type { StrideDelayMode } from "@elem-rs/core/extra";
+import type { StrideDelayBigLeapMode } from "@elem-rs/core/extra";
 
 export interface SynthParams {
   frequency: number;
@@ -19,7 +19,7 @@ export interface SynthParams {
   delayTimeMs: number;
   delayFeedback: number;
   delayTransitionMs: number;
-  delayMode: StrideDelayMode;
+  bigLeapMode: StrideDelayBigLeapMode;
 }
 
 const synthVoice = (hz: NodeRepr_t) =>
@@ -75,7 +75,7 @@ function crunchBranch(key: string, input: NodeRepr_t, p: SynthParams): NodeRepr_
 function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {
   return el.extra.strideDelay({
     key: "stride-delay-" + vn,
-    mode: p.delayMode,
+    bigLeapMode: p.bigLeapMode,
     fb: p.delayFeedback,
     delayMs: p.delayTimeMs,
     transitionMs: p.delayTransitionMs,

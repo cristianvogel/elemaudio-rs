@@ -5,6 +5,7 @@
  * and modulate oscillator frequency.
  */
 
+import {MAX_ZOOM} from "../components/Oscilloscope";
 import { buildGraph as dspBuildGraph, SCOPE_NAME } from "../demo-dsp/boxsum-demo.dsp";
 import { initDemo } from "./demo-harness";
 import "../components/Oscilloscope";
@@ -58,6 +59,12 @@ const layout = `
         </label>
         <input id="tone-hz" type="range" min="60" max="900" value="200" step="1" />
       </div>
+
+      <div class="row">
+        <button id="freeze-scope" class="freeze-button">Freeze</button>
+        <button id="zoomButton" class="zoom-button">Zoom: 1×</button>
+      </div>
+
       <div class="status" id="status">Idle</div>
     </div>
   </div>
@@ -76,6 +83,8 @@ let boxsumAttenuationValue: HTMLSpanElement;
 let toneHzSlider: HTMLInputElement;
 let toneHzValue: HTMLSpanElement;
 let oscilloscope: any;
+let freezeButton: HTMLButtonElement;
+let zoomButton: HTMLButtonElement;
 
 const { mustQuery: q, wireControls } = initDemo({
   layout,
@@ -108,8 +117,31 @@ boxsumAttenuationValue = q<HTMLSpanElement>("#boxsum-attenuation-value");
 toneHzSlider = q<HTMLInputElement>("#tone-hz");
 toneHzValue = q<HTMLSpanElement>("#tone-hz-value");
 oscilloscope = q<any>("elemaudio-oscilloscope");
+freezeButton = q<HTMLButtonElement>("#freeze-scope");
+zoomButton = q<HTMLButtonElement>("#zoomButton");
 
 wireControls([modeSelect, windowLengthSlider, boxModRangeSlider, boxsumAttenuationSlider, toneHzSlider]);
+
+freezeButton.addEventListener("click", () => {
+  const isFrozen = oscilloscope.hasAttribute("freeze");
+  if (isFrozen) {
+    oscilloscope.removeAttribute("freeze");
+    freezeButton.textContent = "Freeze";
+  } else {
+    oscilloscope.setAttribute("freeze", "");
+    freezeButton.textContent = "Unfreeze";
+  }
+});
+
+let currentZoom = 1;
+zoomButton.textContent = "Zoom: 1×";
+oscilloscope.setAttribute("zoom", String(currentZoom));
+
+zoomButton.addEventListener("click", () => {
+  currentZoom = currentZoom === MAX_ZOOM ? 1 : currentZoom * 2;
+  oscilloscope.setAttribute("zoom", String(currentZoom));
+  zoomButton.textContent = `Zoom: ${currentZoom}×`;
+});
 
 function updateReadouts() {
   modeValue.textContent = modeSelect.value;

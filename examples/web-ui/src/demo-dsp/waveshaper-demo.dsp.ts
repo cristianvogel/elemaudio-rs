@@ -5,6 +5,7 @@
 
 import type { NodeRepr_t } from "@elem-rs/core";
 import { el } from "@elem-rs/core";
+import {TIME_SCALE} from "../components/Oscilloscope";
 
 export const SCOPE_NAME = "waveshaper-scope";
 
@@ -17,7 +18,7 @@ export interface WaveshaperParams {
   thresh: number;
   amp: number;
   mix: number;
-  /** Required when source is "sample". VFS path registered by the demo. */
+  /** Required when a source is "sample". VFS path registered by the demo. */
   samplePath?: string;
 }
 
@@ -44,7 +45,7 @@ export function buildGraph(p: WaveshaperParams): NodeRepr_t[] {
   const dry = el.mul(el.sub(1, mix), source);
   const mixed = el.mul(0.25, el.add(wet, dry));
 
-  const scopeInsert = el.scope({ name: SCOPE_NAME, size: 256, channels: 1 }, shaped);
+  const scopeInsert = el.scope({ name: SCOPE_NAME, size: TIME_SCALE, channels: 1 }, shaped);
 
   const left = mixed;
   const right = el.add(mixed, el.mul(0, scopeInsert));

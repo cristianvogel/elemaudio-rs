@@ -206,6 +206,29 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.freeze-button {
+  position: absolute;
+  top: 12px;
+  right: 120px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #9fb0c3;
+  font-size: 12px;
+}
+
+.zoom-button {
+    position: absolute;
+    top: 12px;
+    right: 32px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #9fb0c3;
+}
+
 .status {
   min-height: 1.5em;
   font-size: 0.75em;

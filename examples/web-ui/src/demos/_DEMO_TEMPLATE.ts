@@ -111,7 +111,7 @@ const { mustQuery: q, wireControls } = initDemo({
   layout,
   buildGraph,
   updateReadouts,
-  // Uncomment for oscilloscope event wiring:
+  // Uncomment for scope event wiring:
   // onScopeEvent: (event: any) => {
   //   if (event.source === "demo-scope") {
   //     const block = event.data?.[0];

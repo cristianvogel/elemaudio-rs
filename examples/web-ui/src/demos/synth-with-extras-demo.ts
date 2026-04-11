@@ -4,7 +4,7 @@
  * Arp synth with crunch distortion, stride delay, and stereo limiter.
  */
 
-import type { StrideDelayMode } from "@elem-rs/core/extra";
+import type { StrideDelayBigLeapMode } from "@elem-rs/core/extra";
 import { buildGraph as dspBuildGraph } from "../demo-dsp/synth-demo.dsp";
 import { initDemo } from "./demo-harness";
 
@@ -62,7 +62,7 @@ const layout = `
         </div>
         <div class="dial">
           <label for="delay-method">
-            <span>Mode</span>
+            <span>Big Leap Mode</span>
             <span id="delay-method-value">linear</span>
           </label>
           <input id="delay-method" type="range" min="0" max="1" value="0" step="1" />
@@ -158,7 +158,7 @@ const { mustQuery: q, wireControls } = initDemo({
     delayTimeMs: Number(delayTimeSlider.value),
     delayFeedback: Number(delayFeedbackSlider.value) / 100,
     delayTransitionMs: Number(delayTransitionSlider.value),
-    delayMode: (["linear", "step"] as const)[Number(delayMethodSlider.value)] as StrideDelayMode,
+    bigLeapMode: (["linear", "step"] as const)[Number(delayMethodSlider.value)] as StrideDelayBigLeapMode,
   }),
   updateReadouts,
   renderOptions: { rootFadeInMs: 250, rootFadeOutMs: 250 },

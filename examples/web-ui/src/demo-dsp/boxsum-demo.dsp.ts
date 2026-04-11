@@ -4,6 +4,7 @@
 
 import type { NodeRepr_t } from "@elem-rs/core";
 import { el } from "@elem-rs/core";
+import {TIME_SCALE} from "../components/Oscilloscope";
 
 export const SCOPE_NAME = "boxsum-scope";
 
@@ -29,7 +30,7 @@ export function buildGraph(p: BoxsumParams): NodeRepr_t[] {
   );
 
   const scaledBoxedNoise = el.mul(modRange, boxedNoise);
-  const scopeInsert = el.scope({ name: SCOPE_NAME, size: 256, channels: 1 }, boxedNoise);
+  const scopeInsert = el.scope({ name: SCOPE_NAME, size: TIME_SCALE, channels: 1 }, boxedNoise);
 
   const left = el.mul(0.25, el.blepsaw(el.abs(el.add(toneBaseFreq, scaledBoxedNoise))));
   const right = el.mul(0.25, el.blepsaw(el.abs(el.sub(toneBaseFreq, scaledBoxedNoise))));

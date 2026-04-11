@@ -5,6 +5,7 @@
  * Supports oscillator and sample-based source selection.
  */
 
+import {MAX_ZOOM} from "../components/Oscilloscope";
 import { buildGraph as dspBuildGraph, SCOPE_NAME, type SourceMode } from "../demo-dsp/waveshaper-demo.dsp";
 import { initDemo } from "./demo-harness";
 import sampleUrl from "../../../demo-resources/115bpm_808_Beat_mono.wav?url";
@@ -20,7 +21,7 @@ const SAMPLE_VFS_PATH = "waveshaper/808-beat.wav";
 // ---- layout -----------------------------------------------------------
 
 const layout = `
-  <elemaudio-oscilloscope id="scope"></elemaudio-oscilloscope>
+  <elemaudio-oscilloscope id="scope" ></elemaudio-oscilloscope>
   <div class="scope-title"><p>Shaped signal</p></div>
   <div class="panel">
     <h1>elemaudio-rs</h1>
@@ -80,6 +81,11 @@ const layout = `
         <input id="mix" type="range" min="0" max="1" value="1" step="0.01" />
       </div>
 
+      <div class="row">
+        <button id="freeze-scope" class="freeze-button">Freeze</button>
+        <button id="zoomButton" class="zoom-button">Zoom: 1×</button>
+      </div>
+
       <div class="status" id="status">Idle</div>
     </div>
   </div>
@@ -106,6 +112,8 @@ let mixValue: HTMLSpanElement;
 let sourceSelect: HTMLSelectElement;
 let sourceValue: HTMLSpanElement;
 let oscilloscope: any;
+let freezeButton: HTMLButtonElement;
+let zoomButton: HTMLButtonElement;
 
 const { mustQuery: q, wireControls } = initDemo({
   layout,
@@ -155,9 +163,34 @@ mixSlider = q<HTMLInputElement>("#mix");
 mixValue = q<HTMLSpanElement>("#mix-value");
 sourceSelect = q<HTMLSelectElement>("#source-select");
 sourceValue = q<HTMLSpanElement>("#source-value");
-oscilloscope = q<any>("elemaudio-oscilloscope");
+oscilloscope = q<HTMLElement>("elemaudio-oscilloscope");
+freezeButton = q<HTMLButtonElement>("#freeze-scope");
+zoomButton = q<HTMLButtonElement>("#zoomButton");
 
 wireControls([sourceSelect, freqSlider, driveSlider, threshSlider, ampSlider, mixSlider]);
+
+// Toggle freeze state on the oscilloscope
+freezeButton.addEventListener("click", () => {
+    const isFrozen = oscilloscope.hasAttribute("freeze");
+    if (isFrozen) {
+        oscilloscope.removeAttribute("freeze");
+        freezeButton.textContent = "Freeze";
+    } else {
+        oscilloscope.setAttribute("freeze", "");
+        freezeButton.textContent = "Unfreeze";
+    }
+});
+
+// Cycle zoom 1× → 2× → 4×
+let currentZoom = 1;
+zoomButton.textContent = "Zoom: 1×";
+oscilloscope.setAttribute("zoom", String(currentZoom));
+
+zoomButton.addEventListener("click", () => {
+  currentZoom = currentZoom === MAX_ZOOM ? 1 : currentZoom * 2;
+  oscilloscope.setAttribute("zoom", String(currentZoom));
+  zoomButton.textContent = `Zoom: ${currentZoom}×`;
+});
 
 function updateReadouts() {
   sourceValue.textContent = sourceSelect.value;

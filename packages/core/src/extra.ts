@@ -444,9 +444,9 @@ export function boxAverage(
 }
 
 /**
- * Modes for `el.extra.strideDelay(...)`.
+ * Big leap modes for `el.extra.strideDelay(...)`.
  */
-export type StrideDelayMode = "linear" | "step";
+export type StrideDelayBigLeapMode = "linear" | "step";
 
 /**
  * Props for `el.extra.strideDelay(...)`.
@@ -462,8 +462,8 @@ export interface StrideDelayProps extends Record<string, unknown> {
   fb?: number;
   /** Crossfade length in milliseconds. */
   transitionMs?: number;
-  /** Large-jump interpolation mode. */
-  mode?: StrideDelayMode;
+  /** Big leap interpolation mode. */
+  bigLeapMode?: StrideDelayBigLeapMode;
 }
 
 /**
@@ -494,7 +494,7 @@ export function strideDelay(
     delayMs,
     fb = 0,
     transitionMs = 100,
-    mode = "linear",
+    bigLeapMode = "linear",
     ...other
   } = props;
 
@@ -504,7 +504,7 @@ export function strideDelay(
     delayMs,
     fb,
     transitionMs,
-    mode,
+    bigLeapMode,
   };
 
   if (right === undefined) {
