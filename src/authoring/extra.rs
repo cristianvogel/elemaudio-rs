@@ -206,7 +206,7 @@ pub fn state_space_filter(
         panic!("state_space_filter slope must be between 2 and 8");
     }
 
-    Node::new("statespacefilter", props, vec![resolve(cutoff), resolve(x)])
+    Node::new("stateSpaceFilter", props, vec![resolve(cutoff), resolve(x)])
 }
 
 /// Raw variable-width box sum helper.

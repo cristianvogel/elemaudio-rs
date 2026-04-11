@@ -308,7 +308,7 @@ export function stateSpaceFilter(
   }
 
   return createNode(
-    "statespacefilter",
+    "stateSpaceFilter",
     {
       ...other,
       slope,

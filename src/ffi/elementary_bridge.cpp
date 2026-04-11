@@ -52,11 +52,7 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });
 
-        handle->runtime->registerNodeType("statespacefilter", [](elem::NodeId const id, double fs, int const bs) {
-            return std::make_shared<elem::StateSpaceFilterNode<double>>(id, fs, bs);
-        });
-
-        handle->runtime->registerNodeType("state_space_filter", [](elem::NodeId const id, double fs, int const bs) {
+        handle->runtime->registerNodeType("stateSpaceFilter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::StateSpaceFilterNode<double>>(id, fs, bs);
         });
 
