@@ -125,7 +125,7 @@ export type StateSpaceFilterType = "highpass" | "lowpass";
  */
 export interface StateSpaceFilterProps extends Record<string, unknown> {
   /** Filter slope in dB/oct; supported values are 2 through 8. */
-  slope: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  slope: number;
   filterType?: StateSpaceFilterType;
 }
 
@@ -301,7 +301,7 @@ export function stateSpaceFilter(
   cutoff: ElemNode,
   x: ElemNode,
 ): NodeRepr_t {
-  const { slope, ...other } = props;
+  const { slope, filterType, ...other } = props;
 
   if (![2, 3, 4, 5, 6, 7, 8].includes(slope)) {
     throw new Error("stateSpaceFilter requires slope between 2 and 8");
@@ -311,9 +311,10 @@ export function stateSpaceFilter(
     "stateSpaceFilter",
     {
       ...other,
+      filterType,
       slope,
     },
-      [resolve(cutoff), resolve(x)]
+    [resolve(cutoff), resolve(x)],
   );
 }
 

@@ -21,9 +21,14 @@ struct StateSpaceFilterNode : public GraphNode<FloatType> {
     int setProperty(std::string const& key, js::Value const& val, SharedResourceMap&) override {
         if (key == "cutoff_hz") {
             if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
+            cutoffHz.store(static_cast<Sample>((js::Number) val), std::memory_order_relaxed);
         } else if (key == "slope") {
             if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
             slopeValue.store(std::max(2, std::min(8, static_cast<int>((js::Number) val))), std::memory_order_relaxed);
+        } else if (key == "filterType") {
+            if (!val.isString()) return ReturnCode::InvalidPropertyType();
+            auto value = static_cast<std::string>(val);
+            filterType.store(value == "lowpass" || value == "lp" ? 1 : 0, std::memory_order_relaxed);
         }
         return GraphNode<FloatType>::setProperty(key, val);
     }
@@ -38,6 +43,7 @@ struct StateSpaceFilterNode : public GraphNode<FloatType> {
         auto* in = ctx.inputData[1];
         auto* out = ctx.outputData[0];
         auto sr = static_cast<Sample>(GraphNode<FloatType>::getSampleRate());
+        auto filter = filterType.load(std::memory_order_relaxed);
         auto slope = std::max(2, std::min(8, slopeValue.load(std::memory_order_relaxed)));
 
         auto stages = std::max(1, slope / 2);
@@ -53,7 +59,7 @@ struct StateSpaceFilterNode : public GraphNode<FloatType> {
                 lowState[stage] = low;
             }
             auto high = sample - low;
-            out[i] = high;
+            out[i] = filter == 0 ? high : low;
         }
 
         for (size_t c = 1; c < numOuts; ++c) {
@@ -62,7 +68,9 @@ struct StateSpaceFilterNode : public GraphNode<FloatType> {
     }
 
 private:
+    std::atomic<Sample> cutoffHz{Sample(1000)};
     std::atomic<int> slopeValue{2};
+    std::atomic<int> filterType{0};
     Sample lowState[4] = {Sample(0), Sample(0), Sample(0), Sample(0)};
 };
 

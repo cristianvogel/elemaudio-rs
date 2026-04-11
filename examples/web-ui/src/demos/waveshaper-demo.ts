@@ -46,15 +46,34 @@ const layout = `
           <span>Tone Frequency</span>
           <span id="freq-value">220 Hz</span>
         </label>
-        <input id="freq" type="range" min="40" max="2000" value="220" step="1" />
+        <input id="freq" type="range" min="10" max="2000" value="220" step="1" />
       </div>
       
-      <div class="row">
+      <div class="dial-strip" aria-label="Filter controls">
+        <div class="dial">
           <label for="cutoff">
-              <span>Filter Cutoff</span>
-              <span id="cutoff-value">300 Hz</span>
+            <span>Filter Cutoff</span>
+            <span id="cutoff-value">300 Hz</span>
           </label>
-          <input id="cutoff" type="range" min="20" max="16000" value="300" step="1">
+          <input id="cutoff" type="range" min="20" max="16000" value="300" step="1" />
+        </div>
+        <div class="dial">
+          <label for="filter-type">
+            <span>Filter Type</span>
+            <span id="filter-type-value">highpass</span>
+          </label>
+          <select id="filter-type" class="toggle-select">
+            <option value="highpass">Highpass</option>
+            <option value="lowpass">Lowpass</option>
+          </select>
+        </div>
+        <div class="dial">
+          <label for="slope">
+            <span>Slope</span>
+            <span id="slope-value">8</span>
+          </label>
+          <input id="slope" type="range" min="2" max="8" value="8" step="1" />
+        </div>
       </div>
 
       <div class="row">
@@ -111,6 +130,10 @@ let freqSlider: HTMLInputElement;
 let freqValue: HTMLSpanElement;
 let cutOffSlider: HTMLInputElement;
 let cutOffValue: HTMLSpanElement;
+let slopeSlider: HTMLInputElement;
+let slopeValue: HTMLSpanElement;
+let filterTypeSelect: HTMLSelectElement;
+let filterTypeValue: HTMLSpanElement;
 let driveSlider: HTMLInputElement;
 let driveValue: HTMLSpanElement;
 let threshSlider: HTMLInputElement;
@@ -131,6 +154,8 @@ const {mustQuery: q, wireControls} = initDemo({
         source: sourceSelect.value as SourceMode,
         freq: Number(freqSlider.value),
         cutOff: Number(cutOffSlider.value),
+        slope: Number(slopeSlider.value),
+        filterType: filterTypeSelect.value as "highpass" | "lowpass",
         drive: Number(driveSlider.value),
         thresh: Number(threshSlider.value),
         amp: Number(ampSlider.value),
@@ -166,6 +191,10 @@ freqSlider = q<HTMLInputElement>("#freq");
 freqValue = q<HTMLSpanElement>("#freq-value");
 cutOffSlider = q<HTMLInputElement>("#cutoff");
 cutOffValue = q<HTMLSpanElement>("#cutoff-value");
+slopeSlider = q<HTMLInputElement>("#slope");
+slopeValue = q<HTMLSpanElement>("#slope-value");
+filterTypeSelect = q<HTMLSelectElement>("#filter-type");
+filterTypeValue = q<HTMLSpanElement>("#filter-type-value");
 driveSlider = q<HTMLInputElement>("#drive");
 driveValue = q<HTMLSpanElement>("#drive-value");
 threshSlider = q<HTMLInputElement>("#thresh");
@@ -180,7 +209,7 @@ oscilloscope = q<HTMLElement>("elemaudio-oscilloscope");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
 
-wireControls([sourceSelect, freqSlider, cutOffSlider, driveSlider, threshSlider, ampSlider, mixSlider]);
+wireControls([sourceSelect, freqSlider, cutOffSlider, slopeSlider, filterTypeSelect, driveSlider, threshSlider, ampSlider, mixSlider]);
 
 // Toggle freeze state on the oscilloscope
 freezeButton.addEventListener("click", () => {
@@ -210,6 +239,8 @@ function updateReadouts() {
     freqSlider.disabled = sourceSelect.value === "sample";
     freqValue.textContent = `${Number(freqSlider.value)} Hz`;
     cutOffValue.textContent = `${Number(cutOffSlider.value)} Hz`;
+    slopeValue.textContent = slopeSlider.value;
+    filterTypeValue.textContent = filterTypeSelect.value;
     driveValue.textContent = `${Number(driveSlider.value).toFixed(2)}x`;
     threshValue.textContent = Number(threshSlider.value).toFixed(2);
     ampValue.textContent = Number(ampSlider.value).toFixed(2);

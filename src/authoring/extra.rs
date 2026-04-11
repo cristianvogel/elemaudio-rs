@@ -197,6 +197,7 @@ pub fn state_space_filter(
     cutoff: impl Into<ElemNode>,
     x: impl Into<ElemNode>,
 ) -> Node {
+    let mut props = props;
     let slope = props
         .get("slope")
         .and_then(|value| value.as_u64())
@@ -204,6 +205,10 @@ pub fn state_space_filter(
 
     if !(2..=8).contains(&slope) {
         panic!("state_space_filter slope must be between 2 and 8");
+    }
+
+    if let serde_json::Value::Object(map) = &mut props {
+        map.remove("slope");
     }
 
     Node::new("stateSpaceFilter", props, vec![resolve(cutoff), resolve(x)])

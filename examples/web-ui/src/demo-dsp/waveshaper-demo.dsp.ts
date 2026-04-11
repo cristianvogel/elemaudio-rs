@@ -15,6 +15,8 @@ export interface WaveshaperParams {
   source: SourceMode;
   freq: number;
   cutOff: number;
+  slope: number;
+  filterType: "highpass" | "lowpass";
   drive: number;
   thresh: number;
   amp: number;
@@ -46,7 +48,7 @@ export function buildGraph(p: WaveshaperParams): NodeRepr_t[] {
 
   const shaped = el.extra.foldback({ key: "foldback:0", thresh: p.thresh, amp: p.amp }, source);
 
-  const filtered = el.extra.stateSpaceFilter( {  slope: 8, mode: "highpass"}, cutoff,  shaped)
+  const filtered = el.extra.stateSpaceFilter({ slope: p.slope, filterType: p.filterType }, cutoff, shaped);
 
   const mixed = el.mul(0.25, el.select( mix, filtered, source));
 
