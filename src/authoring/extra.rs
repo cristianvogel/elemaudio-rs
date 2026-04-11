@@ -188,24 +188,33 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     )
 }
 
-/// VariSlope SVF — cascaded Simper SVF with Rossum-style continuous slope morphing.
+/// VariSlope SVF — cascaded Butterworth SVF with Rossum-style continuous slope
+/// morphing.
 ///
 /// # Overview
 ///
 /// This node exposes a continuously variable filter order (slope) that morphs
-/// smoothly between 1 and 4 cascaded second-order SVF stages (12–48 dB/oct)
-/// at audio rate, inspired by Dave Rossum's analog cascade designs.
+/// smoothly between 1 and 6 cascaded second-order Butterworth SVF stages
+/// (12–72 dB/oct) at audio rate, inspired by Dave Rossum's analog cascade
+/// designs.
 ///
-/// All four internal stages run every sample so their integrator states remain
+/// Q is fixed internally at Butterworth (√2 ≈ 1.414, maximally flat magnitude)
+/// and is not exposed. The slope is the sole tonal control: one knob that
+/// determines how aggressively the filter rolls off.
+///
+/// All six internal stages run every sample so their integrator states remain
 /// warm regardless of the current slope value. The output is a linear crossfade
 /// between the two adjacent integer-order outputs that bracket the current slope,
 /// so the filter order morphs without clicks, discontinuities, or dropout.
 ///
+/// Per-stage gain correction (matched magnitude at cutoff) prevents the BLT
+/// passband droop from compounding across stages.
+///
 /// # Contrast with `el.svf`
 ///
 /// The vendor `el.svf` is a single-stage Simper SVF (12 dB/oct fixed order)
-/// with an exposed Q parameter. `vari_slope_svf` adds continuous slope morphing
-/// as its defining feature; Q is also exposed (defaulting to √2, Butterworth).
+/// with an exposed Q parameter. `vari_slope_svf` removes Q and adds continuous
+/// Butterworth slope morphing as its defining feature.
 ///
 /// # Inputs
 ///
@@ -213,11 +222,7 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// |-------|-------------|----------|----------|-------------------------------|
 /// | 0     | `cutoff_hz` | yes      | —        | Cutoff frequency in Hz        |
 /// | 1     | `audio`     | yes      | —        | Audio input signal            |
-/// | 2     | `slope`     | no       | `4.0`    | Continuous order \[1.0, 4.0\] |
-/// | 3     | `q`         | no       | `√2`     | Filter Q (Butterworth default)|
-///
-/// All inputs are per-sample audio signals; `slope` and `q` are optional and
-/// fall back to their defaults when the corresponding child is not connected.
+/// | 2     | `slope`     | no       | `1.0`    | Continuous order \[1.0, 6.0\] |
 ///
 /// # Properties
 ///
@@ -232,20 +237,23 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// use elemaudio_rs::{el, extra};
 /// use serde_json::json;
 ///
-/// // Static 24 dB/oct lowpass at 800 Hz with Butterworth Q.
+/// // Static 24 dB/oct lowpass at 800 Hz.
 /// let node = extra::vari_slope_svf(
 ///     json!({ "filterType": "lowpass" }),
 ///     el::const_(json!({ "value": 800.0 })),  // cutoff
 ///     source,                                   // audio
 ///     el::const_(json!({ "value": 2.0 })),      // slope = 24 dB/oct
-///     None,                                     // Q — use Butterworth default
 /// );
 ///
-/// // Slope swept from 1.0 → 4.0 by an LFO for a dynamic order morph.
-/// let slope_lfo = el::cycle(el::const_(json!({ "value": 0.25 })));
+/// // Slope swept from 1.0 → 6.0 by an LFO for a dynamic order morph.
+/// let slope_lfo = el::add(
+///     el::const_(json!({ "value": 3.5 })),
+///     el::mul(el::const_(json!({ "value": 2.5 })),
+///             el::cycle(el::const_(json!({ "value": 0.25 })))),
+/// );
 /// let node = extra::vari_slope_svf(
 ///     json!({ "filterType": "lowpass" }),
-///     cutoff, source, slope_lfo, None,
+///     cutoff, source, slope_lfo,
 /// );
 /// ```
 pub fn vari_slope_svf(
@@ -253,12 +261,8 @@ pub fn vari_slope_svf(
     cutoff: impl Into<ElemNode>,
     audio: impl Into<ElemNode>,
     slope: impl Into<ElemNode>,
-    q: Option<impl Into<ElemNode>>,
 ) -> Node {
-    let mut children = vec![resolve(cutoff), resolve(audio), resolve(slope)];
-    if let Some(q_node) = q {
-        children.push(resolve(q_node));
-    }
+    let children = vec![resolve(cutoff), resolve(audio), resolve(slope)];
     Node::new("variSlopeSvf", props, children)
 }
 

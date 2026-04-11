@@ -11,8 +11,8 @@
 #include <extra/boxsum.h>
 #include <extra/freqshift.h>
 #include <extra/limiter.h>
-// VariSlopeSVFNode: Rossum-style continuously morphable slope SVF (12–48 dB/oct).
-// Replaces the old StateSpaceFilterNode cascaded one-pole implementation.
+// VariSlopeSVFNode: Rossum-style continuously morphable Butterworth slope SVF (12–72 dB/oct).
+// Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0). Q fixed at Butterworth.
 #include <extra/vari_slope_svf.h>
 #include <extra/stridedelay.h>
 
@@ -55,10 +55,9 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         });
 
         // "variSlopeSvf" — VariSlopeSVFNode.
-        // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–4.0), [3] Q.
+        // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0).
         // Property: filterType ("lowpass"/"lp" or "highpass"/"hp").
-        // Defining feature: Rossum-style continuous blend between 1–4 cascaded
-        // Simper SVF stages so filter order morphs smoothly at audio rate.
+        // Q fixed at Butterworth. 1–6 cascaded stages (12–72 dB/oct).
         handle->runtime->registerNodeType("variSlopeSvf", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::VariSlopeSVFNode<double>>(id, fs, bs);
         });

@@ -1,6 +1,7 @@
 #pragma once
 
-// VariSlopeSVFNode — cascaded Simper SVF with Rossum-style continuous slope morphing.
+// VariSlopeSVFNode — cascaded Butterworth SVF with Rossum-style continuous
+// slope morphing.
 //
 // ============================================================================
 // Design rationale
@@ -8,69 +9,89 @@
 //
 // The vendor `el.svf` (elem::StateVariableFilterNode) is a single second-order
 // Simper SVF: one biquad stage, 12 dB/oct rolloff, Q exposed, coefficient
-// update per sample. It is excellent for fixed-order filtering with fast cutoff
-// modulation but offers no way to morph the filter order continuously.
+// update per sample.
 //
-// VariSlopeSVFNode adds that capability. Its defining feature is a continuous
-// `slope` parameter (range [1.0, 4.0]) that blends smoothly between 1–4
-// cascaded SVF stages (12–48 dB/oct) inspired by Dave Rossum's analog cascade
-// designs. All four stages run every sample so their integrator states remain
-// warm; the output is then a linear blend between the two adjacent integer-order
-// outputs that bracket the current slope value. The result is a filter whose
-// order morphs without clicks, discontinuities, or integrator dropouts.
+// VariSlopeSVFNode takes a different approach. Q is fixed internally at
+// Butterworth (√2 ≈ 1.4142, maximally flat magnitude) and the sole tonal
+// control is a continuous `slope` parameter in [1.0, 6.0] that blends smoothly
+// between 1–6 cascaded SVF stages (12–72 dB/oct). This is inspired by Dave
+// Rossum's analog cascade designs where one knob morphs the filter order
+// continuously without clicks or discontinuities.
+//
+// All six stages run every sample so their integrator states remain warm; the
+// output is a linear blend between the two adjacent integer-order outputs that
+// bracket the current slope value.
+//
+// Q is not exposed because the slope *is* the character control. A Butterworth
+// cascade is maximally flat in the passband at every order — no resonant peak,
+// no passband ripple. Exposing Q on a multi-stage cascade creates compounding
+// resonance that is hard to predict or control musically.
 //
 // ============================================================================
 // SVF kernel
 // ============================================================================
 //
-// The per-stage kernel replicates the vendor's linear trapezoidal form exactly
-// (Simper, "Linear Trapezoidal Integrated SVF", 2023) as a self-contained
-// stateless helper so stages share coefficients while keeping independent state:
+// Each stage is the Simper linear trapezoidal SVF (identical to the vendor):
 //
 //   v3    = v0 - ic2eq
-//   v1    = a1*ic1eq + a2*v3          (bandpass integrator output)
-//   v2    = ic2eq + a2*ic1eq + a3*v3  (lowpass integrator output)
-//   ic1eq = 2*v1 - ic1eq              (update first integrator memory)
-//   ic2eq = 2*v2 - ic2eq              (update second integrator memory)
+//   v1    = a1*ic1eq + a2*v3
+//   v2    = ic2eq + a2*ic1eq + a3*v3
+//   ic1eq = 2*v1 - ic1eq
+//   ic2eq = 2*v2 - ic2eq
 //   low   = v2
 //   high  = v0 - k*v1 - v2
 //
-// Coefficients are derived per sample from cutoff and Q:
-//   g  = tan(pi * fc / fs)
-//   k  = 1 / Q
-//   a1 = 1 / (1 + g*(g+k))
-//   a2 = g * a1
-//   a3 = g * a2
+// Coefficients (constant k = 1/√2 for Butterworth):
+//   g  = tan(π · fc / fs)
+//   k  = √2 ≈ 0.7071  (1/Q where Q = √2)
+//   a1 = 1 / (1 + g·(g + k))
+//   a2 = g · a1
+//   a3 = g · a2
+//
+// ============================================================================
+// Per-stage gain correction (matched magnitude at cutoff)
+// ============================================================================
+//
+// The bilinear transform introduces a magnitude error that compounds across
+// cascaded stages. A per-stage scalar corrects it:
+//
+//   gainComp = |H_analog(jω₀)| / |H_digital(e^{jω})|
+//
+// The analog second-order Butterworth prototype at its own cutoff has:
+//   |H(jω₀)| = 1/k = Q = √2 ≈ 1.4142
+//
+// The digital magnitude is evaluated from the exact z-domain transfer function
+// (dgriffin91 derivation). Applied after each stage in the cascade so the
+// passband droop does not compound.
+//
+// For highpass mode the gain correction is set to 1.0 because the BLT error
+// manifests in the stopband (below cutoff) which is inaudible.
 //
 // ============================================================================
 // Rossum blend
 // ============================================================================
 //
-// With slope = S (a float in [1.0, 4.0]):
+// With slope = S (a float in [1.0, 6.0]):
 //
-//   lo  = stageOut[ floor(S) - 1 ]   output of the lower integer order
-//   hi  = stageOut[ ceil(S)  - 1 ]   output of the higher integer order
-//   out = lo + frac(S) * (hi - lo)   linear crossfade
+//   lo  = stageOut[ floor(S) - 1 ]
+//   hi  = stageOut[ ceil(S)  - 1 ]
+//   out = lo + frac(S) · (hi - lo)
 //
-// At integer values (1, 2, 3, 4) the blend is exactly one stage's output.
-// Between integers the filter order morphs continuously without discontinuity.
-//
-// ============================================================================
-// Inputs (all per-sample audio signals)
-// ============================================================================
-//
-//   [0]  cutoff_hz  — cutoff frequency in Hz            (required)
-//   [1]  audio      — input signal                      (required)
-//   [2]  slope      — continuous order 1.0–4.0          (optional; default 4.0)
-//   [3]  q          — filter Q                          (optional; default sqrt(2) = Butterworth)
+// At integer values (1–6) the blend is exactly one stage's output.
 //
 // ============================================================================
-// Properties (set from the non-realtime thread)
+// Inputs
 // ============================================================================
 //
-//   filterType  — "lowpass" / "lp"  selects the lowpass output of each stage.
-//               — "highpass" / "hp" selects the highpass output of each stage.
-//               — Default: "lowpass".
+//   [0]  cutoff_hz  — cutoff frequency in Hz   (required)
+//   [1]  audio      — input signal              (required)
+//   [2]  slope      — continuous order 1.0–6.0  (optional; default 1.0)
+//
+// ============================================================================
+// Properties
+// ============================================================================
+//
+//   filterType  — "lowpass" / "lp" (default) or "highpass" / "hp"
 //
 // ============================================================================
 // Thread safety
@@ -78,7 +99,6 @@
 //
 // `filterType` is written by setProperty (non-realtime) and read by process
 // (realtime) through a std::atomic<bool>. All other state is realtime-only.
-// The `slope` and `q` modulation inputs are read only from the audio thread.
 //
 // ============================================================================
 // References
@@ -86,6 +106,9 @@
 //
 // Andrew Simper, "Linear Trapezoidal Integrated SVF":
 //   https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
+//
+// dgriffin91, "Deriving the transfer function of the Simper SVF":
+//   https://dgriffin91.github.io/dsp-math-notes/svf_z_domain_tf.html
 //
 // Dave Rossum, "Making Digital Filters Sound Analog":
 //   AES 1992 preprint — continuous pole interpolation in cascade topologies.
@@ -104,64 +127,87 @@ namespace elem {
 // ----------------------------------------------------------------------------
 namespace svf_detail {
 
-    // Butterworth Q (maximally flat magnitude, no passband ripple).
-    static constexpr double kDefaultQ  = 1.4142135623730950488; // sqrt(2)
+    static constexpr double kPi = 3.14159265358979323846;
 
-    // Cutoff clamped to [20 Hz, Nyquist * 0.4999] to keep the bilinear
-    // pre-warp well-conditioned and the filter stable at all sample rates.
+    // Butterworth damping: k = 1/Q = 1/√2 ≈ 0.7071.
+    // Maximally flat magnitude, no passband ripple, no resonant peak.
+    static constexpr double kButterworthK = 0.70710678118654752440;
+
+    // Cutoff clamped to [20 Hz, Nyquist × 0.4999].
     static constexpr double kMinCutoff = 20.0;
 
-    // Q clamped to [0.25, 20.0] — matches the vendor SVF node range.
-    static constexpr double kMinQ      = 0.25;
-    static constexpr double kMaxQ      = 20.0;
-
-    // Maximum number of cascaded stages (slope 4.0 = 4 stages = 48 dB/oct).
-    static constexpr int    kMaxStages = 4;
+    // Maximum number of cascaded stages. Slope 6.0 = 6 stages = 72 dB/oct.
+    static constexpr int kMaxStages = 6;
 
     // -------------------------------------------------------------------------
-    // Coeffs — per-sample coefficient set, computed in makeCoeffs and passed
-    // by value to tick/cascade so no heap allocation occurs on the audio thread.
+    // Coeffs
     // -------------------------------------------------------------------------
     struct Coeffs {
-        double g;   // tan(pi * fc / fs) — pre-warped normalised frequency
-        double k;   // 1/Q — damping factor
-        double a1;  // 1 / (1 + g*(g+k))
-        double a2;  // g * a1
-        double a3;  // g * a2
+        double g;        // tan(π · fc / fs)
+        double k;        // 1/Q — always kButterworthK
+        double a1;       // 1 / (1 + g·(g + k))
+        double a2;       // g · a1
+        double a3;       // g · a2
+        double gainComp; // per-stage magnitude correction at cutoff (LP only)
     };
 
-    // Compute SVF coefficients from cutoff (Hz), Q, and sample rate (Hz).
-    // Cutoff and Q are clamped to their safe operating ranges before use.
-    inline Coeffs makeCoeffs(double fc, double q, double sr) {
+    // Compute SVF coefficients from cutoff (Hz) and sample rate (Hz).
+    // Q is fixed at Butterworth internally — not exposed to the caller.
+    //
+    // The gain correction is derived from the exact z-domain transfer function
+    // of the Simper SVF, comparing the digital LP magnitude at the cutoff
+    // frequency to the analog Butterworth prototype magnitude (1/k = √2).
+    inline Coeffs makeCoeffs(double fc, double sr) {
         auto nyquist   = sr * 0.5;
         auto fcClamped = std::max(kMinCutoff, std::min(fc, nyquist * 0.4999));
-        auto qClamped  = std::max(kMinQ,      std::min(q,  kMaxQ));
-        auto g  = std::tan(3.14159265358979323846 * fcClamped / sr);
-        auto k  = 1.0 / qClamped;
+
+        auto g  = std::tan(kPi * fcClamped / sr);
+        auto k  = kButterworthK;
         auto a1 = 1.0 / (1.0 + g * (g + k));
         auto a2 = g * a1;
         auto a3 = g * a2;
-        return {g, k, a1, a2, a3};
+
+        // --- Per-stage gain correction at cutoff ---
+        //
+        // Analog Butterworth prototype at ω₀: |H(j)| = 1/k = √2.
+        auto analog_mag_sq = 1.0 / (k * k);  // = 2.0
+
+        // Digital LP magnitude at z = exp(j·2π·fc/fs):
+        auto w      = 2.0 * kPi * fcClamped / sr;
+        auto cos_w  = std::cos(w);
+        auto sin_w  = std::sin(w);
+        auto cos_2w = std::cos(2.0 * w);
+        auto sin_2w = std::sin(2.0 * w);
+
+        auto d_c2 = g*g - g*k + 1.0;
+        auto d_c1 = 2.0*g*g - 2.0;
+        auto d_c0 = g*g + g*k + 1.0;
+        auto d_re = d_c2 * cos_2w + d_c1 * cos_w + d_c0;
+        auto d_im = -(d_c2 * sin_2w + d_c1 * sin_w);
+        auto d_mag_sq = d_re * d_re + d_im * d_im;
+
+        auto lp_n_re = g*g * (cos_2w + 2.0*cos_w + 1.0);
+        auto lp_n_im = g*g * (-(sin_2w + 2.0*sin_w));
+        auto lp_dig_mag_sq = (lp_n_re*lp_n_re + lp_n_im*lp_n_im) / d_mag_sq;
+
+        auto gainComp = (lp_dig_mag_sq > 1e-30)
+            ? std::sqrt(analog_mag_sq / lp_dig_mag_sq) : 1.0;
+
+        return {g, k, a1, a2, a3, gainComp};
     }
 
     // -------------------------------------------------------------------------
-    // State — two integrator memories for one SVF biquad stage.
-    // Each cascaded stage has its own independent State instance.
+    // State — two integrator memories per SVF stage.
     // -------------------------------------------------------------------------
     struct State {
-        double ic1eq = 0.0;  // first integrator memory (bandpass)
-        double ic2eq = 0.0;  // second integrator memory (lowpass)
+        double ic1eq = 0.0;
+        double ic2eq = 0.0;
     };
 
     // -------------------------------------------------------------------------
-    // tick — advance one SVF stage by one sample.
-    //
-    // Implements the Simper linear trapezoidal form verbatim. Identical to the
-    // vendor StateVariableFilterNode::tick kernel so the two implementations
-    // remain audibly interchangeable at integer slope values.
-    //
-    // Returns {low, high}. Band, notch, and allpass outputs are not exposed
-    // here because the cascade blend operates only on low/high pairs.
+    // tick — one SVF stage, one sample.
+    // Pure Simper trapezoidal form, no soft-clipping. Stability is guaranteed
+    // by the fixed Butterworth Q (no resonant blowup possible).
     // -------------------------------------------------------------------------
     inline std::pair<double, double> tick(State& s, Coeffs const& c, double v0) {
         double v3 = v0 - s.ic2eq;
@@ -175,21 +221,9 @@ namespace svf_detail {
     }
 
     // -------------------------------------------------------------------------
-    // cascade — run n SVF stages in series and capture each stage's output.
-    //
-    // All kMaxStages are always run (not just the active ones) so every stage's
-    // integrator state advances every sample regardless of the current slope
-    // blend weight. This prevents integrator dropout when slope sweeps upward
-    // re-activating a previously idle stage, which would otherwise produce a
-    // transient click as the stale state re-enters the signal path.
-    //
-    // Parameters:
-    //   states   — array of kMaxStages State instances, one per stage
-    //   c        — shared coefficient set for this sample
-    //   input    — audio input to the first stage
-    //   wantsLow — true = lowpass output chain, false = highpass output chain
-    //   n        — number of stages to run (must be <= kMaxStages)
-    //   outs     — output array of length >= n; outs[s] = output after stage s+1
+    // cascade — run all kMaxStages in series.
+    // Per-stage gain correction is applied after each stage (LP only; HP uses
+    // gainComp = 1.0).
     // -------------------------------------------------------------------------
     inline void cascade(State* states, Coeffs const& c, double input,
                         bool wantsLow, int n, double* outs)
@@ -198,6 +232,7 @@ namespace svf_detail {
         for (int s = 0; s < n; ++s) {
             auto [low, high] = tick(states[s], c, sig);
             sig     = wantsLow ? low : high;
+            sig    *= c.gainComp;
             outs[s] = sig;
         }
     }
@@ -215,14 +250,8 @@ struct VariSlopeSVFNode : public GraphNode<FloatType> {
     VariSlopeSVFNode(NodeId id, double sr, int blockSize)
         : GraphNode<FloatType>(id, sr, blockSize) {}
 
-    // -------------------------------------------------------------------------
-    // setProperty — called from the non-realtime thread.
-    //
-    // Supported keys:
-    //   "filterType"  string  "lowpass"/"lp" or "highpass"/"hp"
-    //
-    // All other keys are forwarded to the base GraphNode props map.
-    // -------------------------------------------------------------------------
+    // ---- setProperty (non-realtime thread) ----------------------------------
+
     int setProperty(std::string const& key, js::Value const& val,
                     SharedResourceMap&) override
     {
@@ -234,35 +263,23 @@ struct VariSlopeSVFNode : public GraphNode<FloatType> {
         return GraphNode<FloatType>::setProperty(key, val);
     }
 
-    // -------------------------------------------------------------------------
-    // process — called from the realtime audio thread once per block.
+    // ---- process (realtime audio thread) ------------------------------------
     //
-    // Input layout:
-    //   inputData[0]  cutoff_hz  — per-sample cutoff in Hz   (required)
-    //   inputData[1]  audio      — per-sample input signal   (required)
-    //   inputData[2]  slope      — per-sample slope [1,4]    (optional)
-    //   inputData[3]  q          — per-sample Q              (optional)
-    //
-    // If fewer than 2 inputs are connected the output is silenced.
-    // If slope or q inputs are absent their defaults are used (4.0 and sqrt(2)).
-    //
-    // Output layout:
-    //   outputData[0]  filtered signal
-    //   outputData[1+] zeroed
-    // -------------------------------------------------------------------------
+    // Inputs:
+    //   [0]  cutoff_hz  (required)
+    //   [1]  audio      (required)
+    //   [2]  slope      (optional; default 1.0, range [1.0, 6.0])
+
     void process(BlockContext<FloatType> const& ctx) override {
         auto numIns     = ctx.numInputChannels;
         auto numOuts    = ctx.numOutputChannels;
         auto numSamples = ctx.numSamples;
 
-        // Require at least cutoff and audio inputs.
         if (numIns < 2 || numOuts < 1 || numSamples == 0) return;
 
         auto const* cutoffIn = ctx.inputData[0];
         auto const* audioIn  = ctx.inputData[1];
-        // Optional: slope modulation (input [2]) and Q modulation (input [3]).
         auto const* slopeIn  = (numIns > 2) ? ctx.inputData[2] : nullptr;
-        auto const* qIn      = (numIns > 3) ? ctx.inputData[3] : nullptr;
 
         auto* out = ctx.outputData[0];
         auto  sr  = GraphNode<FloatType>::getSampleRate();
@@ -270,54 +287,38 @@ struct VariSlopeSVFNode : public GraphNode<FloatType> {
 
         for (size_t i = 0; i < numSamples; ++i) {
             auto fc    = static_cast<double>(cutoffIn[i]);
-            auto q     = qIn     ? static_cast<double>(qIn[i])
-                                 : svf_detail::kDefaultQ;
-            // slope in [1.0, 4.0]; clamp to safe range.
-            auto slope = slopeIn ? static_cast<double>(slopeIn[i]) : 4.0;
-            slope = std::max(1.0, std::min(4.0, slope));
+            auto slope = slopeIn ? static_cast<double>(slopeIn[i]) : 1.0;
+            slope = std::max(1.0, std::min(static_cast<double>(svf_detail::kMaxStages), slope));
 
-            auto coeffs = svf_detail::makeCoeffs(fc, q, sr);
+            auto coeffs = svf_detail::makeCoeffs(fc, sr);
 
-            // Always run all kMaxStages to keep integrators warm (see cascade
-            // documentation above for why this matters).
+            // HP mode: skip gain correction (BLT error is in the stopband).
+            if (!lp) coeffs.gainComp = 1.0;
+
             double stageOut[svf_detail::kMaxStages];
             svf_detail::cascade(state, coeffs, static_cast<double>(audioIn[i]),
                                 lp, svf_detail::kMaxStages, stageOut);
 
-            // Rossum blend: linearly crossfade between the outputs of the two
-            // integer stage counts that bracket the current slope value.
-            //
-            //   slope = 1.7  →  lo_idx = 0 (stage 1), hi_idx = 1 (stage 2)
-            //                   frac   = 0.7
-            //   out   = stageOut[0] + 0.7 * (stageOut[1] - stageOut[0])
-            auto  lo_idx = static_cast<int>(slope) - 1;
-            auto  hi_idx = std::min(lo_idx + 1, svf_detail::kMaxStages - 1);
-            auto  frac   = slope - std::floor(slope);
+            // Rossum blend between adjacent integer orders.
+            auto lo_idx = static_cast<int>(slope) - 1;
+            auto hi_idx = std::min(lo_idx + 1, svf_detail::kMaxStages - 1);
+            auto frac   = slope - std::floor(slope);
 
             out[i] = static_cast<Sample>(
                 stageOut[lo_idx] + frac * (stageOut[hi_idx] - stageOut[lo_idx])
             );
         }
 
-        // Zero any surplus output channels.
         for (size_t c = 1; c < numOuts; ++c)
             std::fill_n(ctx.outputData[c], numSamples, FloatType(0));
     }
 
-    // -------------------------------------------------------------------------
-    // reset — clear all integrator state.
-    // Called on the non-realtime thread by Runtime::reset().
-    // -------------------------------------------------------------------------
     void reset() override {
         for (auto& s : state) s = {};
     }
 
 private:
-    // filterType is written on the non-realtime thread and read on the audio
-    // thread, so it is protected by an atomic.
     std::atomic<bool> wantsLow { true };
-
-    // One independent State (two integrator memories) per cascade stage.
     svf_detail::State state[svf_detail::kMaxStages] = {};
 };
 

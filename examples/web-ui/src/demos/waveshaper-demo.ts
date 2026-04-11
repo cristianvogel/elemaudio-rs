@@ -70,9 +70,9 @@ const layout = `
         <div class="dial">
           <label for="slope">
             <span>Slope</span>
-            <span id="slope-value">8</span>
+            <span id="slope-value">3</span>
           </label>
-          <input id="slope" type="range" min="2" max="8" value="8" step="1" />
+          <input id="slope" type="range" min="1" max="6" value="3" step="0.01" />
         </div>
       </div>
 

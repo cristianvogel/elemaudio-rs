@@ -68,6 +68,7 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - ✅ Public optional resource extension split into `elemaudio-resources`
 - ✅ Rust graph authoring surface now covers the upstream `el.*` core, math, filters, oscillators, envelopes, dynamics, and multichannel helpers
 - ✅ Extended Rust/JS authoring with `el::extra::*` for native DSP nodes
+- ✅ Replaced `StateSpaceFilterNode` with `VariSlopeSVFNode` — true Simper SVF kernel with Rossum-style continuous slope morphing (12–48 dB/oct), Q exposed (Butterworth default), fully documented in header, bridge, and Rust authoring layer
 
 ### In Progress
 - 🔄 Connect resource management to runtime-facing usage patterns

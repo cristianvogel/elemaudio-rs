@@ -15,6 +15,7 @@ export interface WaveshaperParams {
   source: SourceMode;
   freq: number;
   cutOff: number;
+  /** Continuous filter order [1.0, 6.0] mapped to 12–72 dB/oct. */
   slope: number;
   filterType: "highpass" | "lowpass";
   drive: number;
@@ -48,7 +49,10 @@ export function buildGraph(p: WaveshaperParams): NodeRepr_t[] {
 
   const shaped = el.extra.foldback({ key: "foldback:0", thresh: p.thresh, amp: p.amp }, source);
 
-  const filtered = el.extra.stateSpaceFilter({ slope: p.slope, filterType: p.filterType }, cutoff, shaped);
+  // variSlopeSvf: slope is a continuous signal [1.0, 6.0]. Q is fixed at
+  // Butterworth internally — not exposed.
+  const slope = el.const({ key: "waveshaper:slope", value: Math.max(1, Math.min(6, p.slope)) });
+  const filtered = el.extra.variSlopeSvf({ filterType: p.filterType }, cutoff, shaped, slope);
 
   const mixed = el.mul(0.25, el.select( mix, filtered, source));
 
