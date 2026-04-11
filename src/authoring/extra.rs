@@ -188,30 +188,78 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     )
 }
 
-/// State-space high/low-pass helper.
+/// VariSlope SVF — cascaded Simper SVF with Rossum-style continuous slope morphing.
 ///
-/// Matches the TS helper signature: `cutoff` is the second input and can be a
-/// literal or a signal node, while `x` is the source signal.
-pub fn state_space_filter(
+/// # Overview
+///
+/// This node exposes a continuously variable filter order (slope) that morphs
+/// smoothly between 1 and 4 cascaded second-order SVF stages (12–48 dB/oct)
+/// at audio rate, inspired by Dave Rossum's analog cascade designs.
+///
+/// All four internal stages run every sample so their integrator states remain
+/// warm regardless of the current slope value. The output is a linear crossfade
+/// between the two adjacent integer-order outputs that bracket the current slope,
+/// so the filter order morphs without clicks, discontinuities, or dropout.
+///
+/// # Contrast with `el.svf`
+///
+/// The vendor `el.svf` is a single-stage Simper SVF (12 dB/oct fixed order)
+/// with an exposed Q parameter. `vari_slope_svf` adds continuous slope morphing
+/// as its defining feature; Q is also exposed (defaulting to √2, Butterworth).
+///
+/// # Inputs
+///
+/// | Index | Signal      | Required | Default  | Notes                         |
+/// |-------|-------------|----------|----------|-------------------------------|
+/// | 0     | `cutoff_hz` | yes      | —        | Cutoff frequency in Hz        |
+/// | 1     | `audio`     | yes      | —        | Audio input signal            |
+/// | 2     | `slope`     | no       | `4.0`    | Continuous order \[1.0, 4.0\] |
+/// | 3     | `q`         | no       | `√2`     | Filter Q (Butterworth default)|
+///
+/// All inputs are per-sample audio signals; `slope` and `q` are optional and
+/// fall back to their defaults when the corresponding child is not connected.
+///
+/// # Properties
+///
+/// | Key          | Type   | Values                              |
+/// |--------------|--------|-------------------------------------|
+/// | `filterType` | string | `"lowpass"` / `"lp"` (default)      |
+/// |              |        | `"highpass"` / `"hp"`               |
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// // Static 24 dB/oct lowpass at 800 Hz with Butterworth Q.
+/// let node = extra::vari_slope_svf(
+///     json!({ "filterType": "lowpass" }),
+///     el::const_(json!({ "value": 800.0 })),  // cutoff
+///     source,                                   // audio
+///     el::const_(json!({ "value": 2.0 })),      // slope = 24 dB/oct
+///     None,                                     // Q — use Butterworth default
+/// );
+///
+/// // Slope swept from 1.0 → 4.0 by an LFO for a dynamic order morph.
+/// let slope_lfo = el::cycle(el::const_(json!({ "value": 0.25 })));
+/// let node = extra::vari_slope_svf(
+///     json!({ "filterType": "lowpass" }),
+///     cutoff, source, slope_lfo, None,
+/// );
+/// ```
+pub fn vari_slope_svf(
     props: serde_json::Value,
     cutoff: impl Into<ElemNode>,
-    x: impl Into<ElemNode>,
+    audio: impl Into<ElemNode>,
+    slope: impl Into<ElemNode>,
+    q: Option<impl Into<ElemNode>>,
 ) -> Node {
-    let mut props = props;
-    let slope = props
-        .get("slope")
-        .and_then(|value| value.as_u64())
-        .expect("state_space_filter helper props must include `slope`") as usize;
-
-    if !(2..=8).contains(&slope) {
-        panic!("state_space_filter slope must be between 2 and 8");
+    let mut children = vec![resolve(cutoff), resolve(audio), resolve(slope)];
+    if let Some(q_node) = q {
+        children.push(resolve(q_node));
     }
-
-    if let serde_json::Value::Object(map) = &mut props {
-        map.remove("slope");
-    }
-
-    Node::new("stateSpaceFilter", props, vec![resolve(cutoff), resolve(x)])
+    Node::new("variSlopeSvf", props, children)
 }
 
 /// Raw variable-width box sum helper.
