@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["box_average","box_sum","crunch","foldback","freqshift","limiter","stride_delay"]};
+window.SIDEBAR_ITEMS = {"enum":["BoxAverageWindowInput","BoxSumWindowInput","StrideDelayWindowInput"],"fn":["box_average","box_sum","crunch","foldback","freqshift","limiter","stride_delay","vari_slope_svf"]};

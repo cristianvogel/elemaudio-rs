@@ -63,7 +63,7 @@
 <a href=#63 id=63 data-nosnippet>63</a>    g: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
 <a href=#64 id=64 data-nosnippet>64</a>    args: <span class="kw">impl </span>IntoIterator&lt;Item = ElemNode&gt;,
 <a href=#65 id=65 data-nosnippet>65</a>) -&gt; Vec&lt;Node&gt; {
-<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">let </span>children = std::iter::once(g.into()).chain(args.into_iter());
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">let </span>children = std::iter::once(g.into()).chain(args);
 <a href=#67 id=67 data-nosnippet>67</a>    unpack_mc(<span class="string">"mc.capture"</span>, props, children)
 <a href=#68 id=68 data-nosnippet>68</a>}
 </code></pre></div></section></main></body></html>
