@@ -1,12 +1,233 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>elemaudio-rs demo</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="./src/synth-with-extras-demo.ts"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>elemaudio-rs demos</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #111722;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e6edf3;
+      --muted: #9fb0c3;
+      --accent: #6ea8fe;
+      --accent2: #8b5cf6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ---- side panel ---- */
+    aside {
+      width: 260px;
+      min-width: 260px;
+      height: 100vh;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 20px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .sidebar-header p {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .demo-group {
+      padding: 12px 0 4px;
+    }
+
+    .demo-group-title {
+      padding: 0 16px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .demo-list {
+      list-style: none;
+    }
+
+    .demo-list li {
+      display: block;
+    }
+
+    .demo-list a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      font-size: 13px;
+      color: var(--text);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .demo-list a:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .demo-list a.active {
+      background: rgba(110, 168, 254, 0.08);
+      border-left-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .demo-list .tag {
+      margin-left: auto;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--accent2);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .sidebar-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* ---- main viewport ---- */
+    main {
+      flex: 1;
+      height: 100vh;
+      position: relative;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: var(--bg);
+    }
+
+    .placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<aside>
+  <div class="sidebar-header">
+    <h1>elemaudio-rs</h1>
+    <p>Interactive demos for the Rust-native Elementary runtime and JS/TS authoring surface.</p>
+  </div>
+
+  <div class="demo-group">
+    <div class="demo-group-title">Synth &amp; Effects</div>
+    <ul class="demo-list">
+      <li><a href="synth.html" data-demo="synth">Synth + Extras</a></li>
+      <li><a href="sample.html" data-demo="sample">Sample Playback</a></li>
+    </ul>
+  </div>
+
+  <div class="demo-group">
+    <div class="demo-group-title">Waveshapers</div>
+    <ul class="demo-list">
+      <li><a href="waveshaper.html" data-demo="waveshaper">Foldback <span class="tag">extra</span></a></li>
+    </ul>
+  </div>
+
+  <div class="demo-group">
+    <div class="demo-group-title">Signal Utilities</div>
+    <ul class="demo-list">
+      <li><a href="boxsum.html" data-demo="boxsum">Box Sum / Average <span class="tag">extra</span></a></li>
+    </ul>
+  </div>
+
+  <div class="demo-group">
+    <div class="demo-group-title">Resource Management</div>
+    <ul class="demo-list">
+      <li><a href="resource-manager.html" data-demo="resource">Resource Manager</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-footer">
+    Built on <a href="https://www.elementary.audio/" target="_blank" rel="noopener">Elementary Audio</a>
+  </div>
+</aside>
+
+<main id="viewport">
+  <div class="placeholder">Select a demo from the sidebar</div>
+</main>
+
+<script>
+  const viewport = document.getElementById("viewport");
+  const links = document.querySelectorAll(".demo-list a[data-demo]");
+
+  function loadDemo(href, link) {
+    viewport.innerHTML = "";
+    const frame = document.createElement("iframe");
+    frame.src = href;
+    viewport.appendChild(frame);
+
+    links.forEach(function (a) { a.classList.remove("active"); });
+    if (link) link.classList.add("active");
+
+    history.replaceState(null, "", "?demo=" + link.dataset.demo);
+  }
+
+  links.forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      loadDemo(a.href, a);
+    });
+  });
+
+  // Restore from query string on load
+  const params = new URLSearchParams(location.search);
+  const initial = params.get("demo");
+
+  if (initial) {
+      const match = document.querySelector('[data-demo="' + initial + '"]');
+      if (match) loadDemo(match.href, match);
+  }
+</script>
+
+</body>
 </html>

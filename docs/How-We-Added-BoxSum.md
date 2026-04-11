@@ -1,10 +1,14 @@
 # How We Added BoxSum
 
-Date: 2026-04-08
+Date: 2026-04-10 (Updated for dual-signature API supporting both static and dynamic windows)
 
 ## Goal
 
-Add first-party `el.extra.boxSum(windowSamples, x)` and `el.extra.boxAverage(windowSamples, x)` helpers for sample accurate variable-width box filter sum and average. The window sample size can be an integer or a signal. If signal, the box width can be changed at sample-rate.
+Add first-party `el.extra.boxSum(...)` and `el.extra.boxAverage(...)` helpers for sample-accurate variable-width box filter sum and average.
+
+The helpers support two usage patterns:
+1. **Static window with keying**: Pass props for parameter updates without graph rebuild via fast-path keying
+2. **Dynamic window signal**: Pass a signal node for sample-rate accurate modulation at runtime
 
 ## Source Material
 
@@ -20,17 +24,33 @@ Core ideas taken from the article:
 
 ## API Surface
 
-`@elem-rs/core` exposes:
+`@elem-rs/core` exposes two signatures for each helper:
 
-- `el.extra.boxSum(windowSamplesNode, x)`
-- `el.extra.boxAverage(windowSamplesNode, x)`
+### Static Window (Keying Support)
+```typescript
+el.extra.boxSum(props: BoxSumProps, x: ElemNode): NodeRepr_t
+el.extra.boxAverage(props: BoxAverageProps, x: ElemNode): NodeRepr_t
+```
 
-The helpers are:
-- mono only
+Props format:
+- `window`: number, window length in samples (required)
+- `key`: string, optional prefix for stable node identity (enables fast-path updates)
+
+### Dynamic Window (Sample-Rate Modulation)
+```typescript
+el.extra.boxSum(window: ElemNode, x: ElemNode): NodeRepr_t
+el.extra.boxAverage(window: ElemNode, x: ElemNode): NodeRepr_t
+```
+
+Pass a signal node directly for runtime sample-rate control. No keying available in this mode.
+
+## Capabilities
+
+- **Static window with keying**: Pass props with `window` and `key` → updates via `mounted.node_with_key("{key}_window").set_const_value(newWindow)` (O(1))
+- **Dynamic window signal**: Pass a signal node → updates via graph parameter modulation at sample rate (O(1) per sample)
 - `boxSum` returns the raw sum
 - `boxAverage` returns the normalized average
-- driven by a `NodeRepr_t` window-size input in samples so the window can change dynamically
-- the first input can be a node or a numeric value, matching the usual `el.*` helper contract
+- Mono only
 
 ## Why It Is Useful
 
@@ -44,6 +64,58 @@ Special qualities:
 4. Efficient when implemented cumulatively
 5. Stable long-running behavior when reset logic is handled correctly
 6. Sample-rate window width modulation support
+
+## Performance Characteristics
+
+### Static Window with Keying (O(1) updates)
+
+Use when the window needs to be updated but the surrounding graph structure is stable.
+
+```typescript
+const graph = el.Graph().render(
+  el.extra.boxSum(
+    { key: "filter", window: 256 },
+    el.white()
+  )
+);
+
+const mounted = graph.mount();
+runtime.execute(mounted.batch());
+
+// Later: update window without rebuilding the entire graph
+const windowNode = mounted.node_with_key("filter_window");
+if (windowNode) {
+  runtime.execute(windowNode.set_const_value(512));
+}
+```
+
+### Dynamic Window Signal (Sample-Rate Modulation)
+
+Use when the window needs to change at sample rate or follow a signal envelope.
+
+```typescript
+// Window modulated by an LFO
+const windowLfo = el.mul(
+  el.add(el.const_(256), el.const_(256)),
+  el.cycle(el.const_(0.5))  // 0.5 Hz oscillation
+);
+
+const graph = el.Graph().render(
+  el.extra.boxSum(windowLfo, el.white())
+);
+
+const mounted = graph.mount();
+runtime.execute(mounted.batch());
+
+// Window changes smoothly at sample rate, no further updates needed
+```
+
+### Trade-off Summary
+
+| Mode | Update Latency | Graph Rebuild | Sample-Rate Control | Use Case |
+|------|-----------------|---------------|--------------------|----------|
+| Static + Keying | O(1), direct property update | No | No | Parameter adjustment during playback |
+| Dynamic Signal | None (inherent to signal) | No | Yes | Time-varying effects (LFO, envelope) |
 
 ## Current Native Implementation
 

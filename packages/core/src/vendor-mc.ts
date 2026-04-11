@@ -141,7 +141,7 @@ export function strideDelay(
     delayMs: number;
     fb?: number;
     transitionMs?: number;
-    mode?: "linear" | "dualStride" | "step";
+    bigLeapMode?: "linear" | "step";
   },
   x: Array<ElemNode>,
 ): Array<NodeRepr_t> {

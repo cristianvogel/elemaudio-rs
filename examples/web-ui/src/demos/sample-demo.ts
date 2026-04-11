@@ -1,9 +1,10 @@
 import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
-import sampleUrl from "../../demo-resources/115bpm_808_Beat_mono.wav?url";
-import irUrl from "../../demo-resources/DEEPNESS.wav?url";
-import WebRenderer from "./WebRenderer";
-import "./style.css";
+import sampleUrl from "../../../demo-resources/115bpm_808_Beat_mono.wav?url";
+import irUrl from "../../../demo-resources/DEEPNESS.wav?url";
+import { buildGraph as dspBuildGraph, type SampleParams } from "../demo-dsp/sample-demo.dsp";
+import WebRenderer from "../WebRenderer";
+import "../style.css";
 
 const bundledSamplePath = "demo-resources/115bpm_808_Beat_mono.wav";
 const bundledIrBasePath = "demo-resources/DEEPNESS";
@@ -38,8 +39,7 @@ app.innerHTML = `
     <code>el.extra.freqShift(...)</code> into <code>el.convolve(...)</code>. 
     The four-channel IR has been pre-prepared, so that channel 3 and 4 are reversed versions of the IR. 
     This makes it trivial to swap the IR flavour, as demonstrated by the UI button there are the bottom.</p>
-    <p class="demo-link"><a href="/index.html">Back to the graph demo</a></p>
-    <p class="demo-link"><a href="/resource-manager.html">Open the Rust resource manager demo</a></p>
+
     <div class="controls">
       <div class="row">
         <label for="rate">
@@ -202,41 +202,17 @@ async function loadBrowserSample(file: File) {
 }
 
 function buildGraph(rate: number): NodeRepr_t[] {
-  const trigger = el.train(0.1);
-  const blend = Number(blendSlider.value) / 100;
   const leftIrPath = irChannelPaths[activeIrPairStart] ?? `${bundledIrBasePath}_ch1.wav`;
   const rightIrPath = irChannelPaths[activeIrPairStart + 1] ?? leftIrPath;
-  const blendNode = el.const({ value: blend });
 
-  if (sampleChannels > 1) {
-    const source = el.mc.sample({ path: samplePath, playbackRate: rate, channels: sampleChannels }, trigger);
-    const leftSource = source[0];
-    const rightSource = source[1] ?? source[0];
-    const leftShiftDown = el.extra.freqshift( {shiftHz: 100, mix: 1.0, key: "fshift_Left", reflect: 3}, leftSource)[0];
-    const rightShiftDown = el.extra.freqshift( {shiftHz: 300, mix: 1.0, key: "fshift_Right", reflect: 3}, rightSource)[0];
-    const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, leftShiftDown));
-    const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, rightShiftDown));
-    const leftBlend = el.select(blendNode, leftWet, leftShiftDown);
-    const rightBlend = el.select(blendNode, rightWet, rightShiftDown);
-
-    return [
-      el.mul(0.5, leftBlend),
-      el.mul(0.5, rightBlend),
-    ];
-  }
-
-  const source = el.sample({ path: samplePath }, trigger, el.const({ value: rate }));
-  const shiftDown = el.extra.freqshift({ shiftHz: 100, mix: 1.0, key: "mono_fshift_down", reflect: 3 }, source)[0];
-  const shiftUp = el.extra.freqshift({ shiftHz: 100, mix: 1.0, key: "mono_fshift_up", reflect: 3 }, source)[1];
-  const leftWet = el.convolve({ key: "ir-left", path: leftIrPath }, el.mul(1.0e-3, shiftDown));
-  const rightWet = el.convolve({ key: "ir-right", path: rightIrPath }, el.mul(1.0e-3, shiftUp));
-  const leftBlend = el.select(blendNode, leftWet, shiftDown);
-  const rightBlend = el.select(blendNode, rightWet, shiftUp);
-
-  return [
-    el.mul(0.5, leftBlend),
-    el.mul(0.5, rightBlend),
-  ];
+  return dspBuildGraph({
+    samplePath,
+    sampleChannels,
+    rate,
+    blend: Number(blendSlider.value) / 100,
+    leftIrPath,
+    rightIrPath,
+  });
 }
 
 async function ensureAudio() {

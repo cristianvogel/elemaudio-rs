@@ -1,0 +1,28 @@
+<!--
+  elemaudio-rs web-ui demo HTML template
+
+  HOW TO USE
+  ‾‾‾‾‾‾‾‾‾‾
+  1. Copy this file alongside the TS template:
+       cp _DEMO_TEMPLATE.html  my-effect.html
+       cp src/_DEMO_TEMPLATE.ts  src/my-effect-demo.ts
+
+  2. Update the <title> below.
+
+  3. Update the <script> src to point at the new TS file.
+
+  4. Register this HTML file in vite.config.ts under
+     build.rollupOptions.input so Vite includes it in dev and build.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>elemaudio-rs DEMO_TITLE</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./src/demos/_DEMO_TEMPLATE.ts"></script>
+  </body>
+</html>

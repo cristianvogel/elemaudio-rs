@@ -1,7 +1,16 @@
 import shallowEqual from 'shallowequal';
 
+type RendererLike = {
+  setProperty(hash: number, key: string, value: unknown): void;
+};
 
-export function updateNodeProps(renderer, hash, prevProps, nextProps) {
+
+export function updateNodeProps(
+  renderer: RendererLike,
+  hash: number,
+  prevProps: Record<string, unknown>,
+  nextProps: Record<string, unknown>,
+) {
   for (let key in nextProps) {
     if (nextProps.hasOwnProperty(key)) {
       const value = nextProps[key];
