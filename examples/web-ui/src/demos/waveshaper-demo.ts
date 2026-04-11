@@ -55,7 +55,7 @@ const layout = `
             <span>Filter Cutoff</span>
             <span id="cutoff-value">300 Hz</span>
           </label>
-          <input id="cutoff" type="range" min="20" max="16000" value="300" step="1" />
+          <input id="cutoff" type="range" min="0" max="1" value="0.37" step="0.001" />
         </div>
         <div class="dial">
           <label for="filter-type">
@@ -121,6 +121,13 @@ const layout = `
 // ---- state ------------------------------------------------------------
 
 let sampleLoaded = false;
+const MIN_CUTOFF = 20;
+const MAX_CUTOFF = 16000;
+
+function cutoffFromSlider(slider: HTMLInputElement) {
+    const position = Number(slider.value) / Number(slider.max);
+    return Math.round(MIN_CUTOFF * Math.pow(MAX_CUTOFF / MIN_CUTOFF, position));
+}
 
 // ---- init -------------------------------------------------------------
 
@@ -153,7 +160,7 @@ const {mustQuery: q, wireControls} = initDemo({
     buildGraph: () => dspBuildGraph({
         source: sourceSelect.value as SourceMode,
         freq: Number(freqSlider.value),
-        cutOff: Number(cutOffSlider.value),
+        cutOff: cutoffFromSlider(cutOffSlider),
         slope: Number(slopeSlider.value),
         filterType: filterTypeSelect.value as "highpass" | "lowpass",
         drive: Number(driveSlider.value),
@@ -238,7 +245,7 @@ function updateReadouts() {
     sourceValue.textContent = sourceSelect.value;
     freqSlider.disabled = sourceSelect.value === "sample";
     freqValue.textContent = `${Number(freqSlider.value)} Hz`;
-    cutOffValue.textContent = `${Number(cutOffSlider.value)} Hz`;
+    cutOffValue.textContent = `${cutoffFromSlider(cutOffSlider)} Hz`;
     slopeValue.textContent = slopeSlider.value;
     filterTypeValue.textContent = filterTypeSelect.value;
     driveValue.textContent = `${Number(driveSlider.value).toFixed(2)}x`;
