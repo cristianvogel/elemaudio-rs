@@ -3,7 +3,7 @@ use crate::graph::Node;
 use crate::{resolve, unpack, ElemNode};
 
 /// Internal enum for box_sum window input (props or signal).
-enum BoxSumWindowInput {
+pub enum BoxSumWindowInput {
     /// Props object with static window and optional key
     Props(serde_json::Value),
     /// Dynamic signal node for sample-rate modulation
@@ -365,7 +365,7 @@ pub fn box_average(window: impl Into<BoxAverageWindowInput>, x: impl Into<ElemNo
 }
 
 /// Internal enum for box_average window input (props or signal).
-enum BoxAverageWindowInput {
+pub enum BoxAverageWindowInput {
     /// Props object with static window and optional key
     Props(serde_json::Value),
     /// Dynamic signal node for sample-rate modulation
@@ -508,7 +508,7 @@ pub fn stride_delay(window: impl Into<StrideDelayWindowInput>, x: impl Into<Elem
 }
 
 /// Internal enum for stride_delay window input (props or signal).
-enum StrideDelayWindowInput {
+pub enum StrideDelayWindowInput {
     /// Props object with static window and optional key
     Props(serde_json::Value),
     /// Dynamic signal node for sample-rate modulation

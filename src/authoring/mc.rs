@@ -63,6 +63,6 @@ pub fn capture(
     g: impl Into<ElemNode>,
     args: impl IntoIterator<Item = ElemNode>,
 ) -> Vec<Node> {
-    let children = std::iter::once(g.into()).chain(args.into_iter());
+    let children = std::iter::once(g.into()).chain(args);
     unpack_mc("mc.capture", props, children)
 }

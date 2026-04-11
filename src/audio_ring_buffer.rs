@@ -133,9 +133,9 @@ impl AudioRingBuffer {
             let slot = write % self.inner.capacity_frames;
             let base = slot * channels;
 
-            for channel in 0..channels {
+            for (channel, channel_input) in inputs.iter().enumerate().take(channels) {
                 self.inner.samples[base + channel]
-                    .store((inputs[channel][frame] as f32).to_bits(), Ordering::Relaxed);
+                    .store((channel_input[frame] as f32).to_bits(), Ordering::Relaxed);
             }
 
             write = write.wrapping_add(1);
