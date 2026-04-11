@@ -97,7 +97,6 @@ namespace elem
             std::vector<Sample> write(channelCount, Sample(0));
 
             auto sampleRate = GraphNode<FloatType>::getSampleRate();
-            auto strideSamples = computeStrideSamples(transitionMs, sampleRate);
             for (size_t i = 0; i < numSamples; ++i) {
                 delayLine->read(delayToSamples(currentDelayMs, sampleRate), wet);
 
@@ -106,13 +105,8 @@ namespace elem
                     auto toDelaySamples = delayToSamples(transitionToMs, sampleRate);
                     auto t = smoothStep(static_cast<Sample>(transitionProgress) / static_cast<Sample>(transitionSamples));
 
-                    if (currentMethod == FallbackMode::DualStrideCrossfade) {
-                        readStrided(fromDelaySamples, strideSamples, readA, readScratch);
-                        readStrided(toDelaySamples, strideSamples, readB, readScratch);
-                    } else {
-                        delayLine->read(fromDelaySamples, readA);
-                        delayLine->read(toDelaySamples, readB);
-                    }
+                    delayLine->read(fromDelaySamples, readA);
+                    delayLine->read(toDelaySamples, readB);
 
                     for (size_t c = 0; c < channelCount; ++c) {
                         wet[c] = readA[c] + (readB[c] - readA[c]) * t;
@@ -149,8 +143,7 @@ namespace elem
     private:
         enum class FallbackMode {
             Linear = 0,
-            DualStrideCrossfade = 1,
-            Step = 2,
+            Step = 1,
         };
 
         static Sample smoothStep(Sample x)
@@ -164,15 +157,8 @@ namespace elem
             return delayMs * Sample(0.001) * static_cast<Sample>(sampleRate);
         }
 
-        static Sample computeStrideSamples(Sample transitionMs, double sampleRate)
-        {
-            auto derivedStrideMs = std::max<Sample>(Sample(1), transitionMs * Sample(0.25));
-            return std::max<Sample>(Sample(1), derivedStrideMs * Sample(0.001) * static_cast<Sample>(sampleRate));
-        }
-
         static FallbackMode parseMethod(std::string const& method)
         {
-            if (method == "dualStride") return FallbackMode::DualStrideCrossfade;
             if (method == "step") return FallbackMode::Step;
             return FallbackMode::Linear;
         }
@@ -188,26 +174,6 @@ namespace elem
                 configuredChannels = channels;
                 configuredCapacitySamples = capacitySamples;
                 configuredMaxDelayMs = maxDelayMs;
-            }
-        }
-
-        void readStrided(
-            Sample delaySamples,
-            Sample strideSamples,
-            std::vector<Sample>& result,
-            std::vector<Sample>& scratch)
-        {
-            auto base = std::floor(delaySamples / strideSamples) * strideSamples;
-            auto frac = (delaySamples - base) / strideSamples;
-
-            delayLine->read(base, result);
-            if (strideSamples <= Sample(1)) {
-                return;
-            }
-
-            delayLine->read(base + strideSamples, scratch);
-            for (size_t c = 0; c < result.size(); ++c) {
-                result[c] = result[c] + (scratch[c] - result[c]) * frac;
             }
         }
 
@@ -236,7 +202,7 @@ namespace elem
         std::atomic<Sample> delayMsTarget{Sample(250)};
         std::atomic<Sample> fbTarget{Sample(0)};
         std::atomic<Sample> transitionMsTarget{Sample(100)};
-        std::atomic<int> methodTarget{static_cast<int>(FallbackMode::DualStrideCrossfade)};
+        std::atomic<int> methodTarget{static_cast<int>(FallbackMode::Linear)};
 
         size_t configuredChannels = 0;
         size_t configuredCapacitySamples = 0;
@@ -248,7 +214,7 @@ namespace elem
         size_t transitionSamples = 1;
         size_t transitionProgress = 0;
         bool transitionActive = false;
-        FallbackMode currentMethod = FallbackMode::DualStrideCrossfade;
+        FallbackMode currentMethod = FallbackMode::Linear;
 
         std::optional<DelayLine> delayLine;
     };

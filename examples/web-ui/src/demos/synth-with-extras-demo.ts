@@ -63,9 +63,9 @@ const layout = `
         <div class="dial">
           <label for="delay-method">
             <span>Mode</span>
-            <span id="delay-method-value">dualStride</span>
+            <span id="delay-method-value">linear</span>
           </label>
-          <input id="delay-method" type="range" min="0" max="2" value="1" step="1" />
+          <input id="delay-method" type="range" min="0" max="1" value="0" step="1" />
         </div>
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
@@ -158,7 +158,7 @@ const { mustQuery: q, wireControls } = initDemo({
     delayTimeMs: Number(delayTimeSlider.value),
     delayFeedback: Number(delayFeedbackSlider.value) / 100,
     delayTransitionMs: Number(delayTransitionSlider.value),
-    delayMode: (["linear", "dualStride", "step"] as const)[Number(delayMethodSlider.value)] as StrideDelayMode,
+    delayMode: (["linear", "step"] as const)[Number(delayMethodSlider.value)] as StrideDelayMode,
   }),
   updateReadouts,
   renderOptions: { rootFadeInMs: 250, rootFadeOutMs: 250 },
@@ -207,7 +207,7 @@ function updateReadouts() {
   delayFeedbackValue.textContent = `${Number(delayFeedbackSlider.value)}%`;
   delayTransitionValue.textContent = `${Number(delayTransitionSlider.value)} ms`;
   delayMethodValue.textContent =
-    ["linear", "dualStride", "step"][Number(delayMethodSlider.value)] ?? "dualStride";
+    ["linear", "step"][Number(delayMethodSlider.value)] ?? "linear";
 }
 
 updateReadouts();

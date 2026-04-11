@@ -34,7 +34,7 @@ Core ideas taken from the article:
 | `fb` | `number` | `0` | Feedback amount |
 | `maxDelayMs` | `number` | `1000` | Maximum delay buffer length in milliseconds |
 | `transitionMs` | `number` | `100` | Crossfade length during a delay transition |
-| `mode` | `"linear" | "dualStride" | "step"` | `"dualStride"` | Large-jump strategy |
+| `mode` | `"linear" | "step"` | `"linear"` | Large-jump strategy |
 | `key` | `string` | none | Stable identity for repeated renders |
 
 ## Modes
@@ -42,12 +42,6 @@ Core ideas taken from the article:
 ### `linear`
 
 Use a simple linear interpolation path for larger jumps.
-
-### `dualStride`
-
-Render two strided delay paths around the old and new delay times, then crossfade between them.
-
-This keeps the transition closer to the article's stride mode than a plain crossfade.
 
 ### `step`
 
@@ -91,7 +85,7 @@ Implementation details:
 - `maxDelayMs` is a buffer capacity, not the audible delay time.
 - The large-jump threshold is fixed in the native vendor code at 1000 ms and is not exposed in the public API.
 - The internal stride is derived from `transitionMs` and is not exposed in the public API.
-- The `dualStride` mode is the default because it stays closest to the article's core idea while keeping jumps practical.
+- `linear` is the default mode.
 
 ## Demo Surface
 

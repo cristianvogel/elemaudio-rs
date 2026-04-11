@@ -446,7 +446,7 @@ export function boxAverage(
 /**
  * Modes for `el.extra.strideDelay(...)`.
  */
-export type StrideDelayMode = "linear" | "dualStride" | "step";
+export type StrideDelayMode = "linear" | "step";
 
 /**
  * Props for `el.extra.strideDelay(...)`.
@@ -494,7 +494,7 @@ export function strideDelay(
     delayMs,
     fb = 0,
     transitionMs = 100,
-    mode = "dualStride",
+    mode = "linear",
     ...other
   } = props;
 
