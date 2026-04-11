@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["box_average","box_sum","crunch","foldback","freqshift","limiter","stride_delay"]};

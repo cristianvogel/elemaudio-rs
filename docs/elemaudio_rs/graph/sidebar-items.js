@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GraphRoots"],"mod":["el","extra","mc"],"struct":["Graph","MountedGraph","MountedNode","Node"],"type":["Value"]};
+window.SIDEBAR_ITEMS = {"enum":["GraphRoots"],"struct":["Graph","MountedGraph","MountedNode","Node"],"type":["Value"]};
