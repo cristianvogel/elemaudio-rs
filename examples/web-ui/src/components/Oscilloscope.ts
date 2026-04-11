@@ -19,7 +19,7 @@ class ElemaudioOscilloscope extends HTMLElement {
     private _data: ScopePoint[] | number[] = [];
 
     private _sampleHistory: number[] = [];
-    private readonly _historyLength = TIME_SCALE ;
+    private readonly _historyLength = TIME_SCALE / 4 ;
     private _blockCount = 0;
 
 
