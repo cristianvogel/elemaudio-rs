@@ -54,10 +54,3 @@ If the derived resource id already exists, the upload flow asks before overwriti
 The resource demo also requests metadata by resource id and displays `duration_ms` plus channel count.
 
 This demo is feature-gated. Set `VITE_ELEMAUDIO_RESOURCES=1` when running Vite to enable the resource manager UI in the browser build.
-
-If Vite reports a missing module from the vendored Elementary sources, reinstall after the dependency list changes.
-
-## Notes
-
-- This is a source example; it is not wired into a workspace-level build yet.
-- The example depends on the vendored Elementary JS sources in this repository.
