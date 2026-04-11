@@ -21,6 +21,7 @@ fn main() {
         .include(&vendor_runtime)
         .include(&vendor_third_party)
         .include(&native_runtime)
+        .flag_if_supported("-w") // stop vendor/bridge compilation emitting tonnes of warning spam
         .flag_if_supported("-std=c++17");
 
     if std::env::var_os("CARGO_FEATURE_RESOURCES").is_some() {

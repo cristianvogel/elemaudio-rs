@@ -1,3 +1,20 @@
+// NOTE: This file is derived from the upstream Elementary vendor source but is
+// OWNED by this repository. It must be updated whenever a custom node is added,
+// renamed, or removed. Do not overwrite it during a vendor sync — merge instead.
+//
+// Custom node registry (keep in sync with src/ffi/elementary_bridge.cpp):
+//   "freqshift"    — FreqShiftNode
+//   "crunch"       — CrunchNode
+//   "boxsum"       — BoxSumNode
+//   "boxaverage"   — BoxAverageNode
+//   "limiter"      — LimiterNode
+//   "variSlopeSvf" — VariSlopeSVFNode  (Butterworth, 12–72 dB/oct, no Q)
+//   "stridedelay"  — StrideDelayNode
+//   "convolve"     — ConvolutionNode   (WASM-only)
+//   "fft"          — FFTNode           (WASM-only)
+//   "metro"        — MetronomeNode     (WASM-only)
+//   "time"         — SampleTimeNode    (WASM-only)
+
 #include <emscripten/bind.h>
 
 #include <memory>
@@ -9,6 +26,7 @@
 #include "../../../../native/extra/freqshift.h"
 #include "../../../../native/extra/crunch.h"
 #include "../../../../native/extra/limiter.h"
+#include "../../../../native/extra/vari_slope_svf.h"
 #include "../../../../native/extra/stridedelay.h"
 #include "Metro.h"
 #include "SampleTime.h"
@@ -71,6 +89,13 @@ public:
 
         runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
+        });
+
+        // VariSlopeSVFNode: Rossum-style continuously morphable Butterworth slope SVF (12–72 dB/oct).
+        // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0). Q fixed at Butterworth.
+        // Property: filterType ("lowpass"/"lp" or "highpass"/"hp").
+        runtime->registerNodeType("variSlopeSvf", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::VariSlopeSVFNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("stridedelay", [](elem::NodeId const id, double fs, int const bs) {

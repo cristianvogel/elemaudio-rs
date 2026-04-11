@@ -116,6 +116,21 @@ export interface LimiterProps extends Record<string, unknown> {
 }
 
 /**
+ * Filter mode for {@link variSlopeSvf}.
+ */
+export type VariSlopeFilterType = "highpass" | "lowpass";
+
+/**
+ * Props for {@link variSlopeSvf}.
+ *
+ * Q is fixed internally at Butterworth and is not exposed.
+ */
+export interface VariSlopeSvfProps extends Record<string, unknown> {
+  /** Filter mode: "lowpass" / "lp" or "highpass" / "hp". Default: "lowpass". */
+  filterType?: VariSlopeFilterType;
+}
+
+/**
  * Native frequency shifter helper.
  *
  * Returns two outputs in order: down-shifted, then up-shifted.
@@ -277,6 +292,61 @@ export function stereoLimiter(
   right: ElemNode,
 ): Array<NodeRepr_t> {
   return limiter(props, left, right) as Array<NodeRepr_t>;
+}
+
+/**
+ * VariSlope SVF — cascaded Butterworth SVF with Rossum-style continuous slope morphing.
+ *
+ * @remarks
+ * Defining feature: `slope` is a continuous per-sample audio signal in
+ * [1.0, 6.0] that blends smoothly between 1–6 cascaded second-order Butterworth
+ * SVF stages (12–72 dB/oct) inspired by Dave Rossum's analog cascade designs.
+ * All six stages run every sample so their integrator states remain warm;
+ * the output crossfades between adjacent integer-order outputs so the filter
+ * order morphs without clicks or dropout.
+ *
+ * Q is fixed internally at Butterworth (sqrt(2), maximally flat magnitude) and
+ * is not exposed. The slope is the sole tonal control.
+ *
+ * Per-stage gain correction (matched magnitude at cutoff) prevents the BLT
+ * passband droop from compounding across stages.
+ *
+ * Contrast with the vendor `el.svf`: that node is a single-stage Simper SVF
+ * with an exposed Q. `variSlopeSvf` removes Q and adds continuous Butterworth
+ * slope morphing as its defining feature.
+ *
+ * @param props      - `{ filterType?: "lowpass" | "lp" | "highpass" | "hp" }`
+ * @param cutoff_hz  - per-sample cutoff frequency in Hz (required)
+ * @param audio      - per-sample audio input signal (required)
+ * @param slope      - per-sample continuous order [1.0, 6.0] (optional; default 1.0)
+ *
+ * @example
+ * ```typescript
+ * // Static 24 dB/oct lowpass at 800 Hz.
+ * const node = el.extra.variSlopeSvf(
+ *   { filterType: "lowpass" },
+ *   el.const({ value: 800 }),   // cutoff
+ *   source,                      // audio
+ *   el.const({ value: 2.0 }),    // slope = 24 dB/oct
+ * );
+ *
+ * // Slope swept by an LFO for a continuous order morph.
+ * const slopeLfo = el.add(3.5, el.mul(2.5, el.cycle(0.1)));
+ * const node = el.extra.variSlopeSvf(
+ *   { filterType: "lowpass" },
+ *   cutoff, source, slopeLfo,
+ * );
+ * ```
+ */
+export function variSlopeSvf(
+  props: VariSlopeSvfProps,
+  cutoff_hz: ElemNode,
+  audio: ElemNode,
+  slope?: ElemNode,
+): NodeRepr_t {
+  const children: NodeRepr_t[] = [resolve(cutoff_hz), resolve(audio)];
+  if (slope !== undefined) children.push(resolve(slope));
+  return createNode("variSlopeSvf", props, children);
 }
 
 /**

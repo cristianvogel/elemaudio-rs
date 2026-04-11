@@ -3,7 +3,7 @@ use crate::graph::Node;
 use crate::{resolve, unpack, ElemNode};
 
 /// Internal enum for box_sum window input (props or signal).
-enum BoxSumWindowInput {
+pub enum BoxSumWindowInput {
     /// Props object with static window and optional key
     Props(serde_json::Value),
     /// Dynamic signal node for sample-rate modulation
@@ -188,6 +188,84 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     )
 }
 
+/// VariSlope SVF — cascaded Butterworth SVF with Rossum-style continuous slope
+/// morphing.
+///
+/// # Overview
+///
+/// This node exposes a continuously variable filter order (slope) that morphs
+/// smoothly between 1 and 6 cascaded second-order Butterworth SVF stages
+/// (12–72 dB/oct) at audio rate, inspired by Dave Rossum's analog cascade
+/// designs.
+///
+/// Q is fixed internally at Butterworth (√2 ≈ 1.414, maximally flat magnitude)
+/// and is not exposed. The slope is the sole tonal control: one knob that
+/// determines how aggressively the filter rolls off.
+///
+/// All six internal stages run every sample so their integrator states remain
+/// warm regardless of the current slope value. The output is a linear crossfade
+/// between the two adjacent integer-order outputs that bracket the current slope,
+/// so the filter order morphs without clicks, discontinuities, or dropout.
+///
+/// Per-stage gain correction (matched magnitude at cutoff) prevents the BLT
+/// passband droop from compounding across stages.
+///
+/// # Contrast with `el.svf`
+///
+/// The vendor `el.svf` is a single-stage Simper SVF (12 dB/oct fixed order)
+/// with an exposed Q parameter. `vari_slope_svf` removes Q and adds continuous
+/// Butterworth slope morphing as its defining feature.
+///
+/// # Inputs
+///
+/// | Index | Signal      | Required | Default  | Notes                         |
+/// |-------|-------------|----------|----------|-------------------------------|
+/// | 0     | `cutoff_hz` | yes      | —        | Cutoff frequency in Hz        |
+/// | 1     | `audio`     | yes      | —        | Audio input signal            |
+/// | 2     | `slope`     | no       | `1.0`    | Continuous order \[1.0, 6.0\] |
+///
+/// # Properties
+///
+/// | Key          | Type   | Values                              |
+/// |--------------|--------|-------------------------------------|
+/// | `filterType` | string | `"lowpass"` / `"lp"` (default)      |
+/// |              |        | `"highpass"` / `"hp"`               |
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// // Static 24 dB/oct lowpass at 800 Hz.
+/// let node = extra::vari_slope_svf(
+///     json!({ "filterType": "lowpass" }),
+///     el::const_(json!({ "value": 800.0 })),  // cutoff
+///     source,                                   // audio
+///     el::const_(json!({ "value": 2.0 })),      // slope = 24 dB/oct
+/// );
+///
+/// // Slope swept from 1.0 → 6.0 by an LFO for a dynamic order morph.
+/// let slope_lfo = el::add(
+///     el::const_(json!({ "value": 3.5 })),
+///     el::mul(el::const_(json!({ "value": 2.5 })),
+///             el::cycle(el::const_(json!({ "value": 0.25 })))),
+/// );
+/// let node = extra::vari_slope_svf(
+///     json!({ "filterType": "lowpass" }),
+///     cutoff, source, slope_lfo,
+/// );
+/// ```
+pub fn vari_slope_svf(
+    props: serde_json::Value,
+    cutoff: impl Into<ElemNode>,
+    audio: impl Into<ElemNode>,
+    slope: impl Into<ElemNode>,
+) -> Node {
+    let children = vec![resolve(cutoff), resolve(audio), resolve(slope)];
+    Node::new("variSlopeSvf", props, children)
+}
+
 /// Raw variable-width box sum helper.
 ///
 /// Computes a box-filter sum over a configurable window length.
@@ -365,7 +443,7 @@ pub fn box_average(window: impl Into<BoxAverageWindowInput>, x: impl Into<ElemNo
 }
 
 /// Internal enum for box_average window input (props or signal).
-enum BoxAverageWindowInput {
+pub enum BoxAverageWindowInput {
     /// Props object with static window and optional key
     Props(serde_json::Value),
     /// Dynamic signal node for sample-rate modulation
@@ -508,7 +586,7 @@ pub fn stride_delay(window: impl Into<StrideDelayWindowInput>, x: impl Into<Elem
 }
 
 /// Internal enum for stride_delay window input (props or signal).
-enum StrideDelayWindowInput {
+pub enum StrideDelayWindowInput {
     /// Props object with static window and optional key
     Props(serde_json::Value),
     /// Dynamic signal node for sample-rate modulation

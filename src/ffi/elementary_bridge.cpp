@@ -11,6 +11,9 @@
 #include <extra/boxsum.h>
 #include <extra/freqshift.h>
 #include <extra/limiter.h>
+// VariSlopeSVFNode: Rossum-style continuously morphable Butterworth slope SVF (12–72 dB/oct).
+// Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0). Q fixed at Butterworth.
+#include <extra/vari_slope_svf.h>
 #include <extra/stridedelay.h>
 
 extern "C" {
@@ -49,6 +52,14 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
+        });
+
+        // "variSlopeSvf" — VariSlopeSVFNode.
+        // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0).
+        // Property: filterType ("lowpass"/"lp" or "highpass"/"hp").
+        // Q fixed at Butterworth. 1–6 cascaded stages (12–72 dB/oct).
+        handle->runtime->registerNodeType("variSlopeSvf", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::VariSlopeSVFNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("stridedelay", [](elem::NodeId const id, double fs, int const bs) {
