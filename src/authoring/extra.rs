@@ -289,8 +289,8 @@ pub fn vari_slope_svf(
 ///
 /// | Key           | Type   | Range   | Default | Notes                      |
 /// |---------------|--------|---------|---------|----------------------------|
-/// | `windowMs`    | number | 1–50    | 10      | FFT window length in ms    |
-/// | `smoothingMs` | number | 0–50    | 5       | Energy smoothing in ms     |
+/// | `windowMs`    | number | 1–100   | 10      | FFT window length in ms    |
+/// | `smoothingMs` | number | 0–2000  | 5       | Energy smoothing in ms (high values = spectral sustain) |
 /// | `maxGainDb`   | number | 0–100   | 40      | Per-band gain ceiling (dB) |
 ///
 /// `swapInputs` is fixed at 1 (on) internally and not exposed.

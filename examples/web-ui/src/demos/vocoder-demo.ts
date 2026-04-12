@@ -70,14 +70,14 @@ const layout = `
             <span>Window</span>
             <span id="window-ms-value">10 ms</span>
           </label>
-          <input id="window-ms" type="range" min="1" max="50" value="10" step="1" />
+          <input id="window-ms" type="range" min="1" max="100" value="10" step="1" />
         </div>
         <div class="dial">
           <label for="smoothing-ms">
             <span>Smoothing</span>
             <span id="smoothing-ms-value">5 ms</span>
           </label>
-          <input id="smoothing-ms" type="range" min="0" max="1000" value="100" step="1" />
+          <input id="smoothing-ms" type="range" min="0" max="2000" value="5" step="1" />
         </div>
         <div class="dial">
           <label for="max-gain-db">

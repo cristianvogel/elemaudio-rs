@@ -38,8 +38,8 @@
 // Properties
 // ============================================================================
 //
-//   windowMs     number  1–50     FFT window length in milliseconds (default 10)
-//   smoothingMs  number  0–50     Energy envelope smoothing in ms   (default 5)
+//   windowMs     number  1–100    FFT window length in milliseconds (default 10)
+//   smoothingMs  number  0–2000   Energy envelope smoothing in ms   (default 5)
 //   maxGainDb    number  0–100    Per-band gain ceiling in dB       (default 40)
 //   swapInputs   number  0 or 1   Swap carrier/modulator            (default 0)
 //
@@ -165,12 +165,12 @@ struct VocoderNode : public GraphNode<FloatType> {
     {
         if (key == "windowMs") {
             if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
-            windowMs_.store(std::max(1.0, std::min(50.0, (js::Number) val)),
+            windowMs_.store(std::max(1.0, std::min(100.0, (js::Number) val)),
                            std::memory_order_relaxed);
             windowDirty_.store(true, std::memory_order_relaxed);
         } else if (key == "smoothingMs") {
             if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
-            smoothingMs_.store(std::max(0.0, std::min(50.0, (js::Number) val)),
+            smoothingMs_.store(std::max(0.0, std::min(2000.0, (js::Number) val)),
                               std::memory_order_relaxed);
         } else if (key == "maxGainDb") {
             if (!val.isNumber()) return ReturnCode::InvalidPropertyType();

@@ -121,9 +121,9 @@ export interface LimiterProps extends Record<string, unknown> {
 export interface VocoderProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
-  /** FFT window length in ms (1–50, default 10). */
+  /** FFT window length in ms (1–100, default 10). */
   windowMs?: number;
-  /** Energy envelope smoothing in ms (0–50, default 5). */
+  /** Energy envelope smoothing in ms (0–2000, default 5). High values produce sustained spectral blur. */
   smoothingMs?: number;
   /** Per-band gain ceiling in dB (0–100, default 40). */
   maxGainDb?: number;
