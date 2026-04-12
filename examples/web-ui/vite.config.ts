@@ -44,6 +44,7 @@ export default defineConfig({
         sample: resolve(__dirname, "sample.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
         waveshaper: resolve(__dirname, "waveshaper.html"),
+        vocoder: resolve(__dirname, "vocoder.html"),
         resource: resolve(__dirname, "resource-manager.html"),
       },
     },

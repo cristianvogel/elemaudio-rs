@@ -15,6 +15,10 @@
 // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0). Q fixed at Butterworth.
 #include <extra/vari_slope_svf.h>
 #include <extra/stridedelay.h>
+// VocoderNode: STFT-based channel vocoder (port of Geraint Luff's JSFX).
+// Inputs: [0] carrier L, [1] carrier R, [2] modulator L, [3] modulator R.
+// Properties: windowMs, smoothingMs, maxGainDb, swapInputs.
+#include <extra/vocoder.h>
 
 extern "C" {
 
@@ -64,6 +68,12 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("stridedelay", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::StrideDelayNode<double>>(id, fs, bs);
+        });
+
+        // "vocoder" — VocoderNode.
+        // STFT channel vocoder. 4 inputs (carrier L/R, modulator L/R), 2 outputs.
+        handle->runtime->registerNodeType("vocoder", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::VocoderNode<double>>(id, fs, bs);
         });
 
         return handle.release();

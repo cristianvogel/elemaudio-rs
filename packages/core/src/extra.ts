@@ -116,6 +116,20 @@ export interface LimiterProps extends Record<string, unknown> {
 }
 
 /**
+ * Props for {@link vocoder}.
+ */
+export interface VocoderProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** FFT window length in ms (1–100, default 10). */
+  windowMs?: number;
+  /** Energy envelope smoothing in ms (0–2000, default 5). High values produce sustained spectral blur. */
+  smoothingMs?: number;
+  /** Per-band gain ceiling in dB (0–100, default 40). */
+  maxGainDb?: number;
+}
+
+/**
  * Filter mode for {@link variSlopeSvf}.
  */
 export type VariSlopeFilterType = "highpass" | "lowpass";
@@ -347,6 +361,50 @@ export function variSlopeSvf(
   const children: NodeRepr_t[] = [resolve(cutoff_hz), resolve(audio)];
   if (slope !== undefined) children.push(resolve(slope));
   return createNode("variSlopeSvf", props, children);
+}
+
+/**
+ * STFT-based channel vocoder.
+ *
+ * @remarks
+ * Port of Geraint Luff's JSFX Vocoder. Imposes the spectral envelope of the
+ * modulator signal onto the carrier signal using per-bin energy envelope
+ * following and overlap-add STFT reconstruction.
+ *
+ * Takes 4 inputs (carrier L, carrier R, modulator L, modulator R) and
+ * returns 2 outputs (vocoded L, vocoded R).
+ *
+ * @param props        - vocoder properties (windowMs, smoothingMs, maxGainDb, swapInputs)
+ * @param carrierL     - left carrier channel
+ * @param carrierR     - right carrier channel
+ * @param modulatorL   - left modulator channel
+ * @param modulatorR   - right modulator channel
+ *
+ * @example
+ * ```typescript
+ * const [outL, outR] = el.extra.vocoder(
+ *   { windowMs: 10, smoothingMs: 5, maxGainDb: 40 },
+ *   carrierL, carrierR,
+ *   modulatorL, modulatorR,
+ * );
+ * ```
+ */
+export function vocoder(
+  props: VocoderProps,
+  carrierL: ElemNode,
+  carrierR: ElemNode,
+  modulatorL: ElemNode,
+  modulatorR: ElemNode,
+): Array<NodeRepr_t> {
+  return unpack(
+    createNode("vocoder", props, [
+      resolve(carrierL),
+      resolve(carrierR),
+      resolve(modulatorL),
+      resolve(modulatorR),
+    ]),
+    2,
+  );
 }
 
 /**

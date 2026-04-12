@@ -21,6 +21,11 @@ declare module "*.wav?url" {
   export default src;
 }
 
+declare module "*.flac?url" {
+    const src: string;
+    export default src;
+}
+
 interface ImportMetaEnv {
   readonly VITE_ELEMAUDIO_RESOURCES?: string;
 }
