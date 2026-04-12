@@ -10,6 +10,7 @@
 //   "limiter"      — LimiterNode
 //   "variSlopeSvf" — VariSlopeSVFNode  (Butterworth, 12–72 dB/oct, no Q)
 //   "stridedelay"  — StrideDelayNode
+//   "vocoder"      — VocoderNode       (STFT channel vocoder, 4-in 2-out)
 //   "convolve"     — ConvolutionNode   (WASM-only)
 //   "fft"          — FFTNode           (WASM-only)
 //   "metro"        — MetronomeNode     (WASM-only)
@@ -28,6 +29,7 @@
 #include "../../../../native/extra/limiter.h"
 #include "../../../../native/extra/vari_slope_svf.h"
 #include "../../../../native/extra/stridedelay.h"
+#include "../../../../native/extra/vocoder.h"
 #include "Metro.h"
 #include "SampleTime.h"
 
@@ -100,6 +102,11 @@ public:
 
         runtime->registerNodeType("stridedelay", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::StrideDelayNode<double>>(id, fs, bs);
+        });
+
+        // VocoderNode: STFT channel vocoder. 4 inputs, 2 outputs.
+        runtime->registerNodeType("vocoder", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::VocoderNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("fft", [](elem::NodeId const id, double fs, int const bs) {

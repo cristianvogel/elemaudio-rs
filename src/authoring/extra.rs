@@ -266,6 +266,69 @@ pub fn vari_slope_svf(
     Node::new("variSlopeSvf", props, children)
 }
 
+/// STFT-based channel vocoder.
+///
+/// Port of Geraint Luff's JSFX Vocoder. Imposes the spectral envelope of the
+/// modulator signal onto the carrier signal using per-bin energy envelope
+/// following and overlap-add reconstruction.
+///
+/// # Inputs
+///
+/// | Index | Signal        | Required | Notes                  |
+/// |-------|---------------|----------|------------------------|
+/// | 0     | carrier L     | yes      | Left carrier channel   |
+/// | 1     | carrier R     | yes      | Right carrier channel  |
+/// | 2     | modulator L   | yes      | Left modulator channel |
+/// | 3     | modulator R   | yes      | Right modulator channel|
+///
+/// # Outputs
+///
+/// Returns 2 outputs: vocoded left and right channels.
+///
+/// # Properties
+///
+/// | Key           | Type   | Range   | Default | Notes                      |
+/// |---------------|--------|---------|---------|----------------------------|
+/// | `windowMs`    | number | 1–50    | 10      | FFT window length in ms    |
+/// | `smoothingMs` | number | 0–50    | 5       | Energy smoothing in ms     |
+/// | `maxGainDb`   | number | 0–100   | 40      | Per-band gain ceiling (dB) |
+///
+/// `swapInputs` is fixed at 1 (on) internally and not exposed.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// let vocoded = extra::vocoder(
+///     json!({ "windowMs": 10, "smoothingMs": 5, "maxGainDb": 40 }),
+///     carrier_l, carrier_r,
+///     modulator_l, modulator_r,
+/// );
+/// // vocoded is a Vec of 2 nodes: [out_l, out_r]
+/// ```
+pub fn vocoder(
+    props: serde_json::Value,
+    carrier_l: impl Into<ElemNode>,
+    carrier_r: impl Into<ElemNode>,
+    modulator_l: impl Into<ElemNode>,
+    modulator_r: impl Into<ElemNode>,
+) -> Vec<Node> {
+    // Merge swapInputs: 1 into the caller's props.
+    let mut merged = props;
+    if let serde_json::Value::Object(ref mut map) = merged {
+        map.insert("swapInputs".to_string(), serde_json::Value::from(1));
+    }
+    let children = vec![
+        resolve(carrier_l),
+        resolve(carrier_r),
+        resolve(modulator_l),
+        resolve(modulator_r),
+    ];
+    unpack(Node::new("vocoder", merged, children), 2)
+}
+
 /// Raw variable-width box sum helper.
 ///
 /// Computes a box-filter sum over a configurable window length.
