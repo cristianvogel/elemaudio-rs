@@ -133,8 +133,13 @@ unsafe impl Send for Runtime {}
 #[bon]
 impl Runtime {
     /// Starts building a runtime.
-    pub fn new() -> RuntimeConstructBuilder {
+    pub fn builder() -> RuntimeConstructBuilder {
         Self::create()
+    }
+
+    /// Backward-compatible constructor entrypoint used by examples and tests.
+    pub fn new() -> RuntimeConstructBuilder {
+        Self::builder()
     }
 
     /// Creates a runtime for the given sample rate and buffer size.
