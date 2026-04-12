@@ -152,6 +152,13 @@ impl MountedGraph {
             .map(|(_, node)| node.clone())
     }
 
+    /// Returns an iterator over all mounted nodes with their structural paths.
+    pub fn all_nodes(&self) -> impl Iterator<Item = (&[usize], &MountedNode)> {
+        self.nodes
+            .iter()
+            .map(|(path, node)| (path.as_slice(), node))
+    }
+
     /// Convenience for updating a keyed `const` node's numeric value.
     pub fn set_const_value(&self, key: &str, value: f64) -> Option<InstructionBatch> {
         let node = self.node_with_key(key)?;
@@ -200,15 +207,24 @@ impl Graph {
 
     /// Lowers the graph and keeps mounted-node handles for direct updates.
     pub fn mount(&self) -> MountedGraph {
+        let mut next_id: NodeId = 1;
+        self.mount_with_id_counter(&mut next_id)
+    }
+
+    /// Lowers the graph using an external node-ID counter.
+    ///
+    /// Each call advances `next_id` past all allocated IDs. This allows
+    /// successive graph rebuilds to produce unique node IDs within the
+    /// same runtime session, avoiding `NodeAlreadyExists` errors.
+    pub fn mount_with_id_counter(&self, next_id: &mut NodeId) -> MountedGraph {
         let mut batch = InstructionBatch::new();
         let mut mounted = MountedGraph::default();
-        let mut next_id: NodeId = 1;
 
         let mut lowered_roots = Vec::with_capacity(self.roots.len());
 
         for (channel, root) in self.roots.iter().enumerate() {
-            let root_id = next_id;
-            next_id += 1;
+            let root_id = *next_id;
+            *next_id += 1;
 
             batch.push(Instruction::CreateNode {
                 node_id: root_id,
@@ -220,14 +236,14 @@ impl Graph {
                 value: serde_json::json!(channel),
             });
 
-            let child_id = next_id;
-            next_id += 1;
+            let child_id = *next_id;
+            *next_id += 1;
             let path = vec![channel];
             let mounted_root = lower_node(
                 root,
                 child_id,
                 &path,
-                &mut next_id,
+                next_id,
                 &mut batch,
                 &mut mounted.nodes,
                 &mut mounted.keyed_nodes,
