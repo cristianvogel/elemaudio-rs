@@ -14,11 +14,25 @@ namespace elem
 {
     static constexpr double kStrideDelayMaxJumpMs = 1000.0;
 
+    // Children layout:
+    //   [0] = delayMs signal (sample-rate control)
+    //   [1] = fb signal      (sample-rate control)
+    //   [2..N+2] = audio input channels
+    //
+    // Props (structural, not modulation targets):
+    //   maxDelayMs    — maximum delay buffer length (default 1000)
+    //   transitionMs  — crossfade duration for stride jumps (default 100)
+    //   bigLeapMode   — "linear" or "step" (default "linear")
+
     template <typename FloatType>
     struct StrideDelayNode : public GraphNode<FloatType> {
         using GraphNode<FloatType>::GraphNode;
         using Sample = FloatType;
         using DelayLine = signalsmith::delay::MultiDelay<Sample, signalsmith::delay::InterpolatorKaiserSinc8>;
+
+        static constexpr size_t CHILD_DELAY_MS = 0;
+        static constexpr size_t CHILD_FB       = 1;
+        static constexpr size_t CHILD_AUDIO    = 2;
 
         StrideDelayNode(NodeId id, double sr, int blockSize)
             : GraphNode<FloatType>(id, sr, blockSize)
@@ -29,12 +43,6 @@ namespace elem
             if (key == "maxDelayMs") {
                 if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
                 maxDelayMsTarget.store(std::max<Sample>(0, static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
-            } else if (key == "delayMs") {
-                if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
-                delayMsTarget.store(std::max<Sample>(0, static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
-            } else if (key == "fb") {
-                if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
-                fbTarget.store(static_cast<Sample>((js::Number) val), std::memory_order_relaxed);
             } else if (key == "transitionMs") {
                 if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
                 transitionMsTarget.store(std::max<Sample>(0, static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
@@ -48,9 +56,9 @@ namespace elem
 
         void reset() override
         {
-            currentDelayMs = delayMsTarget.load(std::memory_order_relaxed);
-            transitionFromMs = currentDelayMs;
-            transitionToMs = currentDelayMs;
+            currentDelayMs = Sample(0);
+            transitionFromMs = Sample(0);
+            transitionToMs = Sample(0);
             transitionProgress = 0;
             transitionSamples = 1;
             transitionActive = false;
@@ -64,15 +72,23 @@ namespace elem
             auto numOuts = ctx.numOutputChannels;
             auto numSamples = ctx.numSamples;
 
-            if (numIns == 0 || numOuts == 0 || numSamples == 0) {
+            // Need at least: delayMs + fb + one audio channel
+            if (numIns < 3 || numOuts == 0 || numSamples == 0) {
                 for (size_t c = 0; c < numOuts; ++c) {
                     std::fill_n(ctx.outputData[c], numSamples, FloatType(0));
                 }
                 return;
             }
 
-            auto channelCount = std::min(numIns, numOuts);
+            // Control signals
+            auto const* delayMsSignal = ctx.inputData[CHILD_DELAY_MS];
+            auto const* fbSignal      = ctx.inputData[CHILD_FB];
+
+            // Audio channels start at index 2
+            auto audioChannelCount = numIns - CHILD_AUDIO;
+            auto channelCount = std::min(audioChannelCount, numOuts);
             ensureDelayLine(channelCount);
+
             if (!delayLine) {
                 for (size_t c = 0; c < numOuts; ++c) {
                     std::fill_n(ctx.outputData[c], numSamples, FloatType(0));
@@ -80,10 +96,12 @@ namespace elem
                 return;
             }
 
-            auto targetDelayMs = delayMsTarget.load(std::memory_order_relaxed);
-            auto targetFb = fbTarget.load(std::memory_order_relaxed);
             auto transitionMs = transitionMsTarget.load(std::memory_order_relaxed);
             auto method = methodTarget.load(std::memory_order_relaxed);
+
+            // Read the delay target from the signal at the start of each block.
+            // The stride transition system handles smoothing large jumps.
+            auto targetDelayMs = std::max<Sample>(0, delayMsSignal[0]);
 
             if (!transitionActive && std::abs(targetDelayMs - currentDelayMs) > Sample(1e-9)) {
                 startTransition(targetDelayMs, transitionMs, method);
@@ -93,11 +111,12 @@ namespace elem
             std::vector<Sample> wet(channelCount, Sample(0));
             std::vector<Sample> readA(channelCount, Sample(0));
             std::vector<Sample> readB(channelCount, Sample(0));
-            std::vector<Sample> readScratch(channelCount, Sample(0));
             std::vector<Sample> write(channelCount, Sample(0));
 
             auto sampleRate = GraphNode<FloatType>::getSampleRate();
             for (size_t i = 0; i < numSamples; ++i) {
+                auto fb = fbSignal[i];
+
                 delayLine->read(delayToSamples(currentDelayMs, sampleRate), wet);
 
                 if (transitionActive) {
@@ -118,18 +137,20 @@ namespace elem
                         transitionActive = false;
                         transitionProgress = 0;
 
-                        if (currentMethod == FallbackMode::Step && std::abs(targetDelayMs - currentDelayMs) > Sample(kStrideDelayMaxJumpMs)) {
-                            startTransition(targetDelayMs, transitionMs, method);
-                        } else if (std::abs(targetDelayMs - currentDelayMs) > Sample(1e-9)) {
-                            startTransition(targetDelayMs, transitionMs, method);
+                        // Re-read the current signal value to check for further transitions
+                        auto nowTarget = std::max<Sample>(0, delayMsSignal[std::min(i, static_cast<size_t>(numSamples - 1))]);
+                        if (currentMethod == FallbackMode::Step && std::abs(nowTarget - currentDelayMs) > Sample(kStrideDelayMaxJumpMs)) {
+                            startTransition(nowTarget, transitionMs, method);
+                        } else if (std::abs(nowTarget - currentDelayMs) > Sample(1e-9)) {
+                            startTransition(nowTarget, transitionMs, method);
                         }
                     }
                 }
 
                 for (size_t c = 0; c < channelCount; ++c) {
                     ctx.outputData[c][i] = wet[c];
-                    dry[c] = ctx.inputData[c][i];
-                    write[c] = dry[c] + targetFb * wet[c];
+                    dry[c] = ctx.inputData[c + CHILD_AUDIO][i];
+                    write[c] = dry[c] + fb * wet[c];
                 }
 
                 delayLine->write(write);
@@ -199,8 +220,6 @@ namespace elem
         }
 
         std::atomic<Sample> maxDelayMsTarget{Sample(1000)};
-        std::atomic<Sample> delayMsTarget{Sample(250)};
-        std::atomic<Sample> fbTarget{Sample(0)};
         std::atomic<Sample> transitionMsTarget{Sample(100)};
         std::atomic<int> methodTarget{static_cast<int>(FallbackMode::Linear)};
 

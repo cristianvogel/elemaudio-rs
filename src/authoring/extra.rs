@@ -640,19 +640,22 @@ fn limiter_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 
 /// Stride-interpolated delay helper (mono).
 ///
-/// All delay parameters are passed as props to the native `stridedelay` node.
-/// Children are audio inputs only.
+/// `delay_ms` and `fb` are signal children read at sample rate by the
+/// native node. Use `el::const_with_key(...)` for fast-path parameter
+/// updates, or any signal expression for modulation.
 ///
-/// # Props
+/// # Props (structural, not modulation targets)
 ///
 /// | Key            | Type   | Default    | Notes                          |
 /// |----------------|--------|------------|--------------------------------|
 /// | `key`          | string | —          | Optional stable node identity  |
-/// | `delayMs`      | number | (required) | Target delay time in ms        |
 /// | `maxDelayMs`   | number | 1000       | Maximum delay buffer length    |
-/// | `fb`           | number | 0          | Feedback amount                |
 /// | `transitionMs` | number | 100        | Crossfade length in ms         |
 /// | `bigLeapMode`  | string | "linear"   | "linear" or "step"             |
+///
+/// # Children layout
+///
+/// `[delay_ms, fb, audio_input]`
 ///
 /// # Example
 ///
@@ -661,18 +664,24 @@ fn limiter_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 /// use serde_json::json;
 ///
 /// let delayed = extra::stride_delay(
-///     json!({
-///         "key": "delay",
-///         "delayMs": 250.0,
-///         "fb": 0.3,
-///         "transitionMs": 60.0,
-///     }),
-///     el::r#in(json!({"channel": 0}), None),
+///     json!({ "maxDelayMs": 1500, "transitionMs": 60 }),
+///     el::const_with_key("delay", 250.0),   // delay_ms signal
+///     el::const_with_key("fb", 0.3),         // fb signal
+///     el::r#in(json!({"channel": 0}), None), // audio input
 /// );
 /// ```
-pub fn stride_delay(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+pub fn stride_delay(
+    props: serde_json::Value,
+    delay_ms: impl Into<ElemNode>,
+    fb: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
     let resolved_props = stride_delay_resolve_defaults(props);
-    Node::new("stridedelay", resolved_props, vec![resolve(x)])
+    Node::new(
+        "stridedelay",
+        resolved_props,
+        vec![resolve(delay_ms), resolve(fb), resolve(x)],
+    )
 }
 
 /// Stride-interpolated delay helper (stereo).
@@ -681,6 +690,8 @@ pub fn stride_delay(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// two output nodes via `unpack`.
 pub fn stereo_stride_delay(
     props: serde_json::Value,
+    delay_ms: impl Into<ElemNode>,
+    fb: impl Into<ElemNode>,
     left: impl Into<ElemNode>,
     right: impl Into<ElemNode>,
 ) -> Vec<Node> {
@@ -689,24 +700,26 @@ pub fn stereo_stride_delay(
         Node::new(
             "stridedelay",
             resolved_props,
-            vec![resolve(left), resolve(right)],
+            vec![
+                resolve(delay_ms),
+                resolve(fb),
+                resolve(left),
+                resolve(right),
+            ],
         ),
         2,
     )
 }
 
-/// Apply defaults for stride_delay props to match the TS surface.
+/// Apply defaults for stride_delay props.
 fn stride_delay_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
     let mut map = match props {
         serde_json::Value::Object(m) => m,
         _ => serde_json::Map::new(),
     };
 
-    // Defaults matching TS: maxDelayMs=1000, fb=0, transitionMs=100, bigLeapMode="linear"
     map.entry("maxDelayMs")
         .or_insert_with(|| serde_json::Value::from(1000.0));
-    map.entry("fb")
-        .or_insert_with(|| serde_json::Value::from(0.0));
     map.entry("transitionMs")
         .or_insert_with(|| serde_json::Value::from(100.0));
     map.entry("bigLeapMode")

@@ -15,6 +15,8 @@ resources = ["dep:elemaudio-resources"]
 
 [dependencies]
 bon = "3.9"
+dirs = "6"
+log = "0.4"
 serde_json = "1"
 elemaudio-resources = { git = "https://github.com/cristianvogel/elemaudio-resources", optional = true }
 

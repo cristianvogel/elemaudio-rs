@@ -5,6 +5,23 @@
 
 use crate::{Instruction, InstructionBatch, NodeId};
 
+/// Error returned by [`Graph::mount`] and [`Graph::mount_with_id_counter`].
+#[derive(Debug, Clone)]
+pub enum MountError {
+    /// Two nodes in the graph share the same `key` prop value.
+    DuplicateKey(String),
+}
+
+impl std::fmt::Display for MountError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateKey(key) => write!(f, "duplicate mounted node key: {key}"),
+        }
+    }
+}
+
+impl std::error::Error for MountError {}
+
 /// A multichannel graph is a set of root nodes, one per output channel.
 #[derive(Debug, Clone, Default)]
 pub struct Graph {
@@ -47,7 +64,7 @@ impl<const N: usize> From<[Node; N]> for GraphRoots {
 ///
 /// To enable efficient parameter updates:
 /// 1. Create a graph with keyed nodes: `el::const_with_key("my_param", value)`
-/// 2. Mount the graph: `mounted = graph.mount()`
+/// 2. Mount the graph: `mounted = graph.mount()?`
 /// 3. Retrieve the node by key: `mounted.node_with_key("my_param")?`
 /// 4. Send direct updates: `mounted.node.set_const_value(new_value)`
 ///
@@ -206,7 +223,10 @@ impl Graph {
     }
 
     /// Lowers the graph and keeps mounted-node handles for direct updates.
-    pub fn mount(&self) -> MountedGraph {
+    ///
+    /// Returns `Err(MountError::DuplicateKey(...))` if two nodes in the
+    /// graph share the same `key` prop.
+    pub fn mount(&self) -> std::result::Result<MountedGraph, MountError> {
         let mut next_id: NodeId = 1;
         self.mount_with_id_counter(&mut next_id)
     }
@@ -216,7 +236,13 @@ impl Graph {
     /// Each call advances `next_id` past all allocated IDs. This allows
     /// successive graph rebuilds to produce unique node IDs within the
     /// same runtime session, avoiding `NodeAlreadyExists` errors.
-    pub fn mount_with_id_counter(&self, next_id: &mut NodeId) -> MountedGraph {
+    ///
+    /// Returns `Err(MountError::DuplicateKey(...))` if two nodes in the
+    /// graph share the same `key` prop.
+    pub fn mount_with_id_counter(
+        &self,
+        next_id: &mut NodeId,
+    ) -> std::result::Result<MountedGraph, MountError> {
         let mut batch = InstructionBatch::new();
         let mut mounted = MountedGraph::default();
 
@@ -247,7 +273,7 @@ impl Graph {
                 &mut batch,
                 &mut mounted.nodes,
                 &mut mounted.keyed_nodes,
-            );
+            )?;
 
             batch.push(Instruction::AppendChild {
                 parent_id: root_id,
@@ -264,7 +290,7 @@ impl Graph {
         batch.push(Instruction::CommitUpdates);
 
         mounted.batch = batch;
-        mounted
+        Ok(mounted)
     }
 
     /// Adds one root node.
@@ -278,8 +304,13 @@ impl Graph {
     }
 
     /// Lowers the graph into a runtime instruction batch.
+    ///
+    /// Panics if the graph contains duplicate keyed nodes. Prefer
+    /// [`mount`] for fallible access.
     pub fn lower(&self) -> InstructionBatch {
-        self.mount().into_batch()
+        self.mount()
+            .expect("graph contains duplicate keys")
+            .into_batch()
     }
 }
 
@@ -338,7 +369,7 @@ fn lower_node(
     batch: &mut InstructionBatch,
     mounted_nodes: &mut Vec<(Vec<usize>, MountedNode)>,
     keyed_nodes: &mut Vec<(String, MountedNode)>,
-) -> MountedNode {
+) -> std::result::Result<MountedNode, MountError> {
     batch.push(Instruction::CreateNode {
         node_id,
         node_type: node.kind.clone(),
@@ -369,7 +400,7 @@ fn lower_node(
             batch,
             mounted_nodes,
             keyed_nodes,
-        );
+        )?;
         batch.push(Instruction::AppendChild {
             parent_id: node_id,
             child_id,
@@ -388,11 +419,12 @@ fn lower_node(
             .iter()
             .any(|(existing_key, _)| existing_key == &key)
         {
-            panic!("duplicate mounted node key: {key}");
+            log::error!("duplicate mounted node key: {key}");
+            return Err(MountError::DuplicateKey(key));
         }
         keyed_nodes.push((key, mounted_node.clone()));
     }
-    mounted_node
+    Ok(mounted_node)
 }
 
 fn key_from_props(props: &Value) -> Option<String> {
@@ -408,7 +440,7 @@ fn key_from_props(props: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::Graph;
-    use crate::authoring::{el, mc};
+    use crate::authoring::{el, extra, mc};
 
     #[test]
     fn lowers_multichannel_output_channels_on_append_edges() {
@@ -450,5 +482,380 @@ mod tests {
             .collect();
 
         assert_eq!(output_channels, vec![0, 1]);
+    }
+
+    #[test]
+    fn stride_delay_mounts_with_signal_children() {
+        let delay_ms = el::const_with_key("delay", 250.0);
+        let fb = el::const_with_key("fb", 0.3);
+        let input = el::r#in(serde_json::json!({"channel": 0}), None);
+
+        let delayed = extra::stride_delay(
+            serde_json::json!({ "maxDelayMs": 1500, "transitionMs": 60 }),
+            delay_ms,
+            fb,
+            input,
+        );
+
+        let graph = Graph::new().render(vec![delayed]);
+        let mounted = graph.mount().expect("mount");
+        let batch = mounted.batch();
+
+        // Verify the batch serializes to a non-empty JSON array.
+        let json = batch.to_json_string();
+        assert!(json.len() > 2, "batch should contain instructions");
+
+        // Find the stridedelay node in the mounted graph.
+        let sd_nodes: Vec<_> = mounted
+            .all_nodes()
+            .filter(|(_, n)| n.kind() == "stridedelay")
+            .collect();
+        assert_eq!(sd_nodes.len(), 1, "expected 1 stridedelay node");
+
+        // Verify the keyed const nodes are present.
+        let delay_const = mounted
+            .all_nodes()
+            .find(|(_, n)| n.key().as_deref() == Some("delay"));
+        assert!(delay_const.is_some(), "keyed 'delay' const should exist");
+
+        let fb_const = mounted
+            .all_nodes()
+            .find(|(_, n)| n.key().as_deref() == Some("fb"));
+        assert!(fb_const.is_some(), "keyed 'fb' const should exist");
+    }
+
+    #[test]
+    fn stride_delay_children_order_in_batch() {
+        // Verify children are appended in the correct order:
+        // child 0 = delayMs, child 1 = fb, child 2 = audio
+        let delay_ms = el::const_with_key("delay", 250.0);
+        let fb = el::const_with_key("fb", 0.0);
+        let input = el::r#in(serde_json::json!({"channel": 0}), None);
+
+        let delayed = extra::stride_delay(
+            serde_json::json!({ "maxDelayMs": 1500 }),
+            delay_ms,
+            fb,
+            input,
+        );
+
+        let graph = Graph::new().render(vec![delayed]);
+        let json_str = graph.lower().to_json_string();
+        let payload: serde_json::Value = serde_json::from_str(&json_str).expect("valid batch json");
+        let instructions = payload.as_array().expect("batch is an array");
+
+        // Collect CreateNode instructions to map node_id -> node_type.
+        let mut node_types: std::collections::HashMap<i64, String> =
+            std::collections::HashMap::new();
+        for inst in instructions {
+            let arr = inst.as_array().expect("instruction is array");
+            if arr[0].as_i64() == Some(0) {
+                // CreateNode: [0, node_id, node_type]
+                node_types.insert(
+                    arr[1].as_i64().unwrap(),
+                    arr[2].as_str().unwrap().to_string(),
+                );
+            }
+        }
+
+        // Find the stridedelay node ID.
+        let sd_id = node_types
+            .iter()
+            .find(|(_, t)| t.as_str() == "stridedelay")
+            .map(|(id, _)| *id)
+            .expect("stridedelay node should exist");
+
+        // Collect AppendChild instructions for the stridedelay parent.
+        // AppendChild: [2, parent_id, child_id, output_channel]
+        let children_of_sd: Vec<(i64, String)> = instructions
+            .iter()
+            .filter_map(|inst| {
+                let arr = inst.as_array()?;
+                if arr[0].as_i64()? != 2 {
+                    return None;
+                }
+                if arr[1].as_i64()? != sd_id {
+                    return None;
+                }
+                let child_id = arr[2].as_i64()?;
+                let child_type = node_types.get(&child_id)?.clone();
+                Some((child_id, child_type))
+            })
+            .collect();
+
+        // Expect 3 children: const (delay), const (fb), in (audio).
+        assert_eq!(
+            children_of_sd.len(),
+            3,
+            "stridedelay should have 3 children"
+        );
+        assert_eq!(
+            children_of_sd[0].1, "const",
+            "child 0 should be const (delayMs)"
+        );
+        assert_eq!(children_of_sd[1].1, "const", "child 1 should be const (fb)");
+        assert_eq!(children_of_sd[2].1, "in", "child 2 should be in (audio)");
+    }
+
+    #[test]
+    fn stride_delay_runtime_produces_output() {
+        use crate::Runtime;
+
+        let sr = 44100.0;
+        let block = 64;
+        let runtime = Runtime::new()
+            .sample_rate(sr)
+            .buffer_size(block)
+            .call()
+            .expect("runtime creation");
+
+        // Build a graph: const(250ms delay) -> stride_delay -> root
+        // Feed a simple impulse as input.
+        let delay_ms = el::const_(250.0);
+        let fb = el::const_(0.0);
+        let input = el::r#in(serde_json::json!({"channel": 0}), None);
+
+        let delayed = extra::stride_delay(
+            serde_json::json!({ "maxDelayMs": 500, "transitionMs": 10 }),
+            delay_ms,
+            fb,
+            input,
+        );
+
+        let graph = Graph::new().render(vec![delayed]);
+        let mounted = graph.mount().expect("mount");
+        runtime
+            .apply_instructions(mounted.batch())
+            .expect("apply instructions");
+
+        // Create an impulse input: 1.0 at sample 0, then silence.
+        let mut input_buf = vec![0.0_f64; block];
+        input_buf[0] = 1.0;
+        let mut output_buf = vec![0.0_f64; block];
+
+        let inputs = [input_buf.as_slice()];
+        let mut outputs = [output_buf.as_mut_slice()];
+        runtime
+            .process(block, &inputs, &mut outputs)
+            .expect("process");
+
+        // On the first block with 250ms delay at 44100Hz = 11025 samples,
+        // the impulse won't appear in the output yet (delayed beyond this block).
+        // But the output should NOT be all-zero if the node is processing
+        // (the stride transition from 0ms to 250ms will produce some output).
+        // At minimum, the node should not crash.
+
+        // Run several more blocks to fill the delay buffer.
+        let silence = vec![0.0_f64; block];
+        for _ in 0..200 {
+            let inputs = [silence.as_slice()];
+            let mut out = vec![0.0_f64; block];
+            let mut outputs = [out.as_mut_slice()];
+            runtime
+                .process(block, &inputs, &mut outputs)
+                .expect("process");
+
+            // Check if any non-zero output appeared (the delayed impulse).
+            if outputs[0].iter().any(|&s| s.abs() > 1e-10) {
+                // The delay is working — the impulse came back.
+                return;
+            }
+        }
+
+        panic!("stride delay produced no output after 200 blocks — delay effect is not working");
+    }
+
+    #[test]
+    fn stride_delay_with_computed_children_produces_output() {
+        // Mimics the nel-x MC graph: delay_ms and fb are computed
+        // through el::mul/el::add expressions, not plain consts.
+        use crate::Runtime;
+
+        let sr = 44100.0;
+        let block = 64;
+        let runtime = Runtime::new()
+            .sample_rate(sr)
+            .buffer_size(block)
+            .call()
+            .expect("runtime creation");
+
+        let base_delay = el::const_(250.0);
+        let spread = el::const_(0.0);
+        let offset = el::const_(0.0); // channel 0 = center
+
+        // ch_delay = base_delay * (1.0 + spread * offset) = 250 * 1 = 250
+        let ch_delay = el::mul((
+            base_delay,
+            el::add((1.0, el::mul((spread.clone(), offset.clone())))),
+        ));
+
+        // ch_fb = base_fb * (1 - spread * offset * 0.3) = 0.3 * 1 = 0.3
+        let base_fb = el::const_(0.3);
+        let ch_fb = el::mul((
+            base_fb,
+            el::sub((1.0, el::mul((spread, el::mul((offset, 0.3)))))),
+        ));
+
+        let input = el::r#in(serde_json::json!({"channel": 0}), None);
+
+        let delayed = extra::stride_delay(
+            serde_json::json!({ "maxDelayMs": 500, "transitionMs": 10 }),
+            ch_delay,
+            ch_fb,
+            input,
+        );
+
+        let graph = Graph::new().render(vec![delayed]);
+        let mounted = graph.mount().expect("mount");
+        runtime
+            .apply_instructions(mounted.batch())
+            .expect("apply instructions");
+
+        // Send impulse, then silence, check if the delayed impulse returns.
+        let mut input_buf = vec![0.0_f64; block];
+        input_buf[0] = 1.0;
+        let mut output_buf = vec![0.0_f64; block];
+
+        let inputs = [input_buf.as_slice()];
+        let mut outputs = [output_buf.as_mut_slice()];
+        runtime
+            .process(block, &inputs, &mut outputs)
+            .expect("process");
+
+        let silence = vec![0.0_f64; block];
+        for _ in 0..200 {
+            let inputs = [silence.as_slice()];
+            let mut out = vec![0.0_f64; block];
+            let mut outputs = [out.as_mut_slice()];
+            runtime
+                .process(block, &inputs, &mut outputs)
+                .expect("process");
+
+            if outputs[0].iter().any(|&s| s.abs() > 1e-10) {
+                return; // delay is working with computed children
+            }
+        }
+
+        panic!("stride delay with computed children produced no output");
+    }
+
+    #[test]
+    fn stride_delay_with_mix_blend() {
+        // Test the full wet/dry blend path as used in the plugin.
+        use crate::Runtime;
+
+        let sr = 44100.0;
+        let block = 512;
+        let runtime = Runtime::new()
+            .sample_rate(sr)
+            .buffer_size(block)
+            .call()
+            .expect("runtime creation");
+
+        let delay_ms = el::const_(50.0); // Short delay for quick test
+        let fb = el::const_(0.0);
+        let mix_val = 0.5;
+        let mix_wet = el::const_(mix_val);
+        let mix_dry = el::const_(mix_val);
+        let input = el::r#in(serde_json::json!({"channel": 0}), None);
+
+        let delayed = extra::stride_delay(
+            serde_json::json!({ "maxDelayMs": 200, "transitionMs": 10 }),
+            delay_ms,
+            fb,
+            input.clone(),
+        );
+
+        // Manual wet/dry: output = delayed * mix + input * (1 - mix)
+        let wet = el::mul((delayed, mix_wet));
+        let dry = el::mul((input, el::sub((1.0, mix_dry))));
+        let out = el::add((wet, dry));
+
+        let graph = Graph::new().render(vec![out]);
+        let mounted = graph.mount().expect("mount");
+        runtime
+            .apply_instructions(mounted.batch())
+            .expect("apply instructions");
+
+        // Send continuous signal (not just an impulse).
+        let input_signal: Vec<f64> = (0..block)
+            .map(|i| if i < 100 { 1.0 } else { 0.0 })
+            .collect();
+        let mut output_buf = vec![0.0_f64; block];
+
+        let inputs = [input_signal.as_slice()];
+        let mut outputs = [output_buf.as_mut_slice()];
+        runtime
+            .process(block, &inputs, &mut outputs)
+            .expect("process");
+
+        // Check if dry path produces output. May take one block to propagate.
+        let first_block_max = outputs[0].iter().copied().fold(0.0_f64, f64::max);
+        eprintln!("first block max output: {first_block_max}");
+
+        // Run second block with same input to check propagation.
+        let mut output_buf2 = vec![0.0_f64; block];
+        let inputs2 = [input_signal.as_slice()];
+        let mut outputs2 = [output_buf2.as_mut_slice()];
+        runtime
+            .process(block, &inputs2, &mut outputs2)
+            .expect("process 2");
+        let second_block_max = outputs2[0].iter().copied().fold(0.0_f64, f64::max);
+        eprintln!("second block max output: {second_block_max}");
+
+        assert!(
+            first_block_max > 0.01 || second_block_max > 0.01,
+            "dry path should produce output within first two blocks, got max={first_block_max}, {second_block_max}"
+        );
+
+        // After the delay time (50ms = 2205 samples at 44100Hz),
+        // we need more blocks. Run more.
+        let silence = vec![0.0_f64; block];
+        let mut found_delayed = false;
+
+        for block_num in 0..20 {
+            let inputs = [silence.as_slice()];
+            let mut out = vec![0.0_f64; block];
+            let mut outputs = [out.as_mut_slice()];
+            runtime
+                .process(block, &inputs, &mut outputs)
+                .expect("process");
+
+            // After input stops, any non-zero output is from the delay.
+            if outputs[0].iter().any(|&s| s.abs() > 0.01) {
+                found_delayed = true;
+                eprintln!(
+                    "delayed signal appeared in block {} (sample ~{})",
+                    block_num + 1,
+                    (block_num + 1) * block
+                );
+                break;
+            }
+        }
+
+        assert!(
+            found_delayed,
+            "delay effect should produce output after the dry signal stops"
+        );
+    }
+
+    #[test]
+    fn mount_returns_error_on_duplicate_key() {
+        use crate::graph::MountError;
+
+        // Two const nodes sharing the same key.
+        let a = el::const_with_key("dup", 1.0);
+        let b = el::const_with_key("dup", 2.0);
+        let out = el::add((a, b));
+
+        let graph = Graph::new().render(vec![out]);
+        let result = graph.mount();
+
+        match result {
+            Err(MountError::DuplicateKey(key)) => {
+                assert_eq!(key, "dup");
+            }
+            Ok(_) => panic!("expected DuplicateKey error, got Ok"),
+        }
     }
 }

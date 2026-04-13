@@ -9,7 +9,8 @@ use clack_extensions::gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Pl
 use clack_plugin::prelude::*;
 use std::sync::Arc;
 
-use stride_delay_dsp::{DspParameters, StrideDelayEngine};
+use elemaudio_rs::Engine;
+use stride_delay_dsp::{DspParameters, StrideDelayGraph};
 
 #[cfg(target_os = "macos")]
 use crate::editor::{self, Editor};
@@ -30,7 +31,7 @@ pub struct MainThread<'a> {
 }
 
 pub struct AudioProcessor<'a> {
-    pub(crate) engine: StrideDelayEngine,
+    pub(crate) engine: Engine<StrideDelayGraph>,
     pub(crate) shared: &'a PluginSharedState,
     pub(crate) params: PluginParamsLocal,
     pub(crate) host: HostAudioProcessorHandle<'a>,
@@ -112,8 +113,10 @@ impl<'a> PluginAudioProcessor<'a, PluginSharedState, MainThread<'a>> for AudioPr
     ) -> Result<Self, PluginError> {
         let max_frames = audio_config.max_frames_count as usize;
 
-        let engine = StrideDelayEngine::new(audio_config.sample_rate, max_frames)
-            .map_err(|_| PluginError::Message("failed to create DSP engine"))?;
+        let defaults = DspParameters::default();
+        let engine =
+            Engine::<StrideDelayGraph>::new(audio_config.sample_rate, max_frames, &defaults)
+                .map_err(|_| PluginError::Message("failed to create DSP engine"))?;
 
         Ok(Self {
             engine,
@@ -162,7 +165,7 @@ impl<'a> PluginAudioProcessor<'a, PluginSharedState, MainThread<'a>> for AudioPr
             transition_ms: self.params.transition_ms(),
             mix: self.params.mix(),
         };
-        self.engine.set_params(dsp_params);
+        self.engine.set_params(&dsp_params);
 
         // Single-pass channel buffer abstraction.
         enum ChannelBuffer<'a> {
@@ -242,7 +245,7 @@ impl<'a> PluginAudioProcessor<'a, PluginSharedState, MainThread<'a>> for AudioPr
                 let inputs: [&[f64]; 2] = [&self.in_l[..block], &self.in_r[..block]];
                 let mut outputs: [&mut [f64]; 2] =
                     [&mut self.out_l[..block], &mut self.out_r[..block]];
-                self.engine.process(block, &inputs, &mut outputs);
+                let _ = self.engine.process(block, &inputs, &mut outputs);
             }
 
             for j in 0..block {

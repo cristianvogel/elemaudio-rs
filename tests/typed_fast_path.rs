@@ -4,7 +4,7 @@ use elemaudio_rs::{el, Graph, Runtime};
 fn mounted_graph_exposes_direct_update_handle() {
     let graph = Graph::new().render(el::const_(220.0));
 
-    let mounted = graph.mount();
+    let mounted = graph.mount().expect("mount");
     let root = mounted.node_at(&[0]).expect("mounted root node");
 
     assert_eq!(root.kind(), "const");
@@ -22,7 +22,7 @@ fn mounted_graph_batch_matches_lowered_graph() {
         .render(el::cycle(el::sm(el::const_(330.0))));
 
     let lowered = graph.lower().to_json_string();
-    let mounted = graph.mount().batch().to_json_string();
+    let mounted = graph.mount().expect("mount").batch().to_json_string();
 
     assert_eq!(mounted, lowered);
 }
@@ -31,7 +31,7 @@ fn mounted_graph_batch_matches_lowered_graph() {
 fn mounted_graph_can_find_nested_nodes_by_path() {
     let graph = Graph::new().render(el::add((el::const_(1.0), el::sin(el::const_(2.0)))));
 
-    let mounted = graph.mount();
+    let mounted = graph.mount().expect("mount");
 
     let root = mounted.node_at(&[0]).expect("mounted root node");
     let left = mounted.node_at(&[0, 0]).expect("left child node");
@@ -53,7 +53,7 @@ fn mounted_node_updates_audio_without_remounting() {
         .expect("runtime should construct");
 
     let graph = Graph::new().render(el::cycle(el::const_with_key("freq", 220.0)));
-    let mounted = graph.mount();
+    let mounted = graph.mount().expect("mount");
     let frequency = mounted
         .node_with_key("freq")
         .expect("mounted frequency node");

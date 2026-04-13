@@ -87,23 +87,17 @@ via `include_str!`.
 
 ```bash
 cd examples/plugin
-cargo build --release
+
+# Build, bundle, and install to ~/Library/Audio/Plug-Ins/CLAP/
+./bundle.sh --install
+
+# Or build without installing:
+./bundle.sh
+# Output: target/bundle/stride-delay-example.clap
 ```
 
-The output is `target/release/libstride_delay_plugin.dylib` — a CLAP plugin
-binary. To load it in a host, assemble a `.clap` bundle:
-
-```
-my-plugin.clap/
-  Contents/
-    MacOS/
-      libstride_delay_plugin.dylib
-    Info.plist
-```
-
-Or use the bundling tool from the
-[nel-x-audio-dev](https://github.com/user/nel-x-audio-dev) project which
-automates this.
+Then open your CLAP host (Bitwig, Reaper, etc.) and load "Stride Delay Example".
+The plugin is a stereo audio effect — insert it on a track with audio.
 
 ## How it works
 
