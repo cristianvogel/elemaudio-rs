@@ -30,7 +30,7 @@ fn play_graph_through_ring_buffer_with_fast_path_setter() -> Result<(), Box<dyn 
         .call()?;
 
     let graph = test_dsp::demo_graph();
-    let mounted = graph.mount();
+    let mounted = graph.mount().expect("mount");
 
     runtime.apply_instructions(mounted.batch())?;
 
@@ -171,10 +171,9 @@ fn play_mc_graph_through_ring_buffer() -> Result<(), Box<dyn Error>> {
         el::const_(1.0),
     );
 
-    let graph = Graph::new()
-        .render(stereo_sample_loop.clone());
+    let graph = Graph::new().render(stereo_sample_loop.clone());
 
-    let mounted = graph.mount();
+    let mounted = graph.mount().expect("mount");
     runtime.apply_instructions(mounted.batch())?;
 
     let ring = AudioRingBuffer::new(process_channels, sample_rate as usize, sample_rate)?;

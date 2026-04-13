@@ -183,7 +183,7 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 
     Node::new(
         "mul",
-        serde_json::Value::Null,
+        props,
         vec![amp_node, el::select(should_fold, folded, x)],
     )
 }
@@ -237,12 +237,20 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// use elemaudio_rs::{el, extra};
 /// use serde_json::json;
 ///
-/// // Static 24 dB/oct lowpass at 800 Hz.
+/// // Static 24 dB/oct lowpass at 800 Hz (slope = Some).
 /// let node = extra::vari_slope_svf(
 ///     json!({ "filterType": "lowpass" }),
 ///     el::const_(json!({ "value": 800.0 })),  // cutoff
 ///     source,                                   // audio
-///     el::const_(json!({ "value": 2.0 })),      // slope = 24 dB/oct
+///     Some(el::const_(json!({ "value": 2.0 }))),// slope = 24 dB/oct
+/// );
+///
+/// // Default slope (12 dB/oct) — pass None.
+/// let node = extra::vari_slope_svf(
+///     json!({ "filterType": "lowpass" }),
+///     el::const_(json!({ "value": 800.0 })),
+///     source,
+///     None::<Node>,
 /// );
 ///
 /// // Slope swept from 1.0 → 6.0 by an LFO for a dynamic order morph.
@@ -253,16 +261,19 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// );
 /// let node = extra::vari_slope_svf(
 ///     json!({ "filterType": "lowpass" }),
-///     cutoff, source, slope_lfo,
+///     cutoff, source, Some(slope_lfo),
 /// );
 /// ```
 pub fn vari_slope_svf(
     props: serde_json::Value,
     cutoff: impl Into<ElemNode>,
     audio: impl Into<ElemNode>,
-    slope: impl Into<ElemNode>,
+    slope: Option<impl Into<ElemNode>>,
 ) -> Node {
-    let children = vec![resolve(cutoff), resolve(audio), resolve(slope)];
+    let mut children = vec![resolve(cutoff), resolve(audio)];
+    if let Some(s) = slope {
+        children.push(resolve(s));
+    }
     Node::new("variSlopeSvf", props, children)
 }
 
@@ -293,8 +304,6 @@ pub fn vari_slope_svf(
 /// | `smoothingMs` | number | 0–2000  | 5       | Energy smoothing in ms (high values = spectral sustain) |
 /// | `maxGainDb`   | number | 0–100   | 40      | Per-band gain ceiling (dB) |
 ///
-/// `swapInputs` is fixed at 1 (on) internally and not exposed.
-///
 /// # Example
 ///
 /// ```ignore
@@ -315,18 +324,13 @@ pub fn vocoder(
     modulator_l: impl Into<ElemNode>,
     modulator_r: impl Into<ElemNode>,
 ) -> Vec<Node> {
-    // Merge swapInputs: 1 into the caller's props.
-    let mut merged = props;
-    if let serde_json::Value::Object(ref mut map) = merged {
-        map.insert("swapInputs".to_string(), serde_json::Value::from(1));
-    }
     let children = vec![
         resolve(carrier_l),
         resolve(carrier_r),
         resolve(modulator_l),
         resolve(modulator_r),
     ];
-    unpack(Node::new("vocoder", merged, children), 2)
+    unpack(Node::new("vocoder", props, children), 2)
 }
 
 /// Raw variable-width box sum helper.
@@ -566,145 +570,160 @@ fn box_average_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> N
     Node::new("boxaverage", props, vec![window_node, resolve(x)])
 }
 
-/// Native lookahead limiter helper.
+/// Native lookahead limiter helper (mono).
 ///
-/// Expects 1 child for mono input or 2 children for stereo input.
-pub fn limiter(
-    props: serde_json::Value,
-    args: impl IntoIterator<Item = impl Into<ElemNode>>,
-) -> Vec<Node> {
-    let args: Vec<ElemNode> = args.into_iter().map(Into::into).collect();
-    let node = Node::new("limiter", props, args.into_iter().map(resolve).collect());
-    vec![node]
+/// # Props
+///
+/// | Key               | Type   | Default              | Notes                   |
+/// |-------------------|--------|----------------------|-------------------------|
+/// | `key`             | string | —                    | Optional node identity  |
+/// | `maxDelayMs`      | number | 100                  | Lookahead buffer length |
+/// | `inputGain`       | number | 1                    | Pre-limiter gain        |
+/// | `outputLimit`     | number | 10^(-3/20) ≈ 0.708  | Maximum output level    |
+/// | `attackMs`        | number | 20                   | Attack time             |
+/// | `holdMs`          | number | 0                    | Hold time after peaks   |
+/// | `releaseMs`       | number | 0                    | Extra release time      |
+/// | `smoothingStages` | number | 1                    | Smoothing filter stages |
+/// | `linkChannels`    | number | 0.5                  | Channel gain linking    |
+pub fn limiter(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+    let resolved_props = limiter_resolve_defaults(props);
+    Node::new("limiter", resolved_props, vec![resolve(x)])
 }
 
-/// Stride-interpolated delay helper.
+/// Native lookahead limiter helper (stereo).
 ///
-/// Applies a stride-interpolated delay with configurable window length.
+/// Same props as [`limiter`]; takes two audio inputs and returns
+/// two output nodes via `unpack`.
+pub fn stereo_limiter(
+    props: serde_json::Value,
+    left: impl Into<ElemNode>,
+    right: impl Into<ElemNode>,
+) -> Vec<Node> {
+    let resolved_props = limiter_resolve_defaults(props);
+    unpack(
+        Node::new(
+            "limiter",
+            resolved_props,
+            vec![resolve(left), resolve(right)],
+        ),
+        2,
+    )
+}
+
+/// Apply defaults for limiter props to match the TS surface.
+fn limiter_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
+    let mut map = match props {
+        serde_json::Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+
+    map.entry("maxDelayMs")
+        .or_insert_with(|| serde_json::Value::from(100.0));
+    map.entry("inputGain")
+        .or_insert_with(|| serde_json::Value::from(1.0));
+    // -3 dBFS = 10^(-3/20)
+    map.entry("outputLimit")
+        .or_insert_with(|| serde_json::Value::from(10.0_f64.powf(-3.0 / 20.0)));
+    map.entry("attackMs")
+        .or_insert_with(|| serde_json::Value::from(20.0));
+    map.entry("holdMs")
+        .or_insert_with(|| serde_json::Value::from(0.0));
+    map.entry("releaseMs")
+        .or_insert_with(|| serde_json::Value::from(0.0));
+    map.entry("smoothingStages")
+        .or_insert_with(|| serde_json::Value::from(1));
+    map.entry("linkChannels")
+        .or_insert_with(|| serde_json::Value::from(0.5));
+
+    serde_json::Value::Object(map)
+}
+
+/// Stride-interpolated delay helper (mono).
 ///
-/// Supports two usage patterns:
+/// `delay_ms` and `fb` are signal children read at sample rate by the
+/// native node. Use `el::const_with_key(...)` for fast-path parameter
+/// updates, or any signal expression for modulation.
 ///
-/// 1. **Static window with keying** (for fast-path parameter updates):
-///    Pass props with `window` and `key`. The window can be updated via
-///    `mounted.node_with_key("{key}_window")` without rebuilding the graph.
+/// # Props (structural, not modulation targets)
 ///
-/// 2. **Dynamic window signal** (for sample-rate modulation):
-///    Pass a signal node as the window parameter for runtime sample-rate control.
-///    No keying is available in this mode.
+/// | Key            | Type   | Default    | Notes                          |
+/// |----------------|--------|------------|--------------------------------|
+/// | `key`          | string | —          | Optional stable node identity  |
+/// | `maxDelayMs`   | number | 1000       | Maximum delay buffer length    |
+/// | `transitionMs` | number | 100        | Crossfade length in ms         |
+/// | `bigLeapMode`  | string | "linear"   | "linear" or "step"             |
 ///
-/// # Example: Keyed static window with fast-path updates
+/// # Children layout
+///
+/// `[delay_ms, fb, audio_input]`
+///
+/// # Example
 ///
 /// ```ignore
 /// use elemaudio_rs::{Graph, el, extra};
 /// use serde_json::json;
 ///
-/// let graph = Graph::new().render(
-///     extra::stride_delay(
-///         json!({ "key": "delay", "window": 44100.0 }),  // 1 second at 44.1kHz
-///         el::cycle(el::const_(440.0)),
-///     )
+/// let delayed = extra::stride_delay(
+///     json!({ "maxDelayMs": 1500, "transitionMs": 60 }),
+///     el::const_with_key("delay", 250.0),   // delay_ms signal
+///     el::const_with_key("fb", 0.3),         // fb signal
+///     el::r#in(json!({"channel": 0}), None), // audio input
 /// );
-///
-/// let mounted = graph.mount();
-/// let batch = mounted.into_batch();
-/// runtime.execute(&batch);
-///
-/// // Later, update delay time without rebuilding the graph
-/// if let Some(delay_node) = mounted.node_with_key("delay_window") {
-///     let update = delay_node.set_const_value(22050.0);  // Now 0.5 seconds
-///     runtime.execute(&update);
-/// }
 /// ```
+pub fn stride_delay(
+    props: serde_json::Value,
+    delay_ms: impl Into<ElemNode>,
+    fb: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    let resolved_props = stride_delay_resolve_defaults(props);
+    Node::new(
+        "stridedelay",
+        resolved_props,
+        vec![resolve(delay_ms), resolve(fb), resolve(x)],
+    )
+}
+
+/// Stride-interpolated delay helper (stereo).
 ///
-/// # Example: Dynamic signal window for sample-rate modulation
-///
-/// ```ignore
-/// use elemaudio_rs::{Graph, el, extra};
-///
-/// // Delay time modulated by an envelope
-/// let delay_envelope = el::mul((
-///     el::const_(44100.0),  // 1 second max
-///     el::ad(el::const_(100.0), el::const_(500.0), el::const_(0.0)),
-/// ));
-///
-/// let graph = Graph::new().render(
-///     extra::stride_delay(
-///         delay_envelope,
-///         el::cycle(el::const_(440.0)),
-///     )
-/// );
-///
-/// let mounted = graph.mount();
-/// runtime.execute(&mounted.into_batch());
-/// ```
-pub fn stride_delay(window: impl Into<StrideDelayWindowInput>, x: impl Into<ElemNode>) -> Node {
-    match window.into() {
-        StrideDelayWindowInput::Props(props) => stride_delay_from_props(props, x),
-        StrideDelayWindowInput::Signal(window_signal) => Node::new(
+/// Same props as [`stride_delay`]; takes two audio inputs and returns
+/// two output nodes via `unpack`.
+pub fn stereo_stride_delay(
+    props: serde_json::Value,
+    delay_ms: impl Into<ElemNode>,
+    fb: impl Into<ElemNode>,
+    left: impl Into<ElemNode>,
+    right: impl Into<ElemNode>,
+) -> Vec<Node> {
+    let resolved_props = stride_delay_resolve_defaults(props);
+    unpack(
+        Node::new(
             "stridedelay",
-            serde_json::Value::Null,
-            vec![resolve(window_signal), resolve(x)],
+            resolved_props,
+            vec![
+                resolve(delay_ms),
+                resolve(fb),
+                resolve(left),
+                resolve(right),
+            ],
         ),
-    }
+        2,
+    )
 }
 
-/// Internal enum for stride_delay window input (props or signal).
-pub enum StrideDelayWindowInput {
-    /// Props object with static window and optional key
-    Props(serde_json::Value),
-    /// Dynamic signal node for sample-rate modulation
-    Signal(ElemNode),
-}
-
-impl From<serde_json::Value> for StrideDelayWindowInput {
-    fn from(props: serde_json::Value) -> Self {
-        StrideDelayWindowInput::Props(props)
-    }
-}
-
-impl From<Node> for StrideDelayWindowInput {
-    fn from(node: Node) -> Self {
-        StrideDelayWindowInput::Signal(ElemNode::Node(node))
-    }
-}
-
-impl From<f64> for StrideDelayWindowInput {
-    fn from(value: f64) -> Self {
-        StrideDelayWindowInput::Signal(ElemNode::Number(value))
-    }
-}
-
-/// Internal helper to construct stride_delay from props with keying support.
-fn stride_delay_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
-    let mut props = props;
-
-    // Extract and validate window length
-    let window = props
-        .get("window")
-        .and_then(|value| value.as_f64())
-        .expect("stride_delay helper props must include a positive numeric `window` value");
-
-    if !(window.is_finite() && window > 0.0) {
-        panic!("stride_delay helper props must include a positive numeric `window` value");
-    }
-
-    // Extract optional key prefix for fast-path updates
-    let key_prefix = props
-        .get("key")
-        .and_then(|value| value.as_str())
-        .map(|k| k.to_string());
-
-    // Remove control props before constructing the graph
-    if let serde_json::Value::Object(map) = &mut props {
-        map.remove("window");
-        map.remove("key");
-    }
-
-    // Create window node with key if a prefix was supplied
-    let window_node = match &key_prefix {
-        Some(prefix) => el::const_with_key(&format!("{}_window", prefix), window),
-        None => el::const_(window),
+/// Apply defaults for stride_delay props.
+fn stride_delay_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
+    let mut map = match props {
+        serde_json::Value::Object(m) => m,
+        _ => serde_json::Map::new(),
     };
 
-    Node::new("stridedelay", props, vec![window_node, resolve(x)])
+    map.entry("maxDelayMs")
+        .or_insert_with(|| serde_json::Value::from(1000.0));
+    map.entry("transitionMs")
+        .or_insert_with(|| serde_json::Value::from(100.0));
+    map.entry("bigLeapMode")
+        .or_insert_with(|| serde_json::Value::from("linear"));
+
+    serde_json::Value::Object(map)
 }

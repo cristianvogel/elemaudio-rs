@@ -73,14 +73,17 @@ function crunchBranch(key: string, input: NodeRepr_t, p: SynthParams): NodeRepr_
 }
 
 function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {
-  return el.extra.strideDelay({
-    key: "stride-delay-" + vn,
-    bigLeapMode: p.bigLeapMode,
-    fb: p.delayFeedback,
-    delayMs: p.delayTimeMs,
-    transitionMs: p.delayTransitionMs,
-    maxDelayMs: 1000,
-  }, x);
+  return el.extra.strideDelay(
+    {
+      key: "stride-delay-" + vn,
+      bigLeapMode: p.bigLeapMode,
+      transitionMs: p.delayTransitionMs,
+      maxDelayMs: 1000,
+    },
+    el.const({ value: p.delayTimeMs, key: "stride-delay-ms-" + vn }),
+    el.const({ value: p.delayFeedback, key: "stride-delay-fb-" + vn }),
+    x,
+  );
 }
 
 export function buildGraph(p: SynthParams): NodeRepr_t[] {

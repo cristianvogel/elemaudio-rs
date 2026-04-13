@@ -7,9 +7,11 @@
 mod audio_ring_buffer;
 pub mod authoring;
 pub mod core;
+pub mod engine;
 mod error;
 mod ffi;
 pub mod graph;
+pub mod logging;
 mod resource;
 mod runtime;
 
@@ -19,10 +21,12 @@ pub use audio_ring_buffer::AudioRingBuffer;
 pub use authoring::{el, extra, mc};
 /// Core node utilities mirroring the upstream package surface.
 pub use core::{create_node, is_node, resolve, unpack, ElemNode};
+/// Generic DSP engine with auto-diffing parameter updates.
+pub use engine::{DspGraph, Engine, KeyedConst, NativeProp};
 /// Error types and helpers used by the public API.
 pub use error::{Error, Result};
 /// Rust-native graph primitives.
-pub use graph::{Graph, MountedGraph, MountedNode, Node};
+pub use graph::{Graph, MountError, MountedGraph, MountedNode, Node};
 /// Rust-native resource registry and resource values.
 pub use resource::{AudioBuffer, Resource, ResourceId, ResourceManager};
 /// Instruction types and the runtime wrapper.

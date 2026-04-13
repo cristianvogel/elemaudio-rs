@@ -584,10 +584,6 @@ export interface StrideDelayProps extends Record<string, unknown> {
   key?: string;
   /** Maximum delay buffer length in milliseconds. */
   maxDelayMs?: number;
-  /** Target delay time in milliseconds. */
-  delayMs: number;
-  /** Feedback amount. */
-  fb?: number;
   /** Crossfade length in milliseconds. */
   transitionMs?: number;
   /** Big leap interpolation mode. */
@@ -596,31 +592,45 @@ export interface StrideDelayProps extends Record<string, unknown> {
 
 /**
  * Stride-interpolated delay for a mono source node.
+ *
+ * @param props    - stride delay properties (key, maxDelayMs, transitionMs, bigLeapMode)
+ * @param delayMs  - per-sample delay time signal in milliseconds
+ * @param fb       - per-sample feedback amount signal
+ * @param x        - mono audio input
  */
-export function strideDelay(props: StrideDelayProps, x: ElemNode): NodeRepr_t;
+export function strideDelay(props: StrideDelayProps, delayMs: ElemNode, fb: ElemNode, x: ElemNode): NodeRepr_t;
 /**
  * Stereo alias for `el.extra.strideDelay(...)`.
+ *
+ * @param props    - stride delay properties (key, maxDelayMs, transitionMs, bigLeapMode)
+ * @param delayMs  - per-sample delay time signal in milliseconds
+ * @param fb       - per-sample feedback amount signal
+ * @param left     - left audio input
+ * @param right    - right audio input
  */
 export function strideDelay(
   props: StrideDelayProps,
+  delayMs: ElemNode,
+  fb: ElemNode,
   left: ElemNode,
   right: ElemNode,
 ): Array<NodeRepr_t>;
 /**
  * Stride-interpolated delay.
  *
- * The mono overload accepts a single `el` node. The stereo overload accepts
+ * `delayMs` and `fb` are node arguments (children), not props.
+ * The mono overload accepts a single audio input. The stereo overload accepts
  * explicit left/right inputs.
  */
 export function strideDelay(
   props: StrideDelayProps,
+  delayMs: ElemNode,
+  fb: ElemNode,
   x: ElemNode,
   right?: ElemNode,
 ): NodeRepr_t | Array<NodeRepr_t> {
   const {
     maxDelayMs = 1000,
-    delayMs,
-    fb = 0,
     transitionMs = 100,
     bigLeapMode = "linear",
     ...other
@@ -629,18 +639,16 @@ export function strideDelay(
   const resolvedProps = {
     ...other,
     maxDelayMs,
-    delayMs,
-    fb,
     transitionMs,
     bigLeapMode,
   };
 
   if (right === undefined) {
-    return createNode("stridedelay", resolvedProps, [resolve(x)]);
+    return createNode("stridedelay", resolvedProps, [resolve(delayMs), resolve(fb), resolve(x)]);
   }
 
   return unpack(
-    createNode("stridedelay", resolvedProps, [resolve(x), resolve(right)]),
+    createNode("stridedelay", resolvedProps, [resolve(delayMs), resolve(fb), resolve(x), resolve(right)]),
     2,
   );
 }
@@ -650,8 +658,10 @@ export function strideDelay(
  */
 export function stereoStrideDelay(
   props: StrideDelayProps,
+  delayMs: ElemNode,
+  fb: ElemNode,
   left: ElemNode,
   right: ElemNode,
 ): Array<NodeRepr_t> {
-  return strideDelay(props, left, right) as Array<NodeRepr_t>;
+  return strideDelay(props, delayMs, fb, left, right) as Array<NodeRepr_t>;
 }

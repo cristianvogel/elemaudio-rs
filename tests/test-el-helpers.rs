@@ -865,7 +865,8 @@ fn covers_extra_helpers() {
         serde_json::json!({"thresh": 1.0, "amp": 0.5}),
         ElemNode::from(node(1.0)),
     );
-    assert_node(&foldback_node, "mul", serde_json::Value::Null, 2);
+    // After extracting thresh and amp, remaining props is an empty object.
+    assert_node(&foldback_node, "mul", serde_json::json!({}), 2);
 }
 
 #[test]

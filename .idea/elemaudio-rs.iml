@@ -5,9 +5,12 @@
       <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/plugin/crates/dsp/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/plugin/crates/plugin/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/Ydun_ai_workflow" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/src/vendor/elementary/build" />
+      <excludeFolder url="file://$MODULE_DIR$/examples/plugin/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
