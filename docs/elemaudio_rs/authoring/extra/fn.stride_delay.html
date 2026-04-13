@@ -1,55 +1,27 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Stride-interpolated delay helper."><title>stride_delay in elemaudio_rs::authoring::extra - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-77263533.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.94.1 (e408947bf 2026-03-25)" data-channel="1.94.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-7bab91a1.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">stride_delay</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../elemaudio_rs/index.html">elemaudio_<wbr>rs</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">stride_<wbr>delay</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example-keyed-static-window-with-fast-path-updates" title="Example: Keyed static window with fast-path updates">Example: Keyed static window with fast-path updates</a></li><li><a href="#example-dynamic-signal-window-for-sample-rate-modulation" title="Example: Dynamic signal window for sample-rate modulation">Example: Dynamic signal window for sample-rate modulation</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In elemaudio_<wbr>rs::<wbr>authoring::<wbr>extra</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">elemaudio_rs</a>::<wbr><a href="../index.html">authoring</a>::<wbr><a href="index.html">extra</a></div><h1>Function <span class="fn">stride_<wbr>delay</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/elemaudio_rs/authoring/extra.rs.html#640-649">Source</a> </span></div><pre class="rust item-decl"><code>pub fn stride_delay(
-    window: impl <a class="trait" href="https://doc.rust-lang.org/1.94.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="enum.StrideDelayWindowInput.html" title="enum elemaudio_rs::authoring::extra::StrideDelayWindowInput">StrideDelayWindowInput</a>&gt;,
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Stride-interpolated delay helper (mono)."><title>stride_delay in elemaudio_rs::authoring::extra - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-77263533.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.94.1 (e408947bf 2026-03-25)" data-channel="1.94.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-7bab91a1.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">stride_delay</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../elemaudio_rs/index.html">elemaudio_<wbr>rs</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">stride_<wbr>delay</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#props-structural-not-modulation-targets" title="Props (structural, not modulation targets)">Props (structural, not modulation targets)</a></li><li><a href="#children-layout" title="Children layout">Children layout</a></li><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In elemaudio_<wbr>rs::<wbr>authoring::<wbr>extra</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">elemaudio_rs</a>::<wbr><a href="../index.html">authoring</a>::<wbr><a href="index.html">extra</a></div><h1>Function <span class="fn">stride_<wbr>delay</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/elemaudio_rs/authoring/extra.rs.html#673-685">Source</a> </span></div><pre class="rust item-decl"><code>pub fn stride_delay(
+    props: <a class="enum" href="https://docs.rs/serde_json/1.0.149/serde_json/value/enum.Value.html" title="enum serde_json::value::Value">Value</a>,
+    delay_ms: impl <a class="trait" href="https://doc.rust-lang.org/1.94.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="../../core/enum.ElemNode.html" title="enum elemaudio_rs::core::ElemNode">ElemNode</a>&gt;,
+    fb: impl <a class="trait" href="https://doc.rust-lang.org/1.94.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="../../core/enum.ElemNode.html" title="enum elemaudio_rs::core::ElemNode">ElemNode</a>&gt;,
     x: impl <a class="trait" href="https://doc.rust-lang.org/1.94.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="../../core/enum.ElemNode.html" title="enum elemaudio_rs::core::ElemNode">ElemNode</a>&gt;,
-) -&gt; <a class="struct" href="../../graph/struct.Node.html" title="struct elemaudio_rs::graph::Node">Node</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Stride-interpolated delay helper.</p>
-<p>Applies a stride-interpolated delay with configurable window length.</p>
-<p>Supports two usage patterns:</p>
-<ol>
-<li>
-<p><strong>Static window with keying</strong> (for fast-path parameter updates):
-Pass props with <code>window</code> and <code>key</code>. The window can be updated via
-<code>mounted.node_with_key("{key}_window")</code> without rebuilding the graph.</p>
-</li>
-<li>
-<p><strong>Dynamic window signal</strong> (for sample-rate modulation):
-Pass a signal node as the window parameter for runtime sample-rate control.
-No keying is available in this mode.</p>
-</li>
-</ol>
-<h2 id="example-keyed-static-window-with-fast-path-updates"><a class="doc-anchor" href="#example-keyed-static-window-with-fast-path-updates">§</a>Example: Keyed static window with fast-path updates</h2>
+) -&gt; <a class="struct" href="../../graph/struct.Node.html" title="struct elemaudio_rs::graph::Node">Node</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Stride-interpolated delay helper (mono).</p>
+<p><code>delay_ms</code> and <code>fb</code> are signal children read at sample rate by the
+native node. Use <code>el::const_with_key(...)</code> for fast-path parameter
+updates, or any signal expression for modulation.</p>
+<h2 id="props-structural-not-modulation-targets"><a class="doc-anchor" href="#props-structural-not-modulation-targets">§</a>Props (structural, not modulation targets)</h2><div><table><thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>key</code></td><td>string</td><td>—</td><td>Optional stable node identity</td></tr>
+<tr><td><code>maxDelayMs</code></td><td>number</td><td>1000</td><td>Maximum delay buffer length</td></tr>
+<tr><td><code>transitionMs</code></td><td>number</td><td>100</td><td>Crossfade length in ms</td></tr>
+<tr><td><code>bigLeapMode</code></td><td>string</td><td>“linear”</td><td>“linear” or “step”</td></tr>
+</tbody></table>
+</div><h2 id="children-layout"><a class="doc-anchor" href="#children-layout">§</a>Children layout</h2>
+<p><code>[delay_ms, fb, audio_input]</code></p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
 <div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>elemaudio_rs::{Graph, el, extra};
 <span class="kw">use </span>serde_json::json;
 
-<span class="kw">let </span>graph = Graph::new().render(
-    extra::stride_delay(
-        <span class="macro">json!</span>({ <span class="string">"key"</span>: <span class="string">"delay"</span>, <span class="string">"window"</span>: <span class="number">44100.0 </span>}),  <span class="comment">// 1 second at 44.1kHz
-        </span>el::cycle(el::const_(<span class="number">440.0</span>)),
-    )
-);
-
-<span class="kw">let </span>mounted = graph.mount();
-<span class="kw">let </span>batch = mounted.into_batch();
-runtime.execute(<span class="kw-2">&amp;</span>batch);
-
-<span class="comment">// Later, update delay time without rebuilding the graph
-</span><span class="kw">if let </span><span class="prelude-val">Some</span>(delay_node) = mounted.node_with_key(<span class="string">"delay_window"</span>) {
-    <span class="kw">let </span>update = delay_node.set_const_value(<span class="number">22050.0</span>);  <span class="comment">// Now 0.5 seconds
-    </span>runtime.execute(<span class="kw-2">&amp;</span>update);
-}</code></pre></div><h2 id="example-dynamic-signal-window-for-sample-rate-modulation"><a class="doc-anchor" href="#example-dynamic-signal-window-for-sample-rate-modulation">§</a>Example: Dynamic signal window for sample-rate modulation</h2>
-<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>elemaudio_rs::{Graph, el, extra};
-
-<span class="comment">// Delay time modulated by an envelope
-</span><span class="kw">let </span>delay_envelope = el::mul((
-    el::const_(<span class="number">44100.0</span>),  <span class="comment">// 1 second max
-    </span>el::ad(el::const_(<span class="number">100.0</span>), el::const_(<span class="number">500.0</span>), el::const_(<span class="number">0.0</span>)),
-));
-
-<span class="kw">let </span>graph = Graph::new().render(
-    extra::stride_delay(
-        delay_envelope,
-        el::cycle(el::const_(<span class="number">440.0</span>)),
-    )
-);
-
-<span class="kw">let </span>mounted = graph.mount();
-runtime.execute(<span class="kw-2">&amp;</span>mounted.into_batch());</code></pre></div></div></details></section></div></main></body></html>
+<span class="kw">let </span>delayed = extra::stride_delay(
+    <span class="macro">json!</span>({ <span class="string">"maxDelayMs"</span>: <span class="number">1500</span>, <span class="string">"transitionMs"</span>: <span class="number">60 </span>}),
+    el::const_with_key(<span class="string">"delay"</span>, <span class="number">250.0</span>),   <span class="comment">// delay_ms signal
+    </span>el::const_with_key(<span class="string">"fb"</span>, <span class="number">0.3</span>),         <span class="comment">// fb signal
+    </span>el::r#in(<span class="macro">json!</span>({<span class="string">"channel"</span>: <span class="number">0</span>}), <span class="prelude-val">None</span>), <span class="comment">// audio input
+</span>);</code></pre></div></div></details></section></div></main></body></html>

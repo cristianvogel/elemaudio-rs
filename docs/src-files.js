@@ -1,2 +1,2 @@
-createSrcSidebar('[["elemaudio_rs",["",[["authoring",[],["el.rs","extra.rs","mc.rs","mod.rs"]]],["audio_ring_buffer.rs","core.rs","error.rs","ffi.rs","graph.rs","lib.rs","resource.rs","runtime.rs"]]],["resource_manager_server",["",[],["resource-manager-server.rs"]]],["resource_vfs_demo",["",[],["resource-vfs-demo.rs"]]]]');
-//{"start":19,"fragment_lengths":[180,67,55]}
+createSrcSidebar('[["elemaudio_rs",["",[["authoring",[],["el.rs","extra.rs","mc.rs","mod.rs"]]],["audio_ring_buffer.rs","core.rs","engine.rs","error.rs","ffi.rs","graph.rs","lib.rs","logging.rs","resource.rs","runtime.rs"]]],["resource_manager_server",["",[],["resource-manager-server.rs"]]],["resource_vfs_demo",["",[],["resource-vfs-demo.rs"]]]]');
+//{"start":19,"fragment_lengths":[205,67,55]}
