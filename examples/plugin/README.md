@@ -2,7 +2,10 @@
 
 A minimal stereo stride delay effect plugin demonstrating how to author an Elementary Audio
 graph in Rust and host it inside a CLAP plugin with a Wry webview GUI. This is a milestone for the development of this project.
+---
+#### 📍 This bundler does NOT clean the Library/Audio/Plug-Ins/CLAP/ folder , but will erase previous builds of the plugin.
 
+---
 ## What this proves
 
 The same DSP graph that runs in the browser (via the TS authoring surface in
