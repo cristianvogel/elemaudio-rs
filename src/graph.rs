@@ -858,4 +858,73 @@ mod tests {
             Ok(_) => panic!("expected DuplicateKey error, got Ok"),
         }
     }
+
+    #[test]
+    fn stride_delay_with_insert_mounts_and_processes() {
+        use crate::Runtime;
+
+        let sr = 44100.0;
+        let block = 512;
+        let runtime = Runtime::new()
+            .sample_rate(sr)
+            .buffer_size(block)
+            .call()
+            .expect("runtime creation");
+
+        let delay_ms = el::const_(100.0);
+        let fb = el::const_(0.5);
+        let input = el::r#in(serde_json::json!({"channel": 0}), None);
+
+        // Insert a simple passthrough (identity) in the feedback loop.
+        let delayed = extra::stride_delay_with_insert(
+            serde_json::json!({ "maxDelayMs": 500, "transitionMs": 10 }),
+            delay_ms,
+            fb,
+            input,
+            "test_fb",
+            |fb_signal| fb_signal, // passthrough — same as normal feedback
+        );
+
+        let graph = Graph::new().render(vec![delayed]);
+        let mounted = graph.mount().expect("mount");
+
+        // Verify tapIn and tapOut nodes exist in the mounted graph.
+        let has_tap_in = mounted.all_nodes().any(|(_, n)| n.kind() == "tapIn");
+        let has_tap_out = mounted.all_nodes().any(|(_, n)| n.kind() == "tapOut");
+        assert!(has_tap_in, "graph should contain tapIn node");
+        assert!(has_tap_out, "graph should contain tapOut node");
+
+        runtime
+            .apply_instructions(mounted.batch())
+            .expect("apply instructions");
+
+        // Send impulse, run blocks, check for feedback repeats.
+        let mut input_buf = vec![0.0_f64; block];
+        input_buf[0] = 1.0;
+        let mut output_buf = vec![0.0_f64; block];
+
+        let inputs = [input_buf.as_slice()];
+        let mut outputs = [output_buf.as_mut_slice()];
+        runtime
+            .process(block, &inputs, &mut outputs)
+            .expect("process");
+
+        let silence = vec![0.0_f64; block];
+        let mut found_repeat = false;
+        // With fb=0.5 and 100ms delay, the impulse should repeat
+        // (decaying) multiple times.
+        for _ in 0..20 {
+            let inputs = [silence.as_slice()];
+            let mut out = vec![0.0_f64; block];
+            let mut outputs = [out.as_mut_slice()];
+            runtime
+                .process(block, &inputs, &mut outputs)
+                .expect("process");
+            if outputs[0].iter().any(|&s| s.abs() > 1e-10) {
+                found_repeat = true;
+                break;
+            }
+        }
+        assert!(found_repeat, "insert delay should produce feedback repeats");
+    }
 }

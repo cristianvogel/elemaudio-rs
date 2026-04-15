@@ -711,6 +711,84 @@ pub fn stereo_stride_delay(
     )
 }
 
+/// Stride delay with a feedback insert loop (mono).
+///
+/// The user-supplied `insert` closure receives the feedback tap signal
+/// and returns a processed version. The processed signal is mixed with
+/// `fb` and summed back into the delay input. The delay node itself
+/// runs with zero internal feedback — the loop is external via
+/// `tapIn`/`tapOut` with 1-block latency.
+///
+/// # Arguments
+///
+/// - `props` — same as [`stride_delay`] (maxDelayMs, transitionMs, bigLeapMode)
+/// - `delay_ms` — delay time signal child
+/// - `fb` — feedback amount signal child (applied to the insert return)
+/// - `x` — audio input
+/// - `tap_name` — unique name for the feedback tap pair
+/// - `insert` — closure: receives feedback signal, returns processed signal
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// // Delay with a lowpass filter in the feedback loop
+/// let delayed = extra::stride_delay_with_insert(
+///     json!({ "maxDelayMs": 1500, "transitionMs": 60 }),
+///     el::const_with_key("delay", 250.0),
+///     el::const_with_key("fb", 0.5),
+///     el::r#in(json!({"channel": 0}), None),
+///     "fb_loop",
+///     |fb_signal| el::lowpass(el::const_(2000.0), el::const_(0.707), fb_signal),
+/// );
+/// ```
+///
+/// # Signal flow
+///
+/// ```text
+/// tap_in("fb_loop") ──► insert(signal) ──► * fb ──┐
+///                                                   ▼
+/// audio_input ──────────────────────────► add ──► stridedelay(fb=0)
+///                                                      │
+///                                              tap_out("fb_loop") ──► output
+/// ```
+///
+/// Note: the feedback path has 1-block latency (tapIn/tapOut).
+pub fn stride_delay_with_insert(
+    props: serde_json::Value,
+    delay_ms: impl Into<ElemNode>,
+    fb: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+    tap_name: &str,
+    insert: impl FnOnce(Node) -> Node,
+) -> Node {
+    let resolved_props = stride_delay_resolve_defaults(props);
+    let input = resolve(x);
+    let fb_signal = resolve(fb);
+
+    // Tap the feedback path from the previous block.
+    let fb_tap = el::tap_in(serde_json::json!({"name": tap_name}));
+
+    // User processes the feedback signal.
+    let processed = insert(fb_tap);
+
+    // Mix feedback return with the original input.
+    let feedback_mix = el::mul((fb_signal, processed));
+    let summed_input = el::add((input, feedback_mix));
+
+    // Run the delay with fb=0 (external feedback loop handles it).
+    let delayed = Node::new(
+        "stridedelay",
+        resolved_props,
+        vec![resolve(delay_ms), resolve(0.0), summed_input],
+    );
+
+    // Tap the output for next block's feedback.
+    el::tap_out(serde_json::json!({"name": tap_name}), delayed)
+}
+
 /// Apply defaults for stride_delay props.
 fn stride_delay_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
     let mut map = match props {
