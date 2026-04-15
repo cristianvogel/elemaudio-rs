@@ -713,20 +713,21 @@ pub fn stereo_stride_delay(
 
 /// Stride delay with a feedback insert loop (mono).
 ///
-/// The user-supplied `insert` closure receives the feedback tap signal
-/// and returns a processed version. The processed signal is mixed with
-/// `fb` and summed back into the delay input. The delay node itself
-/// runs with zero internal feedback — the loop is external via
-/// `tapIn`/`tapOut` with 1-block latency.
+/// The `insert` closure receives the **feedback audio signal** — the
+/// actual delayed audio coming back through the tap — and returns a
+/// processed version (e.g., filtered, pitch-shifted). The `fb` argument
+/// is the **feedback amount** (a gain coefficient) applied to the insert
+/// return before summing back into the delay input.
 ///
-/// # Arguments
+/// Requires `"fbtap"` in props — a unique name for the tapIn/tapOut pair.
 ///
-/// - `props` — same as [`stride_delay`] (maxDelayMs, transitionMs, bigLeapMode)
-/// - `delay_ms` — delay time signal child
-/// - `fb` — feedback amount signal child (applied to the insert return)
-/// - `x` — audio input
-/// - `tap_name` — unique name for the feedback tap pair
-/// - `insert` — closure: receives feedback signal, returns processed signal
+/// # Props
+///
+/// Same as [`stride_delay`] plus:
+///
+/// | Key       | Type   | Required | Notes                              |
+/// |-----------|--------|----------|------------------------------------|
+/// | `fbtap`   | string | yes      | Unique tap name for feedback loop  |
 ///
 /// # Example
 ///
@@ -734,25 +735,30 @@ pub fn stereo_stride_delay(
 /// use elemaudio_rs::{el, extra};
 /// use serde_json::json;
 ///
-/// // Delay with a lowpass filter in the feedback loop
+/// // Delay with a lowpass filter darkening each repeat
 /// let delayed = extra::stride_delay_with_insert(
-///     json!({ "maxDelayMs": 1500, "transitionMs": 60 }),
-///     el::const_with_key("delay", 250.0),
-///     el::const_with_key("fb", 0.5),
-///     el::r#in(json!({"channel": 0}), None),
-///     "fb_loop",
-///     |fb_signal| el::lowpass(el::const_(2000.0), el::const_(0.707), fb_signal),
+///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb_loop" }),
+///     el::const_with_key("delay", 250.0),    // delay time
+///     el::const_with_key("fb_amt", 0.5),     // feedback amount
+///     el::r#in(json!({"channel": 0}), None), // audio input
+///     |fb_audio| {
+///         // fb_audio is the delayed signal coming back through the loop.
+///         // Filter it so each repeat gets darker.
+///         el::lowpass(el::const_(2000.0), el::const_(0.707), fb_audio)
+///     },
 /// );
 /// ```
 ///
 /// # Signal flow
 ///
 /// ```text
-/// tap_in("fb_loop") ──► insert(signal) ──► * fb ──┐
-///                                                   ▼
-/// audio_input ──────────────────────────► add ──► stridedelay(fb=0)
-///                                                      │
-///                                              tap_out("fb_loop") ──► output
+///                    ┌─── insert(fb_audio) ◄── tapIn(fbtap)
+///                    ▼
+/// fb_amount * insert_return ──┐
+///                              ▼
+/// audio_input ────────── add ──► stridedelay(internal fb=0)
+///                                       │
+///                               tapOut(fbtap) ──► output
 /// ```
 ///
 /// Note: the feedback path has 1-block latency (tapIn/tapOut).
@@ -761,24 +767,37 @@ pub fn stride_delay_with_insert(
     delay_ms: impl Into<ElemNode>,
     fb: impl Into<ElemNode>,
     x: impl Into<ElemNode>,
-    tap_name: &str,
     insert: impl FnOnce(Node) -> Node,
 ) -> Node {
+    let mut props = props;
+
+    // Extract fbtap name from props.
+    let fbtap = props
+        .get("fbtap")
+        .and_then(|v| v.as_str())
+        .expect("stride_delay_with_insert requires 'fbtap' prop")
+        .to_string();
+
+    // Remove fbtap before passing to the native node.
+    if let serde_json::Value::Object(ref mut map) = props {
+        map.remove("fbtap");
+    }
+
     let resolved_props = stride_delay_resolve_defaults(props);
     let input = resolve(x);
     let fb_signal = resolve(fb);
 
-    // Tap the feedback path from the previous block.
-    let fb_tap = el::tap_in(serde_json::json!({"name": tap_name}));
+    // Tap the feedback audio from the previous block.
+    let fb_audio = el::tap_in(serde_json::json!({"name": fbtap}));
 
-    // User processes the feedback signal.
-    let processed = insert(fb_tap);
+    // User processes the feedback audio.
+    let processed = insert(fb_audio);
 
-    // Mix feedback return with the original input.
+    // Apply feedback amount to processed return, sum with input.
     let feedback_mix = el::mul((fb_signal, processed));
     let summed_input = el::add((input, feedback_mix));
 
-    // Run the delay with fb=0 (external feedback loop handles it).
+    // Run delay with internal fb=0 (external loop handles feedback).
     let delayed = Node::new(
         "stridedelay",
         resolved_props,
@@ -786,7 +805,85 @@ pub fn stride_delay_with_insert(
     );
 
     // Tap the output for next block's feedback.
-    el::tap_out(serde_json::json!({"name": tap_name}), delayed)
+    el::tap_out(serde_json::json!({"name": fbtap}), delayed)
+}
+
+/// Stereo stride delay with feedback insert loops.
+///
+/// Builds two independent mono insert delays (L/R) with per-channel
+/// tap names derived from `props.fbtap`: `"{fbtap}:L"` and `"{fbtap}:R"`.
+///
+/// The `insert` closure is called twice — once per channel — with the
+/// feedback audio and a channel tag (`"L"` or `"R"`) so the user can
+/// create per-channel keyed nodes inside the insert chain.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// let [left, right] = extra::stereo_stride_delay_with_insert(
+///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb" }),
+///     el::const_with_key("delay", 250.0),
+///     el::const_with_key("fb_amt", 0.5),
+///     el::r#in(json!({"channel": 0}), None),
+///     el::r#in(json!({"channel": 1}), None),
+///     |fb_audio, tag| {
+///         el::lowpass(
+///             el::const_with_key(&format!("insert_fc:{tag}"), 2000.0),
+///             el::const_(0.707),
+///             fb_audio,
+///         )
+///     },
+/// );
+/// ```
+pub fn stereo_stride_delay_with_insert(
+    props: serde_json::Value,
+    delay_ms: impl Into<ElemNode>,
+    fb: impl Into<ElemNode>,
+    left: impl Into<ElemNode>,
+    right: impl Into<ElemNode>,
+    insert: impl Fn(Node, &str) -> Node,
+) -> [Node; 2] {
+    let mut props_obj = match props {
+        serde_json::Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+
+    let fbtap = props_obj
+        .get("fbtap")
+        .and_then(|v| v.as_str())
+        .expect("stereo_stride_delay_with_insert requires 'fbtap' prop")
+        .to_string();
+    props_obj.remove("fbtap");
+
+    let resolved_props = stride_delay_resolve_defaults(serde_json::Value::Object(props_obj));
+    let delay_node = resolve(delay_ms);
+    let fb_node = resolve(fb);
+
+    let build_channel = |input: Node, tag: &str| -> Node {
+        let tap_name = format!("{fbtap}:{tag}");
+
+        let fb_audio = el::tap_in(serde_json::json!({"name": &tap_name}));
+        let processed = insert(fb_audio, tag);
+
+        let feedback_mix = el::mul((fb_node.clone(), processed));
+        let summed_input = el::add((input, feedback_mix));
+
+        let delayed = Node::new(
+            "stridedelay",
+            resolved_props.clone(),
+            vec![delay_node.clone(), resolve(0.0), summed_input],
+        );
+
+        el::tap_out(serde_json::json!({"name": &tap_name}), delayed)
+    };
+
+    [
+        build_channel(resolve(left), "L"),
+        build_channel(resolve(right), "R"),
+    ]
 }
 
 /// Apply defaults for stride_delay props.

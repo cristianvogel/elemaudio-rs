@@ -877,12 +877,11 @@ mod tests {
 
         // Insert a simple passthrough (identity) in the feedback loop.
         let delayed = extra::stride_delay_with_insert(
-            serde_json::json!({ "maxDelayMs": 500, "transitionMs": 10 }),
+            serde_json::json!({ "maxDelayMs": 500, "transitionMs": 10, "fbtap": "test_fb" }),
             delay_ms,
             fb,
             input,
-            "test_fb",
-            |fb_signal| fb_signal, // passthrough — same as normal feedback
+            |fb_audio| fb_audio, // passthrough — same as normal feedback
         );
 
         let graph = Graph::new().render(vec![delayed]);

@@ -15,17 +15,21 @@ The node types, props, and processing kernels are identical across both surfaces
 ```
               TS (browser)                          Rust (native plugin)
   ┌─────────────────────────────────┐   ┌─────────────────────────────────┐
-  │ el.strideDelay({                │   │ extra::stride_delay(json!({     │
-  │   delayMs: 250,                 │   │     "delayMs": 250,             │
-  │   fb: 0.3,                      │   │     "fb": 0.3,                  │
-  │   transitionMs: 60,             │   │     "transitionMs": 60,         │
-  │ }, input)                       │   │ }), input)                      │
+  │ el.extra.strideDelay(           │   │ extra::stride_delay(            │
+  │   { maxDelayMs: 1500 },         │   │   json!({"maxDelayMs": 1500}),  │
+  │   el.const({value: 250}),       │   │   el::const_(250.0),            │
+  │   el.const({value: 0.3}),       │   │   el::const_(0.3),              │
+  │   input,                        │   │   input,                        │
+  │ )                               │   │ )                               │
   └────────────┬────────────────────┘   └────────────┬────────────────────┘
                │                                     │
                ▼                                     ▼
         elem::Runtime<float>                  elem::Runtime<double>
         (WASM, AudioWorklet)                  (native C++ via FFI)
 ```
+
+`delayMs` and `fb` are signal children (not props), enabling sample-rate
+modulation and graph-level per-channel variation.
 
 The key difference is the **input source**:
 
@@ -69,18 +73,21 @@ higher channel indices and more roots in the render call.
 ```
 examples/plugin/
 ├── Cargo.toml                 workspace manifest
+├── bundle.sh                  macOS .clap bundler (build + optional install)
 ├── ui/
 │   └── index.html             webview GUI (vanilla JS, no build step)
 ├── crates/
 │   ├── dsp/
-│   │   └── src/lib.rs         StrideDelayEngine — graph authoring + property updates
+│   │   └── src/
+│   │       ├── lib.rs          DspParameters, constants, clamping
+│   │       └── graph_script.rs StrideDelayGraph — pure el::* graph (~50 lines)
 │   └── plugin/
 │       └── src/
-│           ├── clack_entry.rs CLAP entry point
-│           ├── shared.rs      lock-free parameter store (atomic f32 relay)
-│           ├── editor.rs      Wry webview editor (macOS, embedded HTML)
-│           ├── plugin.rs      audio processor, main thread, GUI lifecycle
-│           └── params.rs      CLAP parameter declarations, state save/load
+│           ├── clack_entry.rs  CLAP entry point
+│           ├── shared.rs       lock-free parameter store (atomic f32 relay)
+│           ├── editor.rs       Wry webview editor (macOS, embedded HTML)
+│           ├── plugin.rs       audio processor, main thread, GUI lifecycle
+│           └── params.rs       CLAP parameter declarations, state save/load
 ```
 
 No npm, no SolidJS, no Vite, no bundler. The HTML is embedded at compile time
@@ -104,25 +111,52 @@ The plugin is a stereo audio effect — insert it on a track with audio.
 
 ## How it works
 
-### DSP (`crates/dsp/src/lib.rs`)
+### DSP (`crates/dsp/src/graph_script.rs`)
 
-The `StrideDelayEngine` builds a stereo stride delay graph at activation:
+The graph is authored as a pure `DspGraph` implementation — the framework's
+`Engine<StrideDelayGraph>` handles mounting, parameter diffing, and runtime
+delegation. The graph script is ~50 lines of `el::*` code:
 
 ```rust
-let delayed = extra::stride_delay(
-    json!({
-        "delayMs": 250.0,
-        "maxDelayMs": 1500.0,
-        "fb": 0.3,
-        "transitionMs": 60.0,
-        "bigLeapMode": "linear",
-    }),
-    el::r#in(json!({"channel": 0}), None),
+impl DspGraph for StrideDelayGraph {
+    type Params = DspParameters;
+
+    fn build(p: &DspParameters) -> Vec<Node> {
+        let channel = |ch: usize, tag: &str| {
+            let input = el::r#in(json!({"channel": ch}), None);
+            let delay = el::const_with_key(&format!("sd:{tag}:delay"), p.delay_ms as f64);
+            let fb = el::const_with_key(&format!("sd:{tag}:fb"), p.feedback as f64);
+
+            let delayed = extra::stride_delay(
+                json!({ "maxDelayMs": MAX_DELAY_MS, "transitionMs": p.transition_ms as f64 }),
+                delay, fb, input.clone(),
+            );
+            // wet/dry blend ...
+        };
+        vec![channel(0, "L"), channel(1, "R")]
+    }
+}
+```
+
+The engine auto-discovers keyed consts and native node props from the graph
+tree — no manual declarations needed. Parameter changes emit targeted
+`set_const_value` / `SetProperty` instructions — no graph rebuild.
+
+### Feedback insert loop
+
+The `stride_delay_with_insert` helper enables processing in the feedback path:
+
+```rust
+let delayed = extra::stride_delay_with_insert(
+    json!({ "maxDelayMs": 1500, "fbtap": "fb_loop" }),
+    delay_ms, fb_amount, input,
+    |fb_audio| el::lowpass(cutoff, q, fb_audio),  // darken each repeat
 );
 ```
 
-The graph is mounted once. Parameter changes emit targeted `SetProperty`
-instructions to existing nodes — no graph rebuild, no node ID churn.
+The insert closure receives the feedback audio signal and returns a processed
+version. Implemented via `tapIn`/`tapOut` with 1-block latency. A stereo
+variant (`stereo_stride_delay_with_insert`) builds per-channel tap pairs.
 
 ### Audio processing (`plugin.rs`)
 
@@ -150,4 +184,4 @@ real-time audio threads.
 
 ## Date
 
-2026-04-12
+2026-04-13
