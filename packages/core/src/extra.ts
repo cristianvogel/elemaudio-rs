@@ -588,6 +588,11 @@ export interface StrideDelayProps extends Record<string, unknown> {
   transitionMs?: number;
   /** Big leap interpolation mode. */
   bigLeapMode?: StrideDelayBigLeapMode;
+  /**
+   * Feedback tap name for `strideDelayWithInsert`.
+   * When set, names the tapIn/tapOut pair used for the external feedback loop.
+   */
+  fbtap?: string;
 }
 
 /**
@@ -664,4 +669,168 @@ export function stereoStrideDelay(
   right: ElemNode,
 ): Array<NodeRepr_t> {
   return strideDelay(props, delayMs, fb, left, right) as Array<NodeRepr_t>;
+}
+
+/**
+ * Stride delay with a feedback insert loop (mono).
+ *
+ * The `insert` callback receives the **feedback audio signal** — the
+ * actual delayed audio coming back through the tap — and returns a
+ * processed version (e.g., filtered, pitch-shifted). The `fb` argument
+ * is the **feedback amount** (a gain coefficient, typically 0–1) applied
+ * to the insert return before it is summed back into the delay input.
+ *
+ * Requires `props.fbtap` — a unique name for the tapIn/tapOut pair.
+ *
+ * **Feedback path has 1-block latency** (inherent to tapIn/tapOut).
+ *
+ * @param props    - stride delay props; must include `fbtap` name
+ * @param delayMs  - per-sample delay time signal
+ * @param fb       - feedback amount (gain applied to insert return)
+ * @param x        - audio input
+ * @param insert   - callback: receives feedback audio, returns processed audio
+ *
+ * @example
+ * ```ts
+ * // Delay with a lowpass filter darkening each repeat
+ * const delayed = el.extra.strideDelayWithInsert(
+ *   { maxDelayMs: 1500, transitionMs: 60, fbtap: "fb_loop" },
+ *   el.const({ value: 250, key: "delay" }),   // delay time
+ *   el.const({ value: 0.5, key: "fb_amt" }),  // feedback amount
+ *   input,                                     // audio input
+ *   (fbAudio) => {
+ *     // fbAudio is the delayed signal coming back through the loop.
+ *     // Filter it so each repeat gets darker.
+ *     return el.lowpass(
+ *       el.const({ value: 2000 }),
+ *       el.const({ value: 0.707 }),
+ *       fbAudio,
+ *     );
+ *   },
+ * );
+ * ```
+ *
+ * Signal flow:
+ * ```
+ *                    ┌─── insert(fbAudio) ◄── tapIn(fbtap)
+ *                    ▼
+ * fb_amount * insert_return ──┐
+ *                              ▼
+ * audio_input ────────── add ──► stridedelay(internal fb=0)
+ *                                       │
+ *                               tapOut(fbtap) ──► output
+ * ```
+ */
+export function strideDelayWithInsert(
+  props: StrideDelayProps,
+  delayMs: ElemNode,
+  fb: ElemNode,
+  x: ElemNode,
+  insert: (fbAudio: NodeRepr_t) => NodeRepr_t,
+): NodeRepr_t {
+  const {
+    fbtap,
+    maxDelayMs = 1000,
+    transitionMs = 100,
+    bigLeapMode = "linear",
+    ...other
+  } = props;
+
+  if (!fbtap) {
+    throw new Error("strideDelayWithInsert requires props.fbtap (tap name for feedback loop)");
+  }
+
+  const resolvedProps = { ...other, maxDelayMs, transitionMs, bigLeapMode };
+
+  // Tap the feedback audio from the previous block.
+  const fbAudio = createNode("tapIn", { name: fbtap }, []);
+
+  // User processes the feedback audio (filter, pitch shift, etc.).
+  const processed = insert(fbAudio);
+
+  // Apply feedback amount to the processed return, sum with input.
+  const feedbackMix = createNode("mul", {}, [resolve(fb), resolve(processed)]);
+  const summedInput = createNode("add", {}, [resolve(x), feedbackMix]);
+
+  // Run delay with internal fb=0 (external loop handles feedback).
+  const delayed = createNode("stridedelay", resolvedProps, [
+    resolve(delayMs),
+    resolve(0),
+    summedInput,
+  ]);
+
+  // Tap the output for next block's feedback.
+  return createNode("tapOut", { name: fbtap }, [delayed]);
+}
+
+/**
+ * Stereo stride delay with feedback insert loops.
+ *
+ * Builds two independent mono insert delays (L/R) with per-channel
+ * tap names derived from `props.fbtap`: `"{fbtap}:L"` and `"{fbtap}:R"`.
+ *
+ * The `insert` callback is called twice — once per channel — with the
+ * feedback audio and a channel tag (`"L"` or `"R"`) so the user can
+ * create per-channel keyed nodes inside the insert chain.
+ *
+ * @param props    - stride delay props; must include `fbtap` name
+ * @param delayMs  - per-sample delay time signal
+ * @param fb       - feedback amount (gain applied to insert return)
+ * @param left     - left audio input
+ * @param right    - right audio input
+ * @param insert   - callback: `(fbAudio, tag) => processedAudio`
+ *
+ * @example
+ * ```ts
+ * const [delayL, delayR] = el.extra.stereoStrideDelayWithInsert(
+ *   { maxDelayMs: 1500, transitionMs: 60, fbtap: "fb" },
+ *   el.const({ value: 250, key: "delay" }),
+ *   el.const({ value: 0.5, key: "fb_amt" }),
+ *   inputL,
+ *   inputR,
+ *   (fbAudio, tag) => el.lowpass(
+ *     el.const({ value: 2000, key: `insert_fc:${tag}` }),
+ *     el.const({ value: 0.707 }),
+ *     fbAudio,
+ *   ),
+ * );
+ * ```
+ */
+export function stereoStrideDelayWithInsert(
+  props: StrideDelayProps,
+  delayMs: ElemNode,
+  fb: ElemNode,
+  left: ElemNode,
+  right: ElemNode,
+  insert: (fbAudio: NodeRepr_t, tag: string) => NodeRepr_t,
+): [NodeRepr_t, NodeRepr_t] {
+  const {
+    fbtap,
+    maxDelayMs = 1000,
+    transitionMs = 100,
+    bigLeapMode = "linear",
+    ...other
+  } = props;
+
+  if (!fbtap) {
+    throw new Error("stereoStrideDelayWithInsert requires props.fbtap");
+  }
+
+  const resolvedProps = { ...other, maxDelayMs, transitionMs, bigLeapMode };
+
+  function buildChannel(input: ElemNode, tag: string): NodeRepr_t {
+    const tapName = `${fbtap}:${tag}`;
+    const fbAudio = createNode("tapIn", { name: tapName }, []);
+    const processed = insert(fbAudio, tag);
+    const feedbackMix = createNode("mul", {}, [resolve(fb), resolve(processed)]);
+    const summedInput = createNode("add", {}, [resolve(input), feedbackMix]);
+    const delayed = createNode("stridedelay", resolvedProps, [
+      resolve(delayMs),
+      resolve(0),
+      summedInput,
+    ]);
+    return createNode("tapOut", { name: tapName }, [delayed]);
+  }
+
+  return [buildChannel(left, "L"), buildChannel(right, "R")];
 }

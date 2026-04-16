@@ -61,6 +61,13 @@ const layout = `
           <input id="delay-transition" type="range" min="1" max="250" value="20" step="1" />
         </div>
         <div class="dial">
+          <label for="delay-insert-cutoff">
+            <span>FB Filter</span>
+            <span id="delay-insert-cutoff-value">4000 Hz</span>
+          </label>
+          <input id="delay-insert-cutoff" type="range" min="200" max="12000" value="4000" step="1" />
+        </div>
+        <div class="dial">
           <label for="delay-method">
             <span>Big Leap Mode</span>
             <span id="delay-method-value">linear</span>
@@ -128,6 +135,8 @@ let delayFeedbackSlider: HTMLInputElement;
 let delayFeedbackValue: HTMLSpanElement;
 let delayTransitionSlider: HTMLInputElement;
 let delayTransitionValue: HTMLSpanElement;
+let delayInsertCutoffSlider: HTMLInputElement;
+let delayInsertCutoffValue: HTMLSpanElement;
 let delayMethodSlider: HTMLInputElement;
 let delayMethodValue: HTMLSpanElement;
 let limiterEnable: HTMLInputElement;
@@ -158,6 +167,7 @@ const { mustQuery: q, wireControls } = initDemo({
     delayTimeMs: Number(delayTimeSlider.value),
     delayFeedback: Number(delayFeedbackSlider.value) / 100,
     delayTransitionMs: Number(delayTransitionSlider.value),
+    delayInsertCutoff: Number(delayInsertCutoffSlider.value),
     bigLeapMode: (["linear", "step"] as const)[Number(delayMethodSlider.value)] as StrideDelayBigLeapMode,
   }),
   updateReadouts,
@@ -174,6 +184,8 @@ delayFeedbackSlider = q<HTMLInputElement>("#delay-feedback");
 delayFeedbackValue = q<HTMLSpanElement>("#delay-feedback-value");
 delayTransitionSlider = q<HTMLInputElement>("#delay-transition");
 delayTransitionValue = q<HTMLSpanElement>("#delay-transition-value");
+delayInsertCutoffSlider = q<HTMLInputElement>("#delay-insert-cutoff");
+delayInsertCutoffValue = q<HTMLSpanElement>("#delay-insert-cutoff-value");
 delayMethodSlider = q<HTMLInputElement>("#delay-method");
 delayMethodValue = q<HTMLSpanElement>("#delay-method-value");
 limiterEnable = q<HTMLInputElement>("#limiter-enable");
@@ -191,7 +203,7 @@ crunchEnable = q<HTMLInputElement>("#crunch-enable");
 
 wireControls([
   frequencySlider, driveLimiterSlider, limiterEnable,
-  delayTimeSlider, delayFeedbackSlider, delayTransitionSlider, delayMethodSlider,
+  delayTimeSlider, delayFeedbackSlider, delayTransitionSlider, delayInsertCutoffSlider, delayMethodSlider,
   crunchDriveSlider, crunchFuzzSlider, crunchToneSlider, crunchCutSlider, crunchOutSlider, crunchEnable,
 ]);
 
@@ -206,6 +218,7 @@ function updateReadouts() {
   delayTimeValue.textContent = `${Number(delayTimeSlider.value)} ms`;
   delayFeedbackValue.textContent = `${Number(delayFeedbackSlider.value)}%`;
   delayTransitionValue.textContent = `${Number(delayTransitionSlider.value)} ms`;
+  delayInsertCutoffValue.textContent = `${Number(delayInsertCutoffSlider.value)} Hz`;
   delayMethodValue.textContent =
     ["linear", "step"][Number(delayMethodSlider.value)] ?? "linear";
 }

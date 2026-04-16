@@ -20,6 +20,14 @@ export interface VocoderParams {
   maxGainDb: number;
   modulatorSource: ModulatorSource;
   mix: number;
+  /** Stride delay time in ms (applied to vocoded output). */
+  delayTimeMs: number;
+  /** Stride delay feedback amount (0–1). */
+  delayFeedback: number;
+  /** Feedback insert filter cutoff in Hz. */
+  delayInsertCutoff: number;
+  /** Delay dry/wet mix (0 = vocoded only, 1 = fully delayed). */
+  delayMix: number;
   /** VFS path for the carrier sample (mc-test.wav). */
   carrierPath?: string;
   /** VFS path for the modulator sample. */
@@ -73,10 +81,38 @@ export function buildGraph(p: VocoderParams): NodeRepr_t[] {
     modL, modR,
   );
 
-  // ---- Mix (dry carrier / wet vocoded) ----
+  // ---- Stereo stride delay with feedback filter insert ----
+  const [delayedL, delayedR] = el.extra.stereoStrideDelayWithInsert(
+    {
+      key: "vocoder:delay",
+      fbtap: "vocoder-fb",
+      maxDelayMs: 1000,
+      transitionMs: 40,
+      bigLeapMode: "step",
+    },
+    el.const({ value: p.delayTimeMs, key: "vocoder:delay-ms" }),
+    el.const({ value: p.delayFeedback, key: "vocoder:delay-fb" }),
+    vocodedL,
+    vocodedR,
+    (fbAudio, tag) => {
+      // Lowpass in the feedback loop — each repeat gets darker.
+      return el.lowpass(
+        el.const({ value: p.delayInsertCutoff, key: `vocoder:insert-fc:${tag}` }),
+        el.const({ value: 0.707 }),
+        fbAudio,
+      );
+    },
+  );
+
+  // ---- Delay dry/wet (vocoded vs delayed-vocoded) ----
+  const delayMix = el.const({ key: "vocoder:delay-mix", value: p.delayMix });
+  const delayBlendL = el.select(delayMix, delayedL, vocodedL);
+  const delayBlendR = el.select(delayMix, delayedR, vocodedR);
+
+  // ---- Mix (dry carrier / wet vocoded+delay) ----
   const mix = el.const({ key: "vocoder:mix", value: p.mix });
-  const leftSelector =   el.select(mix, vocodedL, carrierL);
-  const rightSelector =  el.select(mix, vocodedR, carrierR);
+  const leftSelector =   el.select(mix, delayBlendL, carrierL);
+  const rightSelector =  el.select(mix, delayBlendR, carrierR);
 
   // ---- Scope inserts (carrier, modulator, output) ----
   const scopeCarrier = el.scope({ name: SCOPE_CARRIER, size: TIME_SCALE, channels: 1 }, carrierL);

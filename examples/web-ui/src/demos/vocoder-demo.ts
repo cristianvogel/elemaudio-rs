@@ -88,6 +88,37 @@ const layout = `
         </div>
       </div>
 
+      <div class="dial-strip" aria-label="Stride delay with insert">
+        <div class="dial">
+          <label for="delay-time">
+            <span>Delay</span>
+            <span id="delay-time-value">250 ms</span>
+          </label>
+          <input id="delay-time" type="range" min="10" max="1000" value="250" step="1" />
+        </div>
+        <div class="dial">
+          <label for="delay-feedback">
+            <span>Feedback</span>
+            <span id="delay-feedback-value">40%</span>
+          </label>
+          <input id="delay-feedback" type="range" min="0" max="95" value="40" step="1" />
+        </div>
+        <div class="dial">
+          <label for="delay-insert-cutoff">
+            <span>FB Filter</span>
+            <span id="delay-insert-cutoff-value">3000 Hz</span>
+          </label>
+          <input id="delay-insert-cutoff" type="range" min="200" max="12000" value="3000" step="1" />
+        </div>
+        <div class="dial">
+          <label for="delay-mix">
+            <span>Delay Mix</span>
+            <span id="delay-mix-value">50%</span>
+          </label>
+          <input id="delay-mix" type="range" min="0" max="1" value="0.5" step="0.01" />
+        </div>
+      </div>
+
       <div class="row">
         <label for="mix">
           <span>Dry / Wet</span>
@@ -121,6 +152,14 @@ let smoothingMsSlider: HTMLInputElement;
 let smoothingMsValue: HTMLSpanElement;
 let maxGainDbSlider: HTMLInputElement;
 let maxGainDbValue: HTMLSpanElement;
+let delayTimeSlider: HTMLInputElement;
+let delayTimeValue: HTMLSpanElement;
+let delayFeedbackSlider: HTMLInputElement;
+let delayFeedbackValue: HTMLSpanElement;
+let delayInsertCutoffSlider: HTMLInputElement;
+let delayInsertCutoffValue: HTMLSpanElement;
+let delayMixSlider: HTMLInputElement;
+let delayMixValue: HTMLSpanElement;
 let mixSlider: HTMLInputElement;
 let mixValue: HTMLSpanElement;
 let scopeCarrier: any;
@@ -137,6 +176,10 @@ const { mustQuery: q, wireControls } = initDemo({
       smoothingMs: Number(smoothingMsSlider.value),
       maxGainDb: Number(maxGainDbSlider.value),
       modulatorSource: modSourceSelect.value as ModulatorSource,
+      delayTimeMs: Number(delayTimeSlider.value),
+      delayFeedback: Number(delayFeedbackSlider.value) / 100,
+      delayInsertCutoff: Number(delayInsertCutoffSlider.value),
+      delayMix: Number(delayMixSlider.value),
       mix: Number(mixSlider.value),
       carrierPath: carrierLoaded ? CARRIER_VFS : undefined,
       modPath: beatLoaded ? MOD_VFS : undefined,
@@ -192,6 +235,14 @@ smoothingMsSlider = q<HTMLInputElement>("#smoothing-ms");
 smoothingMsValue  = q<HTMLSpanElement>("#smoothing-ms-value");
 maxGainDbSlider   = q<HTMLInputElement>("#max-gain-db");
 maxGainDbValue    = q<HTMLSpanElement>("#max-gain-db-value");
+delayTimeSlider        = q<HTMLInputElement>("#delay-time");
+delayTimeValue         = q<HTMLSpanElement>("#delay-time-value");
+delayFeedbackSlider    = q<HTMLInputElement>("#delay-feedback");
+delayFeedbackValue     = q<HTMLSpanElement>("#delay-feedback-value");
+delayInsertCutoffSlider = q<HTMLInputElement>("#delay-insert-cutoff");
+delayInsertCutoffValue  = q<HTMLSpanElement>("#delay-insert-cutoff-value");
+delayMixSlider    = q<HTMLInputElement>("#delay-mix");
+delayMixValue     = q<HTMLSpanElement>("#delay-mix-value");
 mixSlider         = q<HTMLInputElement>("#mix");
 mixValue          = q<HTMLSpanElement>("#mix-value");
 scopeCarrier      = q<any>("#scope-carrier");
@@ -205,6 +256,10 @@ wireControls([
   windowMsSlider,
   smoothingMsSlider,
   maxGainDbSlider,
+  delayTimeSlider,
+  delayFeedbackSlider,
+  delayInsertCutoffSlider,
+  delayMixSlider,
   mixSlider,
 ]);
 
@@ -240,6 +295,10 @@ function updateReadouts() {
   windowMsValue.textContent = `${windowMsSlider.value} ms`;
   smoothingMsValue.textContent = `${smoothingMsSlider.value} ms`;
   maxGainDbValue.textContent = `${maxGainDbSlider.value} dB`;
+  delayTimeValue.textContent = `${delayTimeSlider.value} ms`;
+  delayFeedbackValue.textContent = `${delayFeedbackSlider.value}%`;
+  delayInsertCutoffValue.textContent = `${delayInsertCutoffSlider.value} Hz`;
+  delayMixValue.textContent = `${Math.round(Number(delayMixSlider.value) * 100)}%`;
   mixValue.textContent = `${Math.round(Number(mixSlider.value) * 100)}%`;
 }
 

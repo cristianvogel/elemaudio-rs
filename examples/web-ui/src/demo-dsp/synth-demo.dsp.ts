@@ -19,6 +19,7 @@ export interface SynthParams {
   delayTimeMs: number;
   delayFeedback: number;
   delayTransitionMs: number;
+  delayInsertCutoff: number;
   bigLeapMode: StrideDelayBigLeapMode;
 }
 
@@ -73,9 +74,10 @@ function crunchBranch(key: string, input: NodeRepr_t, p: SynthParams): NodeRepr_
 }
 
 function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {
-  return el.extra.strideDelay(
+  return el.extra.strideDelayWithInsert(
     {
       key: "stride-delay-" + vn,
+      fbtap: "stride-fb-" + vn,
       bigLeapMode: p.bigLeapMode,
       transitionMs: p.delayTransitionMs,
       maxDelayMs: 1000,
@@ -83,6 +85,14 @@ function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {
     el.const({ value: p.delayTimeMs, key: "stride-delay-ms-" + vn }),
     el.const({ value: p.delayFeedback, key: "stride-delay-fb-" + vn }),
     x,
+    (fbAudio) => {
+      // Lowpass filter in the feedback loop — each repeat gets darker.
+      return el.lowpass(
+        el.const({ value: p.delayInsertCutoff, key: "stride-insert-fc-" + vn }),
+        el.const({ value: 0.707 }),
+        fbAudio,
+      );
+    },
   );
 }
 
