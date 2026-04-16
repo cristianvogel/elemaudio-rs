@@ -32,8 +32,12 @@ fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value
     let channels = props
         .get("channels")
         .and_then(|value| value.as_u64())
-        .expect("extra helper props must include a positive integer `channels`")
-        as usize;
+        .unwrap_or_else(|| {
+            log::error!(
+                "extra helper: props missing required positive integer 'channels', defaulting to 1"
+            );
+            1
+        }) as usize;
 
     if let serde_json::Value::Object(map) = &mut props {
         map.remove("channels");
@@ -126,14 +130,15 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     let mut props = props;
 
     // Extract and validate threshold
-    let thresh = props
-        .get("thresh")
-        .and_then(|value| value.as_f64())
-        .expect("foldback helper props must include a positive `thresh` value");
-
-    if !(thresh.is_finite() && thresh > 0.0) {
-        panic!("foldback helper props must include a positive `thresh` value");
-    }
+    let thresh = match props.get("thresh").and_then(|v| v.as_f64()) {
+        Some(t) if t.is_finite() && t > 0.0 => t,
+        _ => {
+            log::error!(
+                "foldback: props missing required positive 'thresh' value, returning passthrough"
+            );
+            return resolve(x);
+        }
+    };
 
     // Extract amplitude, defaulting to 1 / thresh
     let amp = props
@@ -409,14 +414,15 @@ fn box_sum_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> Node 
     let mut props = props;
 
     // Extract and validate window length
-    let window = props
-        .get("window")
-        .and_then(|value| value.as_f64())
-        .expect("box_sum helper props must include a positive numeric `window` value");
-
-    if !(window.is_finite() && window > 0.0) {
-        panic!("box_sum helper props must include a positive numeric `window` value");
-    }
+    let window = match props.get("window").and_then(|v| v.as_f64()) {
+        Some(w) if w.is_finite() && w > 0.0 => w,
+        _ => {
+            log::error!(
+                "box_sum: props missing required positive 'window' value, returning silence"
+            );
+            return el::const_(0.0);
+        }
+    };
 
     // Extract optional key prefix for fast-path updates
     let key_prefix = props
@@ -540,14 +546,15 @@ fn box_average_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> N
     let mut props = props;
 
     // Extract and validate window length
-    let window = props
-        .get("window")
-        .and_then(|value| value.as_f64())
-        .expect("box_average helper props must include a positive numeric `window` value");
-
-    if !(window.is_finite() && window > 0.0) {
-        panic!("box_average helper props must include a positive numeric `window` value");
-    }
+    let window = match props.get("window").and_then(|v| v.as_f64()) {
+        Some(w) if w.is_finite() && w > 0.0 => w,
+        _ => {
+            log::error!(
+                "box_average: props missing required positive 'window' value, returning silence"
+            );
+            return el::const_(0.0);
+        }
+    };
 
     // Extract optional key prefix for fast-path updates
     let key_prefix = props
@@ -771,12 +778,15 @@ pub fn stride_delay_with_insert(
 ) -> Node {
     let mut props = props;
 
-    // Extract fbtap name from props.
-    let fbtap = props
+    // Extract fbtap name from props. Fall back to stride_delay without insert.
+    let Some(fbtap) = props
         .get("fbtap")
         .and_then(|v| v.as_str())
-        .expect("stride_delay_with_insert requires 'fbtap' prop")
-        .to_string();
+        .map(|s| s.to_string())
+    else {
+        log::error!("stride_delay_with_insert: missing 'fbtap' prop, falling back to stride_delay without insert");
+        return stride_delay(props, delay_ms, fb, x);
+    };
 
     // Remove fbtap before passing to the native node.
     if let serde_json::Value::Object(ref mut map) = props {
@@ -851,11 +861,25 @@ pub fn stereo_stride_delay_with_insert(
         _ => serde_json::Map::new(),
     };
 
-    let fbtap = props_obj
+    let Some(fbtap) = props_obj
         .get("fbtap")
         .and_then(|v| v.as_str())
-        .expect("stereo_stride_delay_with_insert requires 'fbtap' prop")
-        .to_string();
+        .map(|s| s.to_string())
+    else {
+        log::error!("stereo_stride_delay_with_insert: missing 'fbtap' prop, falling back to stereo stride_delay without insert");
+        let props_val = serde_json::Value::Object(props_obj);
+        let resolved = stride_delay_resolve_defaults(props_val);
+        let dl = resolve(delay_ms);
+        let fb_n = resolve(fb);
+        return [
+            Node::new(
+                "stridedelay",
+                resolved.clone(),
+                vec![dl.clone(), fb_n.clone(), resolve(left)],
+            ),
+            Node::new("stridedelay", resolved, vec![dl, fb_n, resolve(right)]),
+        ];
+    };
     props_obj.remove("fbtap");
 
     let resolved_props = stride_delay_resolve_defaults(serde_json::Value::Object(props_obj));
