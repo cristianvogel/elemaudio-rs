@@ -747,12 +747,12 @@ pub fn stereo_stride_delay(
 ///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb_loop" }),
 ///     el::const_with_key("delay", 250.0),    // delay time
 ///     el::const_with_key("fb_amt", 0.5),     // feedback amount
-///     el::r#in(json!({"channel": 0}), None), // audio input
 ///     |fb_audio| {
 ///         // fb_audio is the delayed signal coming back through the loop.
 ///         // Filter it so each repeat gets darker.
 ///         el::lowpass(el::const_(2000.0), el::const_(0.707), fb_audio)
 ///     },
+///     el::r#in(json!({"channel": 0}), None), // audio input
 /// );
 /// ```
 ///
@@ -773,8 +773,8 @@ pub fn stride_delay_with_insert(
     props: serde_json::Value,
     delay_ms: impl Into<ElemNode>,
     fb: impl Into<ElemNode>,
-    x: impl Into<ElemNode>,
     insert: impl FnOnce(Node) -> Node,
+    x: impl Into<ElemNode>,
 ) -> Node {
     let mut props = props;
 
@@ -837,8 +837,6 @@ pub fn stride_delay_with_insert(
 ///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb" }),
 ///     el::const_with_key("delay", 250.0),
 ///     el::const_with_key("fb_amt", 0.5),
-///     el::r#in(json!({"channel": 0}), None),
-///     el::r#in(json!({"channel": 1}), None),
 ///     |fb_audio, tag| {
 ///         el::lowpass(
 ///             el::const_with_key(&format!("insert_fc:{tag}"), 2000.0),
@@ -846,15 +844,17 @@ pub fn stride_delay_with_insert(
 ///             fb_audio,
 ///         )
 ///     },
+///     el::r#in(json!({"channel": 0}), None),
+///     el::r#in(json!({"channel": 1}), None),
 /// );
 /// ```
 pub fn stereo_stride_delay_with_insert(
     props: serde_json::Value,
     delay_ms: impl Into<ElemNode>,
     fb: impl Into<ElemNode>,
+    insert: impl Fn(Node, &str) -> Node,
     left: impl Into<ElemNode>,
     right: impl Into<ElemNode>,
-    insert: impl Fn(Node, &str) -> Node,
 ) -> [Node; 2] {
     let mut props_obj = match props {
         serde_json::Value::Object(m) => m,

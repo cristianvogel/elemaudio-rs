@@ -880,8 +880,8 @@ mod tests {
             serde_json::json!({ "maxDelayMs": 500, "transitionMs": 10, "fbtap": "test_fb" }),
             delay_ms,
             fb,
-            input,
             |fb_audio| fb_audio, // passthrough — same as normal feedback
+            input,
         );
 
         let graph = Graph::new().render(vec![delayed]);

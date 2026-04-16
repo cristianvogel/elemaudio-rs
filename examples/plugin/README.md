@@ -149,8 +149,9 @@ The `stride_delay_with_insert` helper enables processing in the feedback path:
 ```rust
 let delayed = extra::stride_delay_with_insert(
     json!({ "maxDelayMs": 1500, "fbtap": "fb_loop" }),
-    delay_ms, fb_amount, input,
+    delay_ms, fb_amount,
     |fb_audio| el::lowpass(cutoff, q, fb_audio),  // darken each repeat
+    input,
 );
 ```
 

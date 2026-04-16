@@ -92,8 +92,6 @@ export function buildGraph(p: VocoderParams): NodeRepr_t[] {
     },
     el.const({ value: p.delayTimeMs, key: "vocoder:delay-ms" }),
     el.const({ value: p.delayFeedback, key: "vocoder:delay-fb" }),
-    vocodedL,
-    vocodedR,
     (fbAudio, tag) => {
       // Lowpass in the feedback loop — each repeat gets darker.
       return el.lowpass(
@@ -102,6 +100,8 @@ export function buildGraph(p: VocoderParams): NodeRepr_t[] {
         fbAudio,
       );
     },
+    vocodedL,
+    vocodedR,
   );
 
   // ---- Delay dry/wet (vocoded vs delayed-vocoded) ----

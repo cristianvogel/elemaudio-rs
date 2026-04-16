@@ -687,8 +687,8 @@ export function stereoStrideDelay(
  * @param props    - stride delay props; must include `fbtap` name
  * @param delayMs  - per-sample delay time signal
  * @param fb       - feedback amount (gain applied to insert return)
- * @param x        - audio input
  * @param insert   - callback: receives feedback audio, returns processed audio
+ * @param x        - audio input
  *
  * @example
  * ```ts
@@ -697,7 +697,6 @@ export function stereoStrideDelay(
  *   { maxDelayMs: 1500, transitionMs: 60, fbtap: "fb_loop" },
  *   el.const({ value: 250, key: "delay" }),   // delay time
  *   el.const({ value: 0.5, key: "fb_amt" }),  // feedback amount
- *   input,                                     // audio input
  *   (fbAudio) => {
  *     // fbAudio is the delayed signal coming back through the loop.
  *     // Filter it so each repeat gets darker.
@@ -707,6 +706,7 @@ export function stereoStrideDelay(
  *       fbAudio,
  *     );
  *   },
+ *   input,                                     // audio input
  * );
  * ```
  *
@@ -725,8 +725,8 @@ export function strideDelayWithInsert(
   props: StrideDelayProps,
   delayMs: ElemNode,
   fb: ElemNode,
-  x: ElemNode,
   insert: (fbAudio: NodeRepr_t) => NodeRepr_t,
+  x: ElemNode,
 ): NodeRepr_t {
   const {
     fbtap,
@@ -776,9 +776,9 @@ export function strideDelayWithInsert(
  * @param props    - stride delay props; must include `fbtap` name
  * @param delayMs  - per-sample delay time signal
  * @param fb       - feedback amount (gain applied to insert return)
+ * @param insert   - callback: `(fbAudio, tag) => processedAudio`
  * @param left     - left audio input
  * @param right    - right audio input
- * @param insert   - callback: `(fbAudio, tag) => processedAudio`
  *
  * @example
  * ```ts
@@ -786,13 +786,13 @@ export function strideDelayWithInsert(
  *   { maxDelayMs: 1500, transitionMs: 60, fbtap: "fb" },
  *   el.const({ value: 250, key: "delay" }),
  *   el.const({ value: 0.5, key: "fb_amt" }),
- *   inputL,
- *   inputR,
  *   (fbAudio, tag) => el.lowpass(
  *     el.const({ value: 2000, key: `insert_fc:${tag}` }),
  *     el.const({ value: 0.707 }),
  *     fbAudio,
  *   ),
+ *   inputL,
+ *   inputR,
  * );
  * ```
  */
@@ -800,9 +800,9 @@ export function stereoStrideDelayWithInsert(
   props: StrideDelayProps,
   delayMs: ElemNode,
   fb: ElemNode,
+  insert: (fbAudio: NodeRepr_t, tag: string) => NodeRepr_t,
   left: ElemNode,
   right: ElemNode,
-  insert: (fbAudio: NodeRepr_t, tag: string) => NodeRepr_t,
 ): [NodeRepr_t, NodeRepr_t] {
   const {
     fbtap,

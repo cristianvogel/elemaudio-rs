@@ -84,7 +84,6 @@ function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {
     },
     el.const({ value: p.delayTimeMs, key: "stride-delay-ms-" + vn }),
     el.const({ value: p.delayFeedback, key: "stride-delay-fb-" + vn }),
-    x,
     (fbAudio) => {
       // Lowpass filter in the feedback loop — each repeat gets darker.
       return el.lowpass(
@@ -93,6 +92,7 @@ function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {
         fbAudio,
       );
     },
+    x,
   );
 }
 
