@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/authoring/extra.rs`."><title>extra.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-77263533.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.94.1 (e408947bf 2026-03-25)" data-channel="1.94.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-7bab91a1.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">elemaudio_rs/authoring/</div>extra.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">super</span>::el;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/authoring/extra.rs`."><title>extra.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">elemaudio_rs/authoring/</div>extra.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">super</span>::el;
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span><span class="kw">crate</span>::graph::Node;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>crate::{resolve, unpack, ElemNode};
 <a href=#4 id=4 data-nosnippet>4</a>
@@ -711,20 +711,195 @@
 <a href=#711 id=711 data-nosnippet>711</a>    )
 <a href=#712 id=712 data-nosnippet>712</a>}
 <a href=#713 id=713 data-nosnippet>713</a>
-<a href=#714 id=714 data-nosnippet>714</a><span class="doccomment">/// Apply defaults for stride_delay props.
-<a href=#715 id=715 data-nosnippet>715</a></span><span class="kw">fn </span>stride_delay_resolve_defaults(props: serde_json::Value) -&gt; serde_json::Value {
-<a href=#716 id=716 data-nosnippet>716</a>    <span class="kw">let </span><span class="kw-2">mut </span>map = <span class="kw">match </span>props {
-<a href=#717 id=717 data-nosnippet>717</a>        serde_json::Value::Object(m) =&gt; m,
-<a href=#718 id=718 data-nosnippet>718</a>        <span class="kw">_ </span>=&gt; serde_json::Map::new(),
-<a href=#719 id=719 data-nosnippet>719</a>    };
-<a href=#720 id=720 data-nosnippet>720</a>
-<a href=#721 id=721 data-nosnippet>721</a>    map.entry(<span class="string">"maxDelayMs"</span>)
-<a href=#722 id=722 data-nosnippet>722</a>        .or_insert_with(|| serde_json::Value::from(<span class="number">1000.0</span>));
-<a href=#723 id=723 data-nosnippet>723</a>    map.entry(<span class="string">"transitionMs"</span>)
-<a href=#724 id=724 data-nosnippet>724</a>        .or_insert_with(|| serde_json::Value::from(<span class="number">100.0</span>));
-<a href=#725 id=725 data-nosnippet>725</a>    map.entry(<span class="string">"bigLeapMode"</span>)
-<a href=#726 id=726 data-nosnippet>726</a>        .or_insert_with(|| serde_json::Value::from(<span class="string">"linear"</span>));
-<a href=#727 id=727 data-nosnippet>727</a>
-<a href=#728 id=728 data-nosnippet>728</a>    serde_json::Value::Object(map)
-<a href=#729 id=729 data-nosnippet>729</a>}
+<a href=#714 id=714 data-nosnippet>714</a><span class="doccomment">/// Stride delay with a feedback insert loop (mono).
+<a href=#715 id=715 data-nosnippet>715</a>///
+<a href=#716 id=716 data-nosnippet>716</a>/// The `insert` closure receives the **feedback audio signal** — the
+<a href=#717 id=717 data-nosnippet>717</a>/// actual delayed audio coming back through the tap — and returns a
+<a href=#718 id=718 data-nosnippet>718</a>/// processed version (e.g., filtered, pitch-shifted). The `fb` argument
+<a href=#719 id=719 data-nosnippet>719</a>/// is the **feedback amount** (a gain coefficient) applied to the insert
+<a href=#720 id=720 data-nosnippet>720</a>/// return before summing back into the delay input.
+<a href=#721 id=721 data-nosnippet>721</a>///
+<a href=#722 id=722 data-nosnippet>722</a>/// Requires `"fbtap"` in props — a unique name for the tapIn/tapOut pair.
+<a href=#723 id=723 data-nosnippet>723</a>///
+<a href=#724 id=724 data-nosnippet>724</a>/// # Props
+<a href=#725 id=725 data-nosnippet>725</a>///
+<a href=#726 id=726 data-nosnippet>726</a>/// Same as [`stride_delay`] plus:
+<a href=#727 id=727 data-nosnippet>727</a>///
+<a href=#728 id=728 data-nosnippet>728</a>/// | Key       | Type   | Required | Notes                              |
+<a href=#729 id=729 data-nosnippet>729</a>/// |-----------|--------|----------|------------------------------------|
+<a href=#730 id=730 data-nosnippet>730</a>/// | `fbtap`   | string | yes      | Unique tap name for feedback loop  |
+<a href=#731 id=731 data-nosnippet>731</a>///
+<a href=#732 id=732 data-nosnippet>732</a>/// # Example
+<a href=#733 id=733 data-nosnippet>733</a>///
+<a href=#734 id=734 data-nosnippet>734</a>/// ```ignore
+<a href=#735 id=735 data-nosnippet>735</a>/// use elemaudio_rs::{el, extra};
+<a href=#736 id=736 data-nosnippet>736</a>/// use serde_json::json;
+<a href=#737 id=737 data-nosnippet>737</a>///
+<a href=#738 id=738 data-nosnippet>738</a>/// // Delay with a lowpass filter darkening each repeat
+<a href=#739 id=739 data-nosnippet>739</a>/// let delayed = extra::stride_delay_with_insert(
+<a href=#740 id=740 data-nosnippet>740</a>///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb_loop" }),
+<a href=#741 id=741 data-nosnippet>741</a>///     el::const_with_key("delay", 250.0),    // delay time
+<a href=#742 id=742 data-nosnippet>742</a>///     el::const_with_key("fb_amt", 0.5),     // feedback amount
+<a href=#743 id=743 data-nosnippet>743</a>///     el::r#in(json!({"channel": 0}), None), // audio input
+<a href=#744 id=744 data-nosnippet>744</a>///     |fb_audio| {
+<a href=#745 id=745 data-nosnippet>745</a>///         // fb_audio is the delayed signal coming back through the loop.
+<a href=#746 id=746 data-nosnippet>746</a>///         // Filter it so each repeat gets darker.
+<a href=#747 id=747 data-nosnippet>747</a>///         el::lowpass(el::const_(2000.0), el::const_(0.707), fb_audio)
+<a href=#748 id=748 data-nosnippet>748</a>///     },
+<a href=#749 id=749 data-nosnippet>749</a>/// );
+<a href=#750 id=750 data-nosnippet>750</a>/// ```
+<a href=#751 id=751 data-nosnippet>751</a>///
+<a href=#752 id=752 data-nosnippet>752</a>/// # Signal flow
+<a href=#753 id=753 data-nosnippet>753</a>///
+<a href=#754 id=754 data-nosnippet>754</a>/// ```text
+<a href=#755 id=755 data-nosnippet>755</a>///                    ┌─── insert(fb_audio) ◄── tapIn(fbtap)
+<a href=#756 id=756 data-nosnippet>756</a>///                    ▼
+<a href=#757 id=757 data-nosnippet>757</a>/// fb_amount * insert_return ──┐
+<a href=#758 id=758 data-nosnippet>758</a>///                              ▼
+<a href=#759 id=759 data-nosnippet>759</a>/// audio_input ────────── add ──► stridedelay(internal fb=0)
+<a href=#760 id=760 data-nosnippet>760</a>///                                       │
+<a href=#761 id=761 data-nosnippet>761</a>///                               tapOut(fbtap) ──► output
+<a href=#762 id=762 data-nosnippet>762</a>/// ```
+<a href=#763 id=763 data-nosnippet>763</a>///
+<a href=#764 id=764 data-nosnippet>764</a>/// Note: the feedback path has 1-block latency (tapIn/tapOut).
+<a href=#765 id=765 data-nosnippet>765</a></span><span class="kw">pub fn </span>stride_delay_with_insert(
+<a href=#766 id=766 data-nosnippet>766</a>    props: serde_json::Value,
+<a href=#767 id=767 data-nosnippet>767</a>    delay_ms: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#768 id=768 data-nosnippet>768</a>    fb: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#769 id=769 data-nosnippet>769</a>    x: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#770 id=770 data-nosnippet>770</a>    insert: <span class="kw">impl </span>FnOnce(Node) -&gt; Node,
+<a href=#771 id=771 data-nosnippet>771</a>) -&gt; Node {
+<a href=#772 id=772 data-nosnippet>772</a>    <span class="kw">let </span><span class="kw-2">mut </span>props = props;
+<a href=#773 id=773 data-nosnippet>773</a>
+<a href=#774 id=774 data-nosnippet>774</a>    <span class="comment">// Extract fbtap name from props.
+<a href=#775 id=775 data-nosnippet>775</a>    </span><span class="kw">let </span>fbtap = props
+<a href=#776 id=776 data-nosnippet>776</a>        .get(<span class="string">"fbtap"</span>)
+<a href=#777 id=777 data-nosnippet>777</a>        .and_then(|v| v.as_str())
+<a href=#778 id=778 data-nosnippet>778</a>        .expect(<span class="string">"stride_delay_with_insert requires 'fbtap' prop"</span>)
+<a href=#779 id=779 data-nosnippet>779</a>        .to_string();
+<a href=#780 id=780 data-nosnippet>780</a>
+<a href=#781 id=781 data-nosnippet>781</a>    <span class="comment">// Remove fbtap before passing to the native node.
+<a href=#782 id=782 data-nosnippet>782</a>    </span><span class="kw">if let </span>serde_json::Value::Object(<span class="kw-2">ref mut </span>map) = props {
+<a href=#783 id=783 data-nosnippet>783</a>        map.remove(<span class="string">"fbtap"</span>);
+<a href=#784 id=784 data-nosnippet>784</a>    }
+<a href=#785 id=785 data-nosnippet>785</a>
+<a href=#786 id=786 data-nosnippet>786</a>    <span class="kw">let </span>resolved_props = stride_delay_resolve_defaults(props);
+<a href=#787 id=787 data-nosnippet>787</a>    <span class="kw">let </span>input = resolve(x);
+<a href=#788 id=788 data-nosnippet>788</a>    <span class="kw">let </span>fb_signal = resolve(fb);
+<a href=#789 id=789 data-nosnippet>789</a>
+<a href=#790 id=790 data-nosnippet>790</a>    <span class="comment">// Tap the feedback audio from the previous block.
+<a href=#791 id=791 data-nosnippet>791</a>    </span><span class="kw">let </span>fb_audio = el::tap_in(<span class="macro">serde_json::json!</span>({<span class="string">"name"</span>: fbtap}));
+<a href=#792 id=792 data-nosnippet>792</a>
+<a href=#793 id=793 data-nosnippet>793</a>    <span class="comment">// User processes the feedback audio.
+<a href=#794 id=794 data-nosnippet>794</a>    </span><span class="kw">let </span>processed = insert(fb_audio);
+<a href=#795 id=795 data-nosnippet>795</a>
+<a href=#796 id=796 data-nosnippet>796</a>    <span class="comment">// Apply feedback amount to processed return, sum with input.
+<a href=#797 id=797 data-nosnippet>797</a>    </span><span class="kw">let </span>feedback_mix = el::mul((fb_signal, processed));
+<a href=#798 id=798 data-nosnippet>798</a>    <span class="kw">let </span>summed_input = el::add((input, feedback_mix));
+<a href=#799 id=799 data-nosnippet>799</a>
+<a href=#800 id=800 data-nosnippet>800</a>    <span class="comment">// Run delay with internal fb=0 (external loop handles feedback).
+<a href=#801 id=801 data-nosnippet>801</a>    </span><span class="kw">let </span>delayed = Node::new(
+<a href=#802 id=802 data-nosnippet>802</a>        <span class="string">"stridedelay"</span>,
+<a href=#803 id=803 data-nosnippet>803</a>        resolved_props,
+<a href=#804 id=804 data-nosnippet>804</a>        <span class="macro">vec!</span>[resolve(delay_ms), resolve(<span class="number">0.0</span>), summed_input],
+<a href=#805 id=805 data-nosnippet>805</a>    );
+<a href=#806 id=806 data-nosnippet>806</a>
+<a href=#807 id=807 data-nosnippet>807</a>    <span class="comment">// Tap the output for next block's feedback.
+<a href=#808 id=808 data-nosnippet>808</a>    </span>el::tap_out(<span class="macro">serde_json::json!</span>({<span class="string">"name"</span>: fbtap}), delayed)
+<a href=#809 id=809 data-nosnippet>809</a>}
+<a href=#810 id=810 data-nosnippet>810</a>
+<a href=#811 id=811 data-nosnippet>811</a><span class="doccomment">/// Stereo stride delay with feedback insert loops.
+<a href=#812 id=812 data-nosnippet>812</a>///
+<a href=#813 id=813 data-nosnippet>813</a>/// Builds two independent mono insert delays (L/R) with per-channel
+<a href=#814 id=814 data-nosnippet>814</a>/// tap names derived from `props.fbtap`: `"{fbtap}:L"` and `"{fbtap}:R"`.
+<a href=#815 id=815 data-nosnippet>815</a>///
+<a href=#816 id=816 data-nosnippet>816</a>/// The `insert` closure is called twice — once per channel — with the
+<a href=#817 id=817 data-nosnippet>817</a>/// feedback audio and a channel tag (`"L"` or `"R"`) so the user can
+<a href=#818 id=818 data-nosnippet>818</a>/// create per-channel keyed nodes inside the insert chain.
+<a href=#819 id=819 data-nosnippet>819</a>///
+<a href=#820 id=820 data-nosnippet>820</a>/// # Example
+<a href=#821 id=821 data-nosnippet>821</a>///
+<a href=#822 id=822 data-nosnippet>822</a>/// ```ignore
+<a href=#823 id=823 data-nosnippet>823</a>/// use elemaudio_rs::{el, extra};
+<a href=#824 id=824 data-nosnippet>824</a>/// use serde_json::json;
+<a href=#825 id=825 data-nosnippet>825</a>///
+<a href=#826 id=826 data-nosnippet>826</a>/// let [left, right] = extra::stereo_stride_delay_with_insert(
+<a href=#827 id=827 data-nosnippet>827</a>///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb" }),
+<a href=#828 id=828 data-nosnippet>828</a>///     el::const_with_key("delay", 250.0),
+<a href=#829 id=829 data-nosnippet>829</a>///     el::const_with_key("fb_amt", 0.5),
+<a href=#830 id=830 data-nosnippet>830</a>///     el::r#in(json!({"channel": 0}), None),
+<a href=#831 id=831 data-nosnippet>831</a>///     el::r#in(json!({"channel": 1}), None),
+<a href=#832 id=832 data-nosnippet>832</a>///     |fb_audio, tag| {
+<a href=#833 id=833 data-nosnippet>833</a>///         el::lowpass(
+<a href=#834 id=834 data-nosnippet>834</a>///             el::const_with_key(&amp;format!("insert_fc:{tag}"), 2000.0),
+<a href=#835 id=835 data-nosnippet>835</a>///             el::const_(0.707),
+<a href=#836 id=836 data-nosnippet>836</a>///             fb_audio,
+<a href=#837 id=837 data-nosnippet>837</a>///         )
+<a href=#838 id=838 data-nosnippet>838</a>///     },
+<a href=#839 id=839 data-nosnippet>839</a>/// );
+<a href=#840 id=840 data-nosnippet>840</a>/// ```
+<a href=#841 id=841 data-nosnippet>841</a></span><span class="kw">pub fn </span>stereo_stride_delay_with_insert(
+<a href=#842 id=842 data-nosnippet>842</a>    props: serde_json::Value,
+<a href=#843 id=843 data-nosnippet>843</a>    delay_ms: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#844 id=844 data-nosnippet>844</a>    fb: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#845 id=845 data-nosnippet>845</a>    left: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#846 id=846 data-nosnippet>846</a>    right: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#847 id=847 data-nosnippet>847</a>    insert: <span class="kw">impl </span>Fn(Node, <span class="kw-2">&amp;</span>str) -&gt; Node,
+<a href=#848 id=848 data-nosnippet>848</a>) -&gt; [Node; <span class="number">2</span>] {
+<a href=#849 id=849 data-nosnippet>849</a>    <span class="kw">let </span><span class="kw-2">mut </span>props_obj = <span class="kw">match </span>props {
+<a href=#850 id=850 data-nosnippet>850</a>        serde_json::Value::Object(m) =&gt; m,
+<a href=#851 id=851 data-nosnippet>851</a>        <span class="kw">_ </span>=&gt; serde_json::Map::new(),
+<a href=#852 id=852 data-nosnippet>852</a>    };
+<a href=#853 id=853 data-nosnippet>853</a>
+<a href=#854 id=854 data-nosnippet>854</a>    <span class="kw">let </span>fbtap = props_obj
+<a href=#855 id=855 data-nosnippet>855</a>        .get(<span class="string">"fbtap"</span>)
+<a href=#856 id=856 data-nosnippet>856</a>        .and_then(|v| v.as_str())
+<a href=#857 id=857 data-nosnippet>857</a>        .expect(<span class="string">"stereo_stride_delay_with_insert requires 'fbtap' prop"</span>)
+<a href=#858 id=858 data-nosnippet>858</a>        .to_string();
+<a href=#859 id=859 data-nosnippet>859</a>    props_obj.remove(<span class="string">"fbtap"</span>);
+<a href=#860 id=860 data-nosnippet>860</a>
+<a href=#861 id=861 data-nosnippet>861</a>    <span class="kw">let </span>resolved_props = stride_delay_resolve_defaults(serde_json::Value::Object(props_obj));
+<a href=#862 id=862 data-nosnippet>862</a>    <span class="kw">let </span>delay_node = resolve(delay_ms);
+<a href=#863 id=863 data-nosnippet>863</a>    <span class="kw">let </span>fb_node = resolve(fb);
+<a href=#864 id=864 data-nosnippet>864</a>
+<a href=#865 id=865 data-nosnippet>865</a>    <span class="kw">let </span>build_channel = |input: Node, tag: <span class="kw-2">&amp;</span>str| -&gt; Node {
+<a href=#866 id=866 data-nosnippet>866</a>        <span class="kw">let </span>tap_name = <span class="macro">format!</span>(<span class="string">"{fbtap}:{tag}"</span>);
+<a href=#867 id=867 data-nosnippet>867</a>
+<a href=#868 id=868 data-nosnippet>868</a>        <span class="kw">let </span>fb_audio = el::tap_in(<span class="macro">serde_json::json!</span>({<span class="string">"name"</span>: <span class="kw-2">&amp;</span>tap_name}));
+<a href=#869 id=869 data-nosnippet>869</a>        <span class="kw">let </span>processed = insert(fb_audio, tag);
+<a href=#870 id=870 data-nosnippet>870</a>
+<a href=#871 id=871 data-nosnippet>871</a>        <span class="kw">let </span>feedback_mix = el::mul((fb_node.clone(), processed));
+<a href=#872 id=872 data-nosnippet>872</a>        <span class="kw">let </span>summed_input = el::add((input, feedback_mix));
+<a href=#873 id=873 data-nosnippet>873</a>
+<a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span>delayed = Node::new(
+<a href=#875 id=875 data-nosnippet>875</a>            <span class="string">"stridedelay"</span>,
+<a href=#876 id=876 data-nosnippet>876</a>            resolved_props.clone(),
+<a href=#877 id=877 data-nosnippet>877</a>            <span class="macro">vec!</span>[delay_node.clone(), resolve(<span class="number">0.0</span>), summed_input],
+<a href=#878 id=878 data-nosnippet>878</a>        );
+<a href=#879 id=879 data-nosnippet>879</a>
+<a href=#880 id=880 data-nosnippet>880</a>        el::tap_out(<span class="macro">serde_json::json!</span>({<span class="string">"name"</span>: <span class="kw-2">&amp;</span>tap_name}), delayed)
+<a href=#881 id=881 data-nosnippet>881</a>    };
+<a href=#882 id=882 data-nosnippet>882</a>
+<a href=#883 id=883 data-nosnippet>883</a>    [
+<a href=#884 id=884 data-nosnippet>884</a>        build_channel(resolve(left), <span class="string">"L"</span>),
+<a href=#885 id=885 data-nosnippet>885</a>        build_channel(resolve(right), <span class="string">"R"</span>),
+<a href=#886 id=886 data-nosnippet>886</a>    ]
+<a href=#887 id=887 data-nosnippet>887</a>}
+<a href=#888 id=888 data-nosnippet>888</a>
+<a href=#889 id=889 data-nosnippet>889</a><span class="doccomment">/// Apply defaults for stride_delay props.
+<a href=#890 id=890 data-nosnippet>890</a></span><span class="kw">fn </span>stride_delay_resolve_defaults(props: serde_json::Value) -&gt; serde_json::Value {
+<a href=#891 id=891 data-nosnippet>891</a>    <span class="kw">let </span><span class="kw-2">mut </span>map = <span class="kw">match </span>props {
+<a href=#892 id=892 data-nosnippet>892</a>        serde_json::Value::Object(m) =&gt; m,
+<a href=#893 id=893 data-nosnippet>893</a>        <span class="kw">_ </span>=&gt; serde_json::Map::new(),
+<a href=#894 id=894 data-nosnippet>894</a>    };
+<a href=#895 id=895 data-nosnippet>895</a>
+<a href=#896 id=896 data-nosnippet>896</a>    map.entry(<span class="string">"maxDelayMs"</span>)
+<a href=#897 id=897 data-nosnippet>897</a>        .or_insert_with(|| serde_json::Value::from(<span class="number">1000.0</span>));
+<a href=#898 id=898 data-nosnippet>898</a>    map.entry(<span class="string">"transitionMs"</span>)
+<a href=#899 id=899 data-nosnippet>899</a>        .or_insert_with(|| serde_json::Value::from(<span class="number">100.0</span>));
+<a href=#900 id=900 data-nosnippet>900</a>    map.entry(<span class="string">"bigLeapMode"</span>)
+<a href=#901 id=901 data-nosnippet>901</a>        .or_insert_with(|| serde_json::Value::from(<span class="string">"linear"</span>));
+<a href=#902 id=902 data-nosnippet>902</a>
+<a href=#903 id=903 data-nosnippet>903</a>    serde_json::Value::Object(map)
+<a href=#904 id=904 data-nosnippet>904</a>}
 </code></pre></div></section></main></body></html>

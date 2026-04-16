@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/graph.rs`."><title>graph.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-77263533.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.94.1 (e408947bf 2026-03-25)" data-channel="1.94.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-7bab91a1.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">elemaudio_rs/</div>graph.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Minimal Rust-native graph DSL for Elementary-style node composition.
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/graph.rs`."><title>graph.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">elemaudio_rs/</div>graph.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Minimal Rust-native graph DSL for Elementary-style node composition.
 <a href=#2 id=2 data-nosnippet>2</a>//!
 <a href=#3 id=3 data-nosnippet>3</a>//! This module provides the core graph types (`Graph`, `Node`, `MountedGraph`,
 <a href=#4 id=4 data-nosnippet>4</a>//! etc.). For node composition helpers, see the `authoring` module.
@@ -858,5 +858,73 @@
 <a href=#858 id=858 data-nosnippet>858</a>            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"expected DuplicateKey error, got Ok"</span>),
 <a href=#859 id=859 data-nosnippet>859</a>        }
 <a href=#860 id=860 data-nosnippet>860</a>    }
-<a href=#861 id=861 data-nosnippet>861</a>}
+<a href=#861 id=861 data-nosnippet>861</a>
+<a href=#862 id=862 data-nosnippet>862</a>    <span class="attr">#[test]
+<a href=#863 id=863 data-nosnippet>863</a>    </span><span class="kw">fn </span>stride_delay_with_insert_mounts_and_processes() {
+<a href=#864 id=864 data-nosnippet>864</a>        <span class="kw">use </span><span class="kw">crate</span>::Runtime;
+<a href=#865 id=865 data-nosnippet>865</a>
+<a href=#866 id=866 data-nosnippet>866</a>        <span class="kw">let </span>sr = <span class="number">44100.0</span>;
+<a href=#867 id=867 data-nosnippet>867</a>        <span class="kw">let </span>block = <span class="number">512</span>;
+<a href=#868 id=868 data-nosnippet>868</a>        <span class="kw">let </span>runtime = Runtime::new()
+<a href=#869 id=869 data-nosnippet>869</a>            .sample_rate(sr)
+<a href=#870 id=870 data-nosnippet>870</a>            .buffer_size(block)
+<a href=#871 id=871 data-nosnippet>871</a>            .call()
+<a href=#872 id=872 data-nosnippet>872</a>            .expect(<span class="string">"runtime creation"</span>);
+<a href=#873 id=873 data-nosnippet>873</a>
+<a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span>delay_ms = el::const_(<span class="number">100.0</span>);
+<a href=#875 id=875 data-nosnippet>875</a>        <span class="kw">let </span>fb = el::const_(<span class="number">0.5</span>);
+<a href=#876 id=876 data-nosnippet>876</a>        <span class="kw">let </span>input = el::r#in(<span class="macro">serde_json::json!</span>({<span class="string">"channel"</span>: <span class="number">0</span>}), <span class="prelude-val">None</span>);
+<a href=#877 id=877 data-nosnippet>877</a>
+<a href=#878 id=878 data-nosnippet>878</a>        <span class="comment">// Insert a simple passthrough (identity) in the feedback loop.
+<a href=#879 id=879 data-nosnippet>879</a>        </span><span class="kw">let </span>delayed = extra::stride_delay_with_insert(
+<a href=#880 id=880 data-nosnippet>880</a>            <span class="macro">serde_json::json!</span>({ <span class="string">"maxDelayMs"</span>: <span class="number">500</span>, <span class="string">"transitionMs"</span>: <span class="number">10</span>, <span class="string">"fbtap"</span>: <span class="string">"test_fb" </span>}),
+<a href=#881 id=881 data-nosnippet>881</a>            delay_ms,
+<a href=#882 id=882 data-nosnippet>882</a>            fb,
+<a href=#883 id=883 data-nosnippet>883</a>            input,
+<a href=#884 id=884 data-nosnippet>884</a>            |fb_audio| fb_audio, <span class="comment">// passthrough — same as normal feedback
+<a href=#885 id=885 data-nosnippet>885</a>        </span>);
+<a href=#886 id=886 data-nosnippet>886</a>
+<a href=#887 id=887 data-nosnippet>887</a>        <span class="kw">let </span>graph = Graph::new().render(<span class="macro">vec!</span>[delayed]);
+<a href=#888 id=888 data-nosnippet>888</a>        <span class="kw">let </span>mounted = graph.mount().expect(<span class="string">"mount"</span>);
+<a href=#889 id=889 data-nosnippet>889</a>
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="comment">// Verify tapIn and tapOut nodes exist in the mounted graph.
+<a href=#891 id=891 data-nosnippet>891</a>        </span><span class="kw">let </span>has_tap_in = mounted.all_nodes().any(|(<span class="kw">_</span>, n)| n.kind() == <span class="string">"tapIn"</span>);
+<a href=#892 id=892 data-nosnippet>892</a>        <span class="kw">let </span>has_tap_out = mounted.all_nodes().any(|(<span class="kw">_</span>, n)| n.kind() == <span class="string">"tapOut"</span>);
+<a href=#893 id=893 data-nosnippet>893</a>        <span class="macro">assert!</span>(has_tap_in, <span class="string">"graph should contain tapIn node"</span>);
+<a href=#894 id=894 data-nosnippet>894</a>        <span class="macro">assert!</span>(has_tap_out, <span class="string">"graph should contain tapOut node"</span>);
+<a href=#895 id=895 data-nosnippet>895</a>
+<a href=#896 id=896 data-nosnippet>896</a>        runtime
+<a href=#897 id=897 data-nosnippet>897</a>            .apply_instructions(mounted.batch())
+<a href=#898 id=898 data-nosnippet>898</a>            .expect(<span class="string">"apply instructions"</span>);
+<a href=#899 id=899 data-nosnippet>899</a>
+<a href=#900 id=900 data-nosnippet>900</a>        <span class="comment">// Send impulse, run blocks, check for feedback repeats.
+<a href=#901 id=901 data-nosnippet>901</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>input_buf = <span class="macro">vec!</span>[<span class="number">0.0_f64</span>; block];
+<a href=#902 id=902 data-nosnippet>902</a>        input_buf[<span class="number">0</span>] = <span class="number">1.0</span>;
+<a href=#903 id=903 data-nosnippet>903</a>        <span class="kw">let </span><span class="kw-2">mut </span>output_buf = <span class="macro">vec!</span>[<span class="number">0.0_f64</span>; block];
+<a href=#904 id=904 data-nosnippet>904</a>
+<a href=#905 id=905 data-nosnippet>905</a>        <span class="kw">let </span>inputs = [input_buf.as_slice()];
+<a href=#906 id=906 data-nosnippet>906</a>        <span class="kw">let </span><span class="kw-2">mut </span>outputs = [output_buf.as_mut_slice()];
+<a href=#907 id=907 data-nosnippet>907</a>        runtime
+<a href=#908 id=908 data-nosnippet>908</a>            .process(block, <span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;mut </span>outputs)
+<a href=#909 id=909 data-nosnippet>909</a>            .expect(<span class="string">"process"</span>);
+<a href=#910 id=910 data-nosnippet>910</a>
+<a href=#911 id=911 data-nosnippet>911</a>        <span class="kw">let </span>silence = <span class="macro">vec!</span>[<span class="number">0.0_f64</span>; block];
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="kw">let </span><span class="kw-2">mut </span>found_repeat = <span class="bool-val">false</span>;
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="comment">// With fb=0.5 and 100ms delay, the impulse should repeat
+<a href=#914 id=914 data-nosnippet>914</a>        // (decaying) multiple times.
+<a href=#915 id=915 data-nosnippet>915</a>        </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">20 </span>{
+<a href=#916 id=916 data-nosnippet>916</a>            <span class="kw">let </span>inputs = [silence.as_slice()];
+<a href=#917 id=917 data-nosnippet>917</a>            <span class="kw">let </span><span class="kw-2">mut </span>out = <span class="macro">vec!</span>[<span class="number">0.0_f64</span>; block];
+<a href=#918 id=918 data-nosnippet>918</a>            <span class="kw">let </span><span class="kw-2">mut </span>outputs = [out.as_mut_slice()];
+<a href=#919 id=919 data-nosnippet>919</a>            runtime
+<a href=#920 id=920 data-nosnippet>920</a>                .process(block, <span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;mut </span>outputs)
+<a href=#921 id=921 data-nosnippet>921</a>                .expect(<span class="string">"process"</span>);
+<a href=#922 id=922 data-nosnippet>922</a>            <span class="kw">if </span>outputs[<span class="number">0</span>].iter().any(|<span class="kw-2">&amp;</span>s| s.abs() &gt; <span class="number">1e-10</span>) {
+<a href=#923 id=923 data-nosnippet>923</a>                found_repeat = <span class="bool-val">true</span>;
+<a href=#924 id=924 data-nosnippet>924</a>                <span class="kw">break</span>;
+<a href=#925 id=925 data-nosnippet>925</a>            }
+<a href=#926 id=926 data-nosnippet>926</a>        }
+<a href=#927 id=927 data-nosnippet>927</a>        <span class="macro">assert!</span>(found_repeat, <span class="string">"insert delay should produce feedback repeats"</span>);
+<a href=#928 id=928 data-nosnippet>928</a>    }
+<a href=#929 id=929 data-nosnippet>929</a>}
 </code></pre></div></section></main></body></html>
