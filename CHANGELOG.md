@@ -69,7 +69,12 @@ While the crate is pre-1.0, breaking changes bump the **minor** version.
   - Web demo: the existing `resource-manager` demo now retriggers the
     sampler with `el.train(el.extra.sampleCount({ path, unit: "hz" }))`,
     i.e. exactly one clean loop per asset length — no drift, no gap, no
-    overlap, regardless of file duration.
+    overlap, regardless of file duration. A full-width timeline canvas
+    above the panel shows a playhead cursor driven by
+    `el.meter(el.phasor(sampleCount(..., unit: "hz")))` — the same
+    loop-rate signal that clocks the retrigger. Switching mirrored assets
+    automatically retunes both the retrigger AND the cursor traversal rate.
+    Label reads the asset name, duration, and computed loop rate in Hz.
   - Browser users: WASM artifact must be rebuilt (same flow as `ramp00`).
 
 ### Changed

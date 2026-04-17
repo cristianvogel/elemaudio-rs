@@ -67,14 +67,17 @@ PURPOSE: Track project progress, status, and metrics across development sessions
       `el.train(el.extra.sampleCount({ path, unit: "hz" }))`. No manual
       rate configuration; switching the mirrored path automatically
       retunes the loop rate (the keyed `sampleCount` node's fast-path
-      `setProperty` update handles it).
+      `setProperty` update handles it). A full-width timeline canvas
+      above the panel visualizes the playhead cursor, driven by
+      `el.meter(el.phasor(loopRate))` — the cursor traverses the
+      timeline in exact sync with the retrigger, no host-side timers.
+- [x] Test suite: 22 lib tests + integration tests (including 6 ramp00
+      tests and 9 sample_count tests), all passing.
 - [x] **Fix: VFS FFI always linkable.** Ungated
       `elementary_runtime_add_shared_resource_f32[_multi]` from the
       `ELEM_RS_ENABLE_RESOURCES` cargo feature — they were mis-gated and
       blocked anyone from using `Runtime::add_shared_resource_f32`
       without pulling in the optional `elemaudio-resources` crate.
-- [x] Test suite: 22 lib tests + integration tests (including 6 ramp00
-      tests and 4 sample_count tests), all passing.
 
 ### Completed Previous Session (2026-04-13)
 - [x] Framework hardening: `mount()` returns `Result<MountedGraph, MountError>` (no panics)

@@ -10,6 +10,10 @@ const bundledSampleUrl = new URL("../../../demo-resources/115bpm_808_Beat_mono.w
 const bundledSampleName = "bundled_808.wav";
 const browserVfsRoot = "resource-manager";
 
+// Name of the `el.meter` node tapping the playhead phasor; matches the
+// `source` field of the meter events the UI subscribes to.
+const POSITION_METER = "rm:position";
+
 type ResourceEntry = {
   id: string;
   kind: string;
@@ -55,6 +59,10 @@ if (!resourceFeatureEnabled) {
 }
 
 app.innerHTML = `
+  <div class="sample-timeline-wrap">
+    <canvas id="sample-timeline" class="sample-timeline"></canvas>
+    <div class="sample-timeline-label" id="sample-timeline-label">No sample loaded</div>
+  </div>
   <div class="panel">
     <h1>elemaudio-rs resource manager demo</h1>
     <p>Uploads browser files into the Rust resource manager, then mirrors the selected Rust resource into the browser VFS for playback.</p>
@@ -62,6 +70,9 @@ app.innerHTML = `
       Playback retriggers exactly at the asset's natural period using
       <code>el.train(el.extra.sampleCount({ path, unit: "hz" }))</code> &mdash;
       one clean loop per asset length, no gap, no overlap, whatever the file is.
+      The timeline above shows a playhead cursor driven by
+      <code>el.meter(el.phasor(sampleCount(..., unit: "hz")))</code> &mdash;
+      the same loop-rate signal that retriggers the sample.
     </p>
     <div class="controls">
       <div class="row">
@@ -121,6 +132,8 @@ const metadataStatus = mustQuery<HTMLDivElement>("#metadata-status");
 const mirrorStatus = mustQuery<HTMLDivElement>("#mirror-status");
 const binaryStatus = mustQuery<HTMLDivElement>("#binary-status");
 const resourceList = mustQuery<HTMLDivElement>("#resource-list");
+const timelineCanvas = mustQuery<HTMLCanvasElement>("#sample-timeline");
+const timelineLabel = mustQuery<HTMLDivElement>("#sample-timeline-label");
 
 let selectedResourceId = "";
 let audioContext: AudioContext | null = null;
@@ -128,6 +141,11 @@ let renderer: WebRenderer | null = null;
 let isStopped = false;
 let activeMirrorPath = `${browserVfsRoot}/active.wav`;
 let activeMirrorChannels = 0;
+
+// Cursor state driven by `el.meter` events emitted from the in-graph
+// phasor. Kept in [0, 1) — the normalized playhead over the active asset.
+let cursorPosition = 0;
+let animationHandle = 0;
 
 function api(path: string) {
   return `${apiBase}${path}`;
@@ -175,6 +193,9 @@ async function loadMetadata(resourceId: string) {
 
   const metadata = (await response.json()) as ResourceMetadata;
   metadataStatus.textContent = `Duration: ${metadata.duration_ms.toFixed(1)} ms, Channels: ${metadata.channels}`;
+
+  const loopHz = metadata.duration_ms > 0 ? 1000 / metadata.duration_ms : 0;
+  timelineLabel.textContent = `${resourceId} — ${metadata.duration_ms.toFixed(1)} ms loop, rate ${loopHz.toFixed(3)} Hz`;
 }
 
 async function ensureAudio() {
@@ -187,6 +208,31 @@ async function ensureAudio() {
 
   const worklet = await renderer.initialize(audioContext);
   worklet.connect(audioContext.destination);
+
+  // Subscribe to meter events streamed from the in-graph playhead phasor.
+  // Each event carries `{source, min, max}`. Since the phasor is monotonic
+  // across a block, `max` is the end-of-block value — the current cursor
+  // position normalized to [0, 1).
+  renderer.on("meter", (event: unknown) => {
+    const payload = event as {
+      source?: string;
+      min?: number;
+      max?: number;
+    };
+    if (payload?.source !== POSITION_METER) {
+      return;
+    }
+    // Guard against Infinity / NaN if loopRate is 0 (empty asset), and
+    // clamp into the visible range.
+    const raw = payload.max ?? 0;
+    if (Number.isFinite(raw)) {
+      cursorPosition = Math.min(Math.max(raw, 0), 1);
+    }
+  });
+
+  if (!animationHandle) {
+    animationHandle = window.requestAnimationFrame(drawTimeline);
+  }
 }
 
 async function mirrorSelectedResource(resourceId: string) {
@@ -214,6 +260,69 @@ async function mirrorSelectedResource(resourceId: string) {
   mirrorStatus.textContent = `Mirrored ${resourceId} into browser VFS at ${mirrorPath}`;
 }
 
+// Draw a simple timeline: a horizontal line spanning the full width of the
+// canvas (representing the asset from start to end) plus a vertical cursor
+// positioned at `cursorPosition × width`. The cursor reflects the output
+// of the in-graph meter that taps `el.phasor(sampleCount(..., unit: "hz"))`,
+// so its motion is sample-accurate relative to the asset's retrigger.
+//
+// Called once per animation frame. Cheap — no allocation, ~dozen draw ops.
+function drawTimeline() {
+  animationHandle = window.requestAnimationFrame(drawTimeline);
+
+  const canvas = timelineCanvas;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = canvas.clientWidth;
+  const cssHeight = canvas.clientHeight;
+  const targetWidth = Math.floor(cssWidth * dpr);
+  const targetHeight = Math.floor(cssHeight * dpr);
+
+  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+  // Background.
+  ctx.fillStyle = "#0b0d10";
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+  // Timeline baseline.
+  const baselineY = Math.floor(cssHeight / 2);
+  ctx.strokeStyle = "#3b4754";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(8, baselineY);
+  ctx.lineTo(cssWidth - 8, baselineY);
+  ctx.stroke();
+
+  // Start / end tick marks.
+  ctx.strokeStyle = "#5a6b7a";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(8, baselineY - 10);
+  ctx.lineTo(8, baselineY + 10);
+  ctx.moveTo(cssWidth - 8, baselineY - 10);
+  ctx.lineTo(cssWidth - 8, baselineY + 10);
+  ctx.stroke();
+
+  // Playhead cursor.
+  if (activeMirrorChannels > 0 && !isStopped) {
+    const x = 8 + cursorPosition * (cssWidth - 16);
+    ctx.strokeStyle = "#4dd0e1";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, 4);
+    ctx.lineTo(x, cssHeight - 4);
+    ctx.stroke();
+  }
+}
+
 function buildGraph(): NodeRepr_t[] {
   if (isStopped) {
     return [el.const({ value: 0 }), el.const({ value: 0 })];
@@ -225,8 +334,8 @@ function buildGraph(): NodeRepr_t[] {
   // loop automatically retunes whenever the user switches assets. No
   // manual measuring, no host-side math, no drift.
   //
-  // The trigger `key` is stable across graph rebuilds so that swapping
-  // the mirrored path updates the rate signal in-place rather than
+  // The `key` is stable across graph rebuilds so that swapping the
+  // mirrored path updates the rate signal in-place rather than
   // restarting the train phase.
   const loopRate = el.extra.sampleCount({
     key: "rm:loopRate",
@@ -235,17 +344,38 @@ function buildGraph(): NodeRepr_t[] {
   });
   const trigger = el.train(loopRate);
 
+  // Position cursor: a phasor clocked by the same loopRate. Runs 0 → 1 in
+  // lockstep with the retrigger train, so its value IS the normalized
+  // playhead position over the asset.
+  //
+  // `el.meter` taps this signal and streams {min, max} events back to the
+  // UI at block-rate (~94 Hz @ buffer=512/sr=48k). The UI reads `max` as
+  // the cursor position — the phasor is monotonic per loop so `max` is
+  // the end-of-block value, which is what we want for a cursor.
+  const position = el.phasor(loopRate, el.const({ value: 0 }));
+  const metered = el.meter({ key: "rm:position", name: POSITION_METER }, position);
+
+  // Keep the meter alive in the dependency graph without audibly mixing
+  // the phasor into the output. `mul(0, metered)` ensures the node isn't
+  // pruned by the renderer's reachability pass but contributes nothing
+  // to the audible signal.
+  const silentTap = el.mul(el.const({ value: 0 }), metered);
+
   if (activeMirrorChannels > 1) {
     const roots = el.mc.sample({ path: activeMirrorPath, channels: activeMirrorChannels }, trigger);
 
-    const left = roots[0] ? el.mul(el.const({ value: 0.5 }), roots[0]) : el.const({ value: 0 });
-    const right = roots[1] ? el.mul(el.const({ value: 0.5 }), roots[1]) : left;
+    const left = roots[0]
+      ? el.add(el.mul(el.const({ value: 0.5 }), roots[0]), silentTap)
+      : silentTap;
+    const right = roots[1]
+      ? el.mul(el.const({ value: 0.5 }), roots[1])
+      : left;
 
     return [left, right];
   }
 
   const sample = el.sample({ path: activeMirrorPath }, trigger, el.const({ value: 1 }));
-  const left = el.mul(el.const({ value: 0.5 }), sample);
+  const left = el.add(el.mul(el.const({ value: 0.5 }), sample), silentTap);
   const right = el.mul(el.const({ value: 0.5 }), sample);
 
   return [left, right];
@@ -346,6 +476,8 @@ async function refresh() {
     resourceIdLabel.textContent = "No resource selected";
     metadataStatus.textContent = "Metadata not loaded";
     mirrorStatus.textContent = "Browser VFS idle";
+    timelineLabel.textContent = "No sample loaded";
+    cursorPosition = 0;
     return;
   }
 
