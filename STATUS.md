@@ -34,6 +34,9 @@ PURPOSE: Track project progress, status, and metrics across development sessions
       `DspParameters != last_dsp_params` check; keeps audio thread allocation-free
       on steady-state blocks
 - [x] `DspParameters` now derives `PartialEq`
+- [x] Test suite: 22 lib tests (was 21) + integration tests, all passing
+- [x] **Version bump: `elemaudio-rs 0.1.0 → 0.2.0`** (SemVer minor bump for the
+      breaking `DspGraph::Params: PartialEq` requirement) + `CHANGELOG.md` added
 - [x] **Version bump: `elemaudio-rs 0.1.0 → 0.2.0`** (SemVer minor bump for the
       breaking `DspGraph::Params: PartialEq` requirement) + `CHANGELOG.md` added
 - [x] **New native extra: `el::extra::ramp00`** — sample-accurate one-shot
