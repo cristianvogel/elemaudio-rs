@@ -38,7 +38,7 @@ app.innerHTML = `
     then processes the audio through 
     <code>el.extra.freqShift(...)</code> into <code>el.convolve(...)</code>. 
     The four-channel IR has been pre-prepared, so that channel 3 and 4 are reversed versions of the IR. 
-    This makes it trivial to swap the IR flavour, as demonstrated by the UI button there are the bottom.</p>
+    This makes it trivial to swap the IR flavour, as demonstrated by the UI button.</p>
 
     <div class="controls">
       <div class="row">

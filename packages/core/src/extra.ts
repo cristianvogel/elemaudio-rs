@@ -687,8 +687,8 @@ export function stereoStrideDelay(
  * @param props    - stride delay props; must include `fbtap` name
  * @param delayMs  - per-sample delay time signal
  * @param fb       - feedback amount (gain applied to insert return)
- * @param x        - audio input
  * @param insert   - callback: receives feedback audio, returns processed audio
+ * @param x        - audio input
  *
  * @example
  * ```ts
@@ -697,7 +697,6 @@ export function stereoStrideDelay(
  *   { maxDelayMs: 1500, transitionMs: 60, fbtap: "fb_loop" },
  *   el.const({ value: 250, key: "delay" }),   // delay time
  *   el.const({ value: 0.5, key: "fb_amt" }),  // feedback amount
- *   input,                                     // audio input
  *   (fbAudio) => {
  *     // fbAudio is the delayed signal coming back through the loop.
  *     // Filter it so each repeat gets darker.
@@ -707,6 +706,7 @@ export function stereoStrideDelay(
  *       fbAudio,
  *     );
  *   },
+ *   input,                                     // audio input
  * );
  * ```
  *
@@ -725,8 +725,8 @@ export function strideDelayWithInsert(
   props: StrideDelayProps,
   delayMs: ElemNode,
   fb: ElemNode,
-  x: ElemNode,
   insert: (fbAudio: NodeRepr_t) => NodeRepr_t,
+  x: ElemNode,
 ): NodeRepr_t {
   const {
     fbtap,
@@ -776,9 +776,9 @@ export function strideDelayWithInsert(
  * @param props    - stride delay props; must include `fbtap` name
  * @param delayMs  - per-sample delay time signal
  * @param fb       - feedback amount (gain applied to insert return)
+ * @param insert   - callback: `(fbAudio, tag) => processedAudio`
  * @param left     - left audio input
  * @param right    - right audio input
- * @param insert   - callback: `(fbAudio, tag) => processedAudio`
  *
  * @example
  * ```ts
@@ -786,13 +786,13 @@ export function strideDelayWithInsert(
  *   { maxDelayMs: 1500, transitionMs: 60, fbtap: "fb" },
  *   el.const({ value: 250, key: "delay" }),
  *   el.const({ value: 0.5, key: "fb_amt" }),
- *   inputL,
- *   inputR,
  *   (fbAudio, tag) => el.lowpass(
  *     el.const({ value: 2000, key: `insert_fc:${tag}` }),
  *     el.const({ value: 0.707 }),
  *     fbAudio,
  *   ),
+ *   inputL,
+ *   inputR,
  * );
  * ```
  */
@@ -800,9 +800,9 @@ export function stereoStrideDelayWithInsert(
   props: StrideDelayProps,
   delayMs: ElemNode,
   fb: ElemNode,
+  insert: (fbAudio: NodeRepr_t, tag: string) => NodeRepr_t,
   left: ElemNode,
   right: ElemNode,
-  insert: (fbAudio: NodeRepr_t, tag: string) => NodeRepr_t,
 ): [NodeRepr_t, NodeRepr_t] {
   const {
     fbtap,
@@ -833,4 +833,131 @@ export function stereoStrideDelayWithInsert(
   }
 
   return [buildChannel(left, "L"), buildChannel(right, "R")];
+}
+
+// ---- interpolateN (energy-preserving N-way crossfade) -----------------
+
+export interface InterpolateNProps extends Record<string, unknown> {
+  /** Wrap the interpolator circularly (barberpole). Default: false. */
+  barberpole?: boolean;
+}
+
+/**
+ * Energy-preserving N-way crossfading mixer.
+ *
+ * Crossfades between N mono signal nodes using a normalised interpolator.
+ *
+ * **Without `barberpole`** (default): interpolator clamped to [0, 1].
+ * `0` = first node, `1` = last node. Linear path.
+ *
+ * **With `barberpole: true`**: nodes on a circular ring. `0` and `1`
+ * both map to the first node. The last node crossfades back into the
+ * first. Values outside [0, 1] wrap seamlessly.
+ *
+ * Uses the Signalsmith cheap energy-preserving crossfade curve:
+ * `smoothstep(x) = 3x² − 2x³` passed through `sqrt` for equal-power.
+ * See https://signalsmith-audio.co.uk/writing/2021/cheap-energy-crossfade/
+ *
+ * @param props        - `{ barberpole?: boolean }`
+ * @param interpolator - position signal
+ * @param nodes        - array of mono signal nodes to crossfade between
+ *
+ * @example
+ * ```ts
+ * // Linear (clamped) crossfade
+ * el.extra.interpolateN({}, el.const({ value: 0.5 }), [oscA, oscB, oscC]);
+ *
+ * // Barberpole: wraps around, bipolar LFO is fine
+ * el.extra.interpolateN({ barberpole: true }, el.cycle(0.1), [oscA, oscB, oscC]);
+ * ```
+ */
+export function interpolateN(
+  props: InterpolateNProps,
+  interpolator: ElemNode,
+  nodes: ElemNode[],
+): NodeRepr_t {
+  const n = nodes.length;
+  if (n < 2) {
+    console.error("interpolateN: requires at least 2 nodes, got", n);
+    return n === 1 ? resolve(nodes[0]) : resolve(0);
+  }
+
+  const barberpole = props.barberpole === true;
+  const interp = resolve(interpolator);
+
+  if (barberpole) {
+    return interpolateNBarberpole(interp, nodes, n);
+  } else {
+    return interpolateNClamped(interp, nodes, n);
+  }
+}
+
+function interpolateNClamped(
+  interp: NodeRepr_t,
+  nodes: ElemNode[],
+  n: number,
+): NodeRepr_t {
+  const clamped = createNode("min", {}, [
+    resolve(1),
+    createNode("max", {}, [resolve(0), interp]),
+  ]);
+  const pos = createNode("mul", {}, [clamped, resolve(n - 1)]);
+
+  const weighted: NodeRepr_t[] = nodes.map((node, i) => {
+    const dist = createNode("abs", {}, [
+      createNode("sub", {}, [pos, resolve(i)]),
+    ]);
+    const proximity = createNode("max", {}, [
+      resolve(0),
+      createNode("sub", {}, [resolve(1), dist]),
+    ]);
+    const ss = createNode("mul", {}, [
+      createNode("mul", {}, [proximity, proximity]),
+      createNode("sub", {}, [
+        resolve(3),
+        createNode("mul", {}, [resolve(2), proximity]),
+      ]),
+    ]);
+    const gain = createNode("sqrt", {}, [ss]);
+    return createNode("mul", {}, [resolve(node), gain]);
+  });
+
+  return weighted.reduce((acc, x) => createNode("add", {}, [acc, x]));
+}
+
+function interpolateNBarberpole(
+  interp: NodeRepr_t,
+  nodes: ElemNode[],
+  n: number,
+): NodeRepr_t {
+  const fract = createNode("sub", {}, [
+    interp,
+    createNode("floor", {}, [interp]),
+  ]);
+  const pos = createNode("mul", {}, [fract, resolve(n)]);
+
+  const weighted: NodeRepr_t[] = nodes.map((node, i) => {
+    const linearDist = createNode("abs", {}, [
+      createNode("sub", {}, [pos, resolve(i)]),
+    ]);
+    const circularDist = createNode("min", {}, [
+      linearDist,
+      createNode("sub", {}, [resolve(n), linearDist]),
+    ]);
+    const proximity = createNode("max", {}, [
+      resolve(0),
+      createNode("sub", {}, [resolve(1), circularDist]),
+    ]);
+    const ss = createNode("mul", {}, [
+      createNode("mul", {}, [proximity, proximity]),
+      createNode("sub", {}, [
+        resolve(3),
+        createNode("mul", {}, [resolve(2), proximity]),
+      ]),
+    ]);
+    const gain = createNode("sqrt", {}, [ss]);
+    return createNode("mul", {}, [resolve(node), gain]);
+  });
+
+  return weighted.reduce((acc, x) => createNode("add", {}, [acc, x]));
 }
