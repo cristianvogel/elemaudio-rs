@@ -32,9 +32,13 @@ export interface VocoderParams {
   carrierPath?: string;
   /** VFS path for the modulator sample. */
   modPath?: string;
+  isStopped?: boolean;
 }
 
 export function buildGraph(p: VocoderParams): NodeRepr_t[] {
+  if (p.isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
 
   let carrierL: NodeRepr_t;
   let carrierR: NodeRepr_t;

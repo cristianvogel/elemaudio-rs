@@ -26,9 +26,13 @@ export interface Ramp00DemoParams {
   threshold: number;
   /** When true, mid-ramp retrigger attempts are ignored (blocking=true). */
   blocking: boolean;
+  isStopped?: boolean;
 }
 
 export function buildGraph(p: Ramp00DemoParams): NodeRepr_t[] {
+  if (p.isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
   // --- control knobs (keyed consts → fast-path parameter updates) ---
   const clockHz = el.const({ key: "ramp00:clockHz", value: p.clockHz });
   const threshold = el.const({ key: "ramp00:threshold", value: p.threshold });

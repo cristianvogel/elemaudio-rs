@@ -84,6 +84,7 @@ app.innerHTML = `
       </div>
       <div class="buttons">
         <button id="play-selected">Mirror and play</button>
+        <button id="stop-audio" class="secondary">Stop audio</button>
         <label class="inline-toggle">
           <input id="auto-play" type="checkbox" checked />
           <span>Auto-play selection</span>
@@ -108,6 +109,7 @@ const renameSelectedButton = mustQuery<HTMLButtonElement>("#rename-selected");
 const deleteSelectedButton = mustQuery<HTMLButtonElement>("#delete-selected");
 const pruneSelectedButton = mustQuery<HTMLButtonElement>("#prune-selected");
 const playSelectedButton = mustQuery<HTMLButtonElement>("#play-selected");
+const stopAudioButton = mustQuery<HTMLButtonElement>("#stop-audio");
 const autoPlayCheckbox = mustQuery<HTMLInputElement>("#auto-play");
 const status = mustQuery<HTMLDivElement>("#status");
 const metadataStatus = mustQuery<HTMLDivElement>("#metadata-status");
@@ -118,6 +120,7 @@ const resourceList = mustQuery<HTMLDivElement>("#resource-list");
 let selectedResourceId = "";
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
+let isStopped = false;
 let activeMirrorPath = `${browserVfsRoot}/active.wav`;
 let activeMirrorChannels = 0;
 
@@ -207,6 +210,10 @@ async function mirrorSelectedResource(resourceId: string) {
 }
 
 function buildGraph(): NodeRepr_t[] {
+  if (isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
+
   const trigger = el.train(el.const({ value: 0.2 }));
 
   if (activeMirrorChannels > 1) {
@@ -233,7 +240,26 @@ async function renderCurrentGraph() {
   await audioContext?.resume();
   await renderer.render(...buildGraph());
   await renderer.pruneVirtualFileSystem();
-  status.textContent = `Playing ${selectedResourceId}`;
+  status.textContent = isStopped ? "Audio stopped" : `Playing ${selectedResourceId}`;
+}
+
+async function stopAudio() {
+  if (!renderer || !audioContext) return;
+
+  isStopped = true;
+  status.textContent = "Stopping audio...";
+
+  // Render silence with a short fade-out
+  await renderer.renderWithOptions(
+    { rootFadeInMs: 0, rootFadeOutMs: 100 },
+    ...[el.const({ value: 0 }), el.const({ value: 0 })]
+  );
+
+  // Give it a moment to fade out before suspending
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  await audioContext.suspend();
+
+  status.textContent = "Audio stopped";
 }
 
 function renderResources(snapshot: ResourceSnapshot) {
@@ -436,8 +462,15 @@ pruneSelectedButton.addEventListener("click", () => {
 });
 
 playSelectedButton.addEventListener("click", () => {
+  isStopped = false;
   void playSelectedResource().catch((error) => {
     status.textContent = `Playback failed: ${error instanceof Error ? error.message : String(error)}`;
+  });
+});
+
+stopAudioButton.addEventListener("click", () => {
+  void stopAudio().catch((error) => {
+    status.textContent = `Stop failed: ${error instanceof Error ? error.message : String(error)}`;
   });
 });
 

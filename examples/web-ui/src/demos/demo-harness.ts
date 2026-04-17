@@ -7,7 +7,7 @@
  *  - control bindings and readout sync
  */
 
-import type { NodeRepr_t } from "@elem-rs/core";
+import { el, type NodeRepr_t } from "@elem-rs/core";
 import WebRenderer from "../WebRenderer";
 import "../style.css";
 
@@ -58,7 +58,12 @@ export function initDemo(config: DemoConfig) {
   app.innerHTML = config.layout;
 
   const startButton = mustQuery<HTMLButtonElement>(app, "#start");
+  const stopButton = mustQuery<HTMLButtonElement>(app, "#stop");
   const status = mustQuery<HTMLDivElement>(app, "#status");
+
+  if (stopButton) {
+    stopButton.disabled = true;
+  }
 
   let audioContext: AudioContext | null = null;
   let renderer: WebRenderer | null = null;
@@ -93,6 +98,26 @@ export function initDemo(config: DemoConfig) {
       config.updateReadouts();
       status.textContent = JSON.stringify(result);
     }
+  }
+
+  async function stopAudio() {
+    if (!renderer || !audioContext) return;
+
+    status.textContent = "Stopping audio...";
+    if (stopButton) stopButton.disabled = true;
+
+    // Render silence with a short fade-out
+    await renderer.renderWithOptions(
+      { rootFadeInMs: 0, rootFadeOutMs: 100 },
+      ...[el.const({ value: 0 }), el.const({ value: 0 })]
+    );
+
+    // Give it a moment to fade out before suspending
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await audioContext.suspend();
+
+    status.textContent = "Audio stopped";
+    startButton.disabled = false;
   }
 
   function resetControl(control: HTMLInputElement) {
@@ -138,11 +163,18 @@ export function initDemo(config: DemoConfig) {
     try {
       await ensureAudio();
       await renderCurrentGraph();
+      if (stopButton) stopButton.disabled = false;
     } catch (error) {
       status.textContent = `Failed: ${error instanceof Error ? error.message : JSON.stringify(error)}`;
       startButton.disabled = false;
     }
   });
+
+  if (stopButton) {
+    stopButton.addEventListener("click", async () => {
+      await stopAudio();
+    });
+  }
 
   // Note: updateReadouts is NOT called here. Demos call it after
   // querying their control elements. The first render also calls it.
@@ -150,6 +182,10 @@ export function initDemo(config: DemoConfig) {
   return {
     app,
     status,
+    startButton,
+    stopButton,
+    stopAudio,
+    renderCurrentGraph,
     wireControls,
     updateReadouts: () => config.updateReadouts(),
     mustQuery: <T extends Element>(sel: string) => mustQuery<T>(app, sel),

@@ -21,6 +21,7 @@ export interface SynthParams {
     delayTransitionMs: number;
     delayInsertCutoff: number;
     bigLeapMode: StrideDelayBigLeapMode;
+    isStopped?: boolean;
 }
 
 const morphingWaves = (hz: NodeRepr_t) => el.extra.interpolateN(
@@ -108,6 +109,9 @@ function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {
 }
 
 export function buildGraph(p: SynthParams): NodeRepr_t[] {
+    if (p.isStopped) {
+        return [el.const({ value: 0 }), el.const({ value: 0 })];
+    }
     const out = synthOut(p.frequency);
     const crunchy = [
         crunchBranch("crunch:0", out[0], p),

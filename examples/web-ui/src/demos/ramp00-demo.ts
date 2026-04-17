@@ -42,7 +42,10 @@ const layout = `
       click <em>Zoom</em> to iterate up to 128&times; or back to 1&times;.
     </p>
     <div class="controls">
-      <button id="start" class="start-button">Start</button>
+      <div class="button-row">
+        <button id="start" class="state-button">Start</button>
+        <button id="stop" class="state-button">Stop</button>
+      </div>
 
       <div class="row toggle-row">
         <label class="toggle-label" for="blocking-toggle">
@@ -99,8 +102,10 @@ let thresholdValue: HTMLSpanElement;
 let oscilloscope: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
+let stopButton: HTMLButtonElement;
+let isStopped = false;
 
-const { mustQuery: q, wireControls } = initDemo({
+const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph: () =>
     dspBuildGraph({
@@ -108,6 +113,7 @@ const { mustQuery: q, wireControls } = initDemo({
       durMs: Number(durMsSlider.value),
       clockHz: Number(clockHzSlider.value),
       threshold: Number(thresholdSlider.value),
+      isStopped,
     }),
   updateReadouts,
   onScopeEvent: (event: any) => {
@@ -131,8 +137,19 @@ thresholdValue = q<HTMLSpanElement>("#threshold-value");
 oscilloscope = q<any>("elemaudio-oscilloscope");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
+stopButton = q<HTMLButtonElement>("#stop");
+
+const startButton = q<HTMLButtonElement>("#start");
+startButton.addEventListener("click", () => {
+  isStopped = false;
+});
 
 wireControls([blockingToggle, durMsSlider, clockHzSlider, thresholdSlider]);
+
+stopButton.addEventListener("click", async () => {
+  isStopped = true;
+  await renderCurrentGraph();
+});
 
 // --- freeze button ---
 freezeButton.addEventListener("click", () => {

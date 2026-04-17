@@ -101,6 +101,15 @@ p {
   flex-wrap: wrap;
 }
 
+.state-button {
+  padding: 12px 16px;
+    margin-left: 10px;
+    margin-right: 10px;
+  border-radius: 12px;
+
+  font-size: 13px;
+}
+
 .row {
   display: grid;
   gap: 8px;
@@ -274,4 +283,14 @@ button:disabled {
   background: rgba(255, 255, 255, 0.03);
   color: #9fb0c3;
   font-size: 13px;
+}
+
+#stop {
+    background: linear-gradient(135deg, rgba(176, 10, 234, 0.52), rgba(250, 155, 72, 0.8));
+}
+
+.button-row {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
