@@ -12,9 +12,13 @@ export interface SampleParams {
   blend: number;
   leftIrPath: string;
   rightIrPath: string;
+  isStopped?: boolean;
 }
 
 export function buildGraph(p: SampleParams): NodeRepr_t[] {
+  if (p.isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
   const trigger = el.train(0.1);
   const blendNode = el.const({ value: p.blend });
 

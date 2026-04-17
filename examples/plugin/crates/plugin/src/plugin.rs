@@ -35,6 +35,12 @@ pub struct AudioProcessor<'a> {
     pub(crate) shared: &'a PluginSharedState,
     pub(crate) params: PluginParamsLocal,
     pub(crate) host: HostAudioProcessorHandle<'a>,
+    /// Last `DspParameters` snapshot actually pushed to the engine. The audio
+    /// thread compares against this on every block and only calls
+    /// `engine.set_params` when something has changed — avoids paying even the
+    /// engine's internal `PartialEq` check on the hot path when the user is
+    /// not touching knobs.
+    last_dsp_params: DspParameters,
     in_l: Vec<f64>,
     in_r: Vec<f64>,
     out_l: Vec<f64>,
@@ -123,6 +129,7 @@ impl<'a> PluginAudioProcessor<'a, PluginSharedState, MainThread<'a>> for AudioPr
             shared,
             params: PluginParamsLocal::new(&shared.params),
             host,
+            last_dsp_params: defaults,
             in_l: vec![0.0_f64; max_frames],
             in_r: vec![0.0_f64; max_frames],
             out_l: vec![0.0_f64; max_frames],
@@ -165,7 +172,13 @@ impl<'a> PluginAudioProcessor<'a, PluginSharedState, MainThread<'a>> for AudioPr
             transition_ms: self.params.transition_ms(),
             mix: self.params.mix(),
         };
-        self.engine.set_params(&dsp_params);
+        // Only push parameters to the engine when something actually changed.
+        // This keeps the audio-thread hot path allocation-free on steady-state
+        // blocks (no graph rebuild, no hashmap reconstruction — see engine.rs).
+        if dsp_params != self.last_dsp_params {
+            self.engine.set_params(&dsp_params);
+            self.last_dsp_params = dsp_params;
+        }
 
         // Single-pass channel buffer abstraction.
         enum ChannelBuffer<'a> {

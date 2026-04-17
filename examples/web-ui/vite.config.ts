@@ -43,6 +43,7 @@ export default defineConfig({
         synth: resolve(__dirname, "synth.html"),
         sample: resolve(__dirname, "sample.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
+        ramp00: resolve(__dirname, "ramp00.html"),
         waveshaper: resolve(__dirname, "waveshaper.html"),
         vocoder: resolve(__dirname, "vocoder.html"),
         resource: resolve(__dirname, "resource-manager.html"),

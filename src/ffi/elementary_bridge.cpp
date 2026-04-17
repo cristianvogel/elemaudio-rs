@@ -19,6 +19,14 @@
 // Inputs: [0] carrier L, [1] carrier R, [2] modulator L, [3] modulator R.
 // Properties: windowMs, smoothingMs, maxGainDb, swapInputs.
 #include <extra/vocoder.h>
+// Ramp00Node: sample-accurate one-shot 0→1 ramp that drops to 0 on peak.
+// Inputs: [0] dur (samples), [1] trigger (rising-edge gate).
+// Property: blocking (bool, default true).
+#include <extra/ramp00.h>
+// SampleCountNode: emits the exact length (in samples) of a VFS-resident
+// audio resource as a constant-valued signal. Zero children.
+// Property: path (string, required) — VFS key of the resource.
+#include <extra/sample_count.h>
 
 extern "C" {
 
@@ -74,6 +82,21 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         // STFT channel vocoder. 4 inputs (carrier L/R, modulator L/R), 2 outputs.
         handle->runtime->registerNodeType("vocoder", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::VocoderNode<double>>(id, fs, bs);
+        });
+
+        // "ramp00" — Ramp00Node.
+        // Sample-accurate one-shot 0→1 ramp that drops to 0 immediately on peak.
+        // Inputs: [0] dur in samples, [1] trigger.
+        // Property: blocking (bool, default true) — block retriggers while running.
+        handle->runtime->registerNodeType("ramp00", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
+        });
+
+        // "sampleCount" — SampleCountNode.
+        // Constant-signal node whose value is the length (in samples, per channel)
+        // of the VFS resource named by the `path` prop. Zero children.
+        handle->runtime->registerNodeType("sampleCount", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
         return handle.release();
@@ -134,7 +157,11 @@ void elementary_runtime_set_current_time_ms(elementary_runtime_handle* handle, d
     }
 }
 
-#if defined(ELEM_RS_ENABLE_RESOURCES)
+// VFS / shared-resource FFI. Always compiled — these are thin wrappers over
+// the runtime's built-in `SharedResourceMap` and have no dependency on the
+// optional `elemaudio-resources` feature. Any extra that consumes a VFS
+// asset (`el.sample`, `el.table`, `el.extra.sampleCount`, …) needs these
+// entry points to be linkable regardless of which cargo features are on.
 int elementary_runtime_add_shared_resource_f32(
     elementary_runtime_handle* handle,
     char const* name,
@@ -175,7 +202,6 @@ int elementary_runtime_add_shared_resource_f32_multi(
         return elem::ReturnCode::InvariantViolation();
     }
 }
-#endif
 
 int elementary_runtime_process(
     elementary_runtime_handle* handle,

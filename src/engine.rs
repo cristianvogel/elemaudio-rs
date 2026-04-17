@@ -52,12 +52,18 @@ pub use legacy::{KeyedConst, NativeProp};
 /// — no manual declarations needed.
 pub trait DspGraph {
     /// Parameter snapshot type (e.g., a struct with delay_ms, feedback, etc.).
-    type Params: Clone;
+    ///
+    /// `PartialEq` is required so [`Engine::set_params`] can early-return when
+    /// the parameters have not changed, avoiding an audio-thread graph rebuild
+    /// and its associated heap allocations (see the realtime audio rules in
+    /// SKILLS.md).
+    type Params: Clone + PartialEq;
 
     /// Build the graph from parameters. Returns output root nodes.
     ///
     /// Called once at activation to mount the graph, and again on each
-    /// `set_params` call to diff keyed consts and native props.
+    /// `set_params` call (when the params have actually changed) to diff
+    /// keyed consts and native props.
     fn build(params: &Self::Params) -> Vec<Node>;
 }
 
@@ -74,6 +80,10 @@ pub struct Engine<G: DspGraph> {
     native_node_ids: HashMap<String, Vec<i32>>,
     /// Current parameters.
     current: G::Params,
+    /// Counts how many times `set_params` performed a full rebuild. Used by
+    /// tests and diagnostics to verify the early-return path fires when
+    /// parameters are unchanged.
+    rebuild_count: u64,
     _phantom: PhantomData<G>,
 }
 
@@ -121,6 +131,7 @@ impl<G: DspGraph> Engine<G> {
             native_props,
             native_node_ids,
             current: params.clone(),
+            rebuild_count: 0,
             _phantom: PhantomData,
         })
     }
@@ -128,7 +139,20 @@ impl<G: DspGraph> Engine<G> {
     /// Update parameters. Rebuilds the graph declaratively, diffs keyed
     /// consts and native node props against the previous build, and emits
     /// minimal instruction batches for any changes.
+    ///
+    /// Realtime note: this call is safe to invoke from the audio thread only
+    /// when the `Params` have actually changed. When they have not, this is
+    /// a cheap `PartialEq` check and an early return — no allocations, no
+    /// tree walk, no FFI. Callers on the audio thread should still prefer
+    /// to gate this behind their own change detection to avoid paying even
+    /// the `PartialEq` cost on every process block when the parameter
+    /// payload is large.
     pub fn set_params(&mut self, params: &G::Params) {
+        if params == &self.current {
+            return;
+        }
+
+        self.rebuild_count += 1;
         let new_roots = G::build(params);
         let new_keyed_consts = collect_keyed_consts(&new_roots);
         let new_native_props = collect_native_props(&new_roots);
@@ -198,6 +222,13 @@ impl<G: DspGraph> Engine<G> {
     /// Returns the current parameters.
     pub fn params(&self) -> &G::Params {
         &self.current
+    }
+
+    /// Number of times `set_params` has performed a full rebuild since this
+    /// engine was constructed. Unchanged-parameter calls do not increment
+    /// this counter. Primarily useful for tests and realtime diagnostics.
+    pub fn rebuild_count(&self) -> u64 {
+        self.rebuild_count
     }
 }
 
@@ -312,7 +343,7 @@ mod tests {
     use crate::authoring::{el, extra};
     use serde_json::json;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq)]
     struct TestParams {
         delay_ms: f64,
         fb: f64,
@@ -441,8 +472,52 @@ mod tests {
         let mut engine =
             Engine::<TestDelayGraph>::new(44100.0, 64, &params).expect("engine creation");
 
+        assert_eq!(engine.rebuild_count(), 0);
         engine.set_params(&params);
         assert!((engine.keyed_consts["delay"] - 50.0).abs() < f64::EPSILON);
+        assert_eq!(
+            engine.rebuild_count(),
+            0,
+            "set_params with unchanged params must not trigger a rebuild"
+        );
+    }
+
+    #[test]
+    fn engine_set_params_early_returns_on_repeated_identical_calls() {
+        let params = TestParams {
+            delay_ms: 50.0,
+            fb: 0.2,
+            transition_ms: 10.0,
+        };
+
+        let mut engine =
+            Engine::<TestDelayGraph>::new(44100.0, 64, &params).expect("engine creation");
+
+        // Simulate an audio thread that calls set_params on every block while
+        // the user is not touching any knobs.
+        for _ in 0..1_000 {
+            engine.set_params(&params);
+        }
+        assert_eq!(
+            engine.rebuild_count(),
+            0,
+            "1000 unchanged set_params calls must produce zero rebuilds"
+        );
+
+        // One real change → exactly one rebuild.
+        let changed = TestParams {
+            delay_ms: 75.0,
+            fb: 0.2,
+            transition_ms: 10.0,
+        };
+        engine.set_params(&changed);
+        assert_eq!(engine.rebuild_count(), 1);
+
+        // Further identical calls must not rebuild again.
+        for _ in 0..100 {
+            engine.set_params(&changed);
+        }
+        assert_eq!(engine.rebuild_count(), 1);
     }
 
     #[test]

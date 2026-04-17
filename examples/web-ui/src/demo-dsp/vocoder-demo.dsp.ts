@@ -32,9 +32,13 @@ export interface VocoderParams {
   carrierPath?: string;
   /** VFS path for the modulator sample. */
   modPath?: string;
+  isStopped?: boolean;
 }
 
 export function buildGraph(p: VocoderParams): NodeRepr_t[] {
+  if (p.isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
 
   let carrierL: NodeRepr_t;
   let carrierR: NodeRepr_t;
@@ -92,9 +96,7 @@ export function buildGraph(p: VocoderParams): NodeRepr_t[] {
     },
     el.const({ value: p.delayTimeMs, key: "vocoder:delay-ms" }),
     el.const({ value: p.delayFeedback, key: "vocoder:delay-fb" }),
-    vocodedL,
-    vocodedR,
-    (fbAudio, tag) => {
+    (fbAudio: NodeRepr_t, tag: string) => {
       // Lowpass in the feedback loop — each repeat gets darker.
       return el.lowpass(
         el.const({ value: p.delayInsertCutoff, key: `vocoder:insert-fc:${tag}` }),
@@ -102,6 +104,8 @@ export function buildGraph(p: VocoderParams): NodeRepr_t[] {
         fbAudio,
       );
     },
+      vocodedL,
+      vocodedR,
   );
 
   // ---- Delay dry/wet (vocoded vs delayed-vocoded) ----

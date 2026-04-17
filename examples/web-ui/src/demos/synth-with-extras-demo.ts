@@ -15,7 +15,10 @@ const layout = `
     <h1>Synth + Extras</h1>
     <p>Demos a complex graph, mixing <code>el.＊</code> with <code>el.extra.＊</code> nodes. </p>
     <div class="controls">
-      <button id="start" class="start-button">Start audio</button>
+      <div class="button-row">
+        <button id="start" class="state-button">Start audio</button>
+        <button id="stop" class="state-button">Stop audio</button>
+      </div>
       <div class="row">
         <label for="frequency">
           <span>Synth Fc</span>
@@ -151,8 +154,10 @@ let crunchCutValue: HTMLSpanElement;
 let crunchOutSlider: HTMLInputElement;
 let crunchOutValue: HTMLSpanElement;
 let crunchEnable: HTMLInputElement;
+let stopButton: HTMLButtonElement;
+let isStopped = false;
 
-const { mustQuery: q, wireControls } = initDemo({
+const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph: () => dspBuildGraph({
     frequency: Number(frequencySlider.value),
@@ -169,6 +174,7 @@ const { mustQuery: q, wireControls } = initDemo({
     delayTransitionMs: Number(delayTransitionSlider.value),
     delayInsertCutoff: Number(delayInsertCutoffSlider.value),
     bigLeapMode: (["linear", "step"] as const)[Number(delayMethodSlider.value)] as StrideDelayBigLeapMode,
+    isStopped,
   }),
   updateReadouts,
   renderOptions: { rootFadeInMs: 250, rootFadeOutMs: 250 },
@@ -200,12 +206,23 @@ crunchCutValue = q<HTMLSpanElement>("#crunch-cut-value");
 crunchOutSlider = q<HTMLInputElement>("#crunch-out");
 crunchOutValue = q<HTMLSpanElement>("#crunch-out-value");
 crunchEnable = q<HTMLInputElement>("#crunch-enable");
+stopButton = q<HTMLButtonElement>("#stop");
+
+const startButton = q<HTMLButtonElement>("#start");
+startButton.addEventListener("click", () => {
+  isStopped = false;
+});
 
 wireControls([
   frequencySlider, driveLimiterSlider, limiterEnable,
   delayTimeSlider, delayFeedbackSlider, delayTransitionSlider, delayInsertCutoffSlider, delayMethodSlider,
   crunchDriveSlider, crunchFuzzSlider, crunchToneSlider, crunchCutSlider, crunchOutSlider, crunchEnable,
 ]);
+
+stopButton.addEventListener("click", async () => {
+  isStopped = true;
+  await renderCurrentGraph();
+});
 
 function updateReadouts() {
   frequencyValue.textContent = `${Number(frequencySlider.value)} Hz`;
