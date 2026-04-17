@@ -7,7 +7,6 @@
 mod graph_script;
 pub use graph_script::StrideDelayGraph;
 
-
 // ---- Parameter IDs (shared with plugin crate) -------------------------
 
 pub const PARAM_ID_DELAY_MS: &str = "delay_ms";
@@ -50,7 +49,7 @@ pub fn clamp_mix(v: f32) -> f32 {
 
 // ---- DSP parameter snapshot -------------------------------------------
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DspParameters {
     pub delay_ms: f32,
     pub feedback: f32,
