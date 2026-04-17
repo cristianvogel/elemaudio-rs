@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/authoring/extra.rs`."><title>extra.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">elemaudio_rs/authoring/</div>extra.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">super</span>::el;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/authoring/extra.rs`."><title>extra.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="elemaudio_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">elemaudio_rs/authoring/</div>extra.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">super</span>::el;
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span><span class="kw">crate</span>::graph::Node;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>crate::{resolve, unpack, ElemNode};
 <a href=#4 id=4 data-nosnippet>4</a>
@@ -902,4 +902,145 @@
 <a href=#902 id=902 data-nosnippet>902</a>
 <a href=#903 id=903 data-nosnippet>903</a>    serde_json::Value::Object(map)
 <a href=#904 id=904 data-nosnippet>904</a>}
+<a href=#905 id=905 data-nosnippet>905</a>
+<a href=#906 id=906 data-nosnippet>906</a><span class="doccomment">/// Sample-accurate one-shot 0→1 ramp.
+<a href=#907 id=907 data-nosnippet>907</a>///
+<a href=#908 id=908 data-nosnippet>908</a>/// On a rising edge of `x` (trigger crossing 0.5 upward), the signal increments
+<a href=#909 id=909 data-nosnippet>909</a>/// linearly from 0 to 1 over `dur` samples, then drops instantly back to 0 on
+<a href=#910 id=910 data-nosnippet>910</a>/// the next sample — hence the `00` suffix: the output starts at 0 and ends at
+<a href=#911 id=911 data-nosnippet>911</a>/// 0. Ideal as a sample-accurate envelope gate, a percussive modulator trigger,
+<a href=#912 id=912 data-nosnippet>912</a>/// or a duration-controlled one-shot LFO.
+<a href=#913 id=913 data-nosnippet>913</a>///
+<a href=#914 id=914 data-nosnippet>914</a>/// # Arguments (AGENTS.md order: props first, trigger/input last)
+<a href=#915 id=915 data-nosnippet>915</a>/// - `props` — see below
+<a href=#916 id=916 data-nosnippet>916</a>/// - `dur`  — ramp duration in **samples** (signal; may vary per-sample)
+<a href=#917 id=917 data-nosnippet>917</a>/// - `x`    — trigger signal; a rising edge through 0.5 starts the ramp
+<a href=#918 id=918 data-nosnippet>918</a>///
+<a href=#919 id=919 data-nosnippet>919</a>/// # Props
+<a href=#920 id=920 data-nosnippet>920</a>/// - `key`     : optional authoring key for stable identity
+<a href=#921 id=921 data-nosnippet>921</a>/// - `blocking`: `bool`, default `true`. When `true`, triggers are ignored
+<a href=#922 id=922 data-nosnippet>922</a>///   while the ramp is running (i.e. until the output returns to exactly 0).
+<a href=#923 id=923 data-nosnippet>923</a>///   When `false`, any rising edge restarts the ramp from 0.
+<a href=#924 id=924 data-nosnippet>924</a>///
+<a href=#925 id=925 data-nosnippet>925</a>/// # dur semantics
+<a href=#926 id=926 data-nosnippet>926</a>/// - `dur` is read every sample and the per-sample increment is `1 / dur`.
+<a href=#927 id=927 data-nosnippet>927</a>/// - If `dur` changes mid-ramp, the current value is preserved and only the
+<a href=#928 id=928 data-nosnippet>928</a>///   slope updates (smooth continuation at the new rate).
+<a href=#929 id=929 data-nosnippet>929</a>/// - If `dur &lt;= 0` at the moment of a would-be trigger, the trigger is ignored.
+<a href=#930 id=930 data-nosnippet>930</a>/// - If `dur &lt;= 0` while the ramp is running, the ramp aborts and the output
+<a href=#931 id=931 data-nosnippet>931</a>///   snaps to 0.
+<a href=#932 id=932 data-nosnippet>932</a>///
+<a href=#933 id=933 data-nosnippet>933</a>/// # Example
+<a href=#934 id=934 data-nosnippet>934</a>///
+<a href=#935 id=935 data-nosnippet>935</a>/// ```ignore
+<a href=#936 id=936 data-nosnippet>936</a>/// use elemaudio_rs::{el, extra};
+<a href=#937 id=937 data-nosnippet>937</a>/// use serde_json::json;
+<a href=#938 id=938 data-nosnippet>938</a>///
+<a href=#939 id=939 data-nosnippet>939</a>/// // 4800-sample (100 ms @ 48kHz) ramp, retriggered by a 2 Hz train,
+<a href=#940 id=940 data-nosnippet>940</a>/// // with retrigger blocking while the ramp is running.
+<a href=#941 id=941 data-nosnippet>941</a>/// let ramp = extra::ramp00(
+<a href=#942 id=942 data-nosnippet>942</a>///     json!({ "blocking": true }),
+<a href=#943 id=943 data-nosnippet>943</a>///     el::const_(4800.0),
+<a href=#944 id=944 data-nosnippet>944</a>///     el::train(el::const_(2.0)),
+<a href=#945 id=945 data-nosnippet>945</a>/// );
+<a href=#946 id=946 data-nosnippet>946</a>/// ```
+<a href=#947 id=947 data-nosnippet>947</a></span><span class="kw">pub fn </span>ramp00(props: serde_json::Value, dur: <span class="kw">impl </span>Into&lt;ElemNode&gt;, x: <span class="kw">impl </span>Into&lt;ElemNode&gt;) -&gt; Node {
+<a href=#948 id=948 data-nosnippet>948</a>    <span class="kw">let </span>resolved_props = ramp00_resolve_defaults(props);
+<a href=#949 id=949 data-nosnippet>949</a>    Node::new(<span class="string">"ramp00"</span>, resolved_props, <span class="macro">vec!</span>[resolve(dur), resolve(x)])
+<a href=#950 id=950 data-nosnippet>950</a>}
+<a href=#951 id=951 data-nosnippet>951</a>
+<a href=#952 id=952 data-nosnippet>952</a><span class="doccomment">/// Apply defaults for `ramp00` props.
+<a href=#953 id=953 data-nosnippet>953</a></span><span class="kw">fn </span>ramp00_resolve_defaults(props: serde_json::Value) -&gt; serde_json::Value {
+<a href=#954 id=954 data-nosnippet>954</a>    <span class="kw">let </span><span class="kw-2">mut </span>map = <span class="kw">match </span>props {
+<a href=#955 id=955 data-nosnippet>955</a>        serde_json::Value::Object(m) =&gt; m,
+<a href=#956 id=956 data-nosnippet>956</a>        <span class="kw">_ </span>=&gt; serde_json::Map::new(),
+<a href=#957 id=957 data-nosnippet>957</a>    };
+<a href=#958 id=958 data-nosnippet>958</a>
+<a href=#959 id=959 data-nosnippet>959</a>    map.entry(<span class="string">"blocking"</span>)
+<a href=#960 id=960 data-nosnippet>960</a>        .or_insert_with(|| serde_json::Value::from(<span class="bool-val">true</span>));
+<a href=#961 id=961 data-nosnippet>961</a>
+<a href=#962 id=962 data-nosnippet>962</a>    serde_json::Value::Object(map)
+<a href=#963 id=963 data-nosnippet>963</a>}
+<a href=#964 id=964 data-nosnippet>964</a>
+<a href=#965 id=965 data-nosnippet>965</a><span class="doccomment">/// Emit the length of a VFS-resident audio resource as a constant signal,
+<a href=#966 id=966 data-nosnippet>966</a>/// optionally scaled into a natural domain (`samp`, `ms`, or `hz`).
+<a href=#967 id=967 data-nosnippet>967</a>///
+<a href=#968 id=968 data-nosnippet>968</a>/// Shape mirrors [`el::sr`](crate::el::sr) and [`el::time`](crate::el::time):
+<a href=#969 id=969 data-nosnippet>969</a>/// zero children, one output, a constant value per sample. The native node
+<a href=#970 id=970 data-nosnippet>970</a>/// computes the scaled value once on the message thread (at `setProperty`
+<a href=#971 id=971 data-nosnippet>971</a>/// time) and streams it out through a `std::fill_n` — the audio loop does
+<a href=#972 id=972 data-nosnippet>972</a>/// no division, no unit parsing, and no allocation.
+<a href=#973 id=973 data-nosnippet>973</a>///
+<a href=#974 id=974 data-nosnippet>974</a>/// # Props
+<a href=#975 id=975 data-nosnippet>975</a>///
+<a href=#976 id=976 data-nosnippet>976</a>/// | Key    | Type     | Required | Default  | Notes                                                                             |
+<a href=#977 id=977 data-nosnippet>977</a>/// |--------|----------|----------|----------|-----------------------------------------------------------------------------------|
+<a href=#978 id=978 data-nosnippet>978</a>/// | `path` | `String` | yes      | —        | VFS key of a previously-added resource                                            |
+<a href=#979 id=979 data-nosnippet>979</a>/// | `unit` | `String` | no       | `"samp"` | Output domain: `"samp"` (raw sample count), `"ms"`, or `"hz"` (1/duration)        |
+<a href=#980 id=980 data-nosnippet>980</a>/// | `key`  | `String` | no       | —        | Optional authoring key for stable identity                                        |
+<a href=#981 id=981 data-nosnippet>981</a>///
+<a href=#982 id=982 data-nosnippet>982</a>/// ## Unit semantics
+<a href=#983 id=983 data-nosnippet>983</a>///
+<a href=#984 id=984 data-nosnippet>984</a>/// Let `len` be the asset's per-channel frame count and `sr` the current
+<a href=#985 id=985 data-nosnippet>985</a>/// runtime sample rate:
+<a href=#986 id=986 data-nosnippet>986</a>///
+<a href=#987 id=987 data-nosnippet>987</a>/// | `unit`   | Output value              | Example (1s @ 48 kHz)      |
+<a href=#988 id=988 data-nosnippet>988</a>/// |----------|---------------------------|-----------------------------|
+<a href=#989 id=989 data-nosnippet>989</a>/// | `"samp"` | `len`                     | 48000                       |
+<a href=#990 id=990 data-nosnippet>990</a>/// | `"ms"`   | `1000 × len / sr`         | 1000.0                      |
+<a href=#991 id=991 data-nosnippet>991</a>/// | `"hz"`   | `sr / len`                | 1.0                         |
+<a href=#992 id=992 data-nosnippet>992</a>///
+<a href=#993 id=993 data-nosnippet>993</a>/// The `"hz"` mode is the fundamental *period* frequency — the reciprocal
+<a href=#994 id=994 data-nosnippet>994</a>/// of the asset's duration in seconds. For a 2-second asset this is
+<a href=#995 id=995 data-nosnippet>995</a>/// `0.5 Hz`. Useful as a `phasor` rate to clock the asset exactly once per
+<a href=#996 id=996 data-nosnippet>996</a>/// cycle.
+<a href=#997 id=997 data-nosnippet>997</a>///
+<a href=#998 id=998 data-nosnippet>998</a>/// # Missing resource
+<a href=#999 id=999 data-nosnippet>999</a>///
+<a href=#1000 id=1000 data-nosnippet>1000</a>/// If the `path` prop names a resource that has **not** been added to the
+<a href=#1001 id=1001 data-nosnippet>1001</a>/// runtime's shared-resource map at the time this node's graph is applied,
+<a href=#1002 id=1002 data-nosnippet>1002</a>/// the underlying `setProperty` returns `InvalidPropertyValue` and the
+<a href=#1003 id=1003 data-nosnippet>1003</a>/// error surfaces through `Runtime::apply_instructions`. Same contract as
+<a href=#1004 id=1004 data-nosnippet>1004</a>/// `el::sample` / `el::table` — add the resource first (e.g. via
+<a href=#1005 id=1005 data-nosnippet>1005</a>/// `Runtime::add_shared_resource_f32`) before rendering.
+<a href=#1006 id=1006 data-nosnippet>1006</a>///
+<a href=#1007 id=1007 data-nosnippet>1007</a>/// # Unknown unit string
+<a href=#1008 id=1008 data-nosnippet>1008</a>///
+<a href=#1009 id=1009 data-nosnippet>1009</a>/// `"samp"`, `"ms"`, and `"hz"` are the only accepted tokens (case-sensitive).
+<a href=#1010 id=1010 data-nosnippet>1010</a>/// Anything else causes the runtime to return `InvalidPropertyValue`.
+<a href=#1011 id=1011 data-nosnippet>1011</a>///
+<a href=#1012 id=1012 data-nosnippet>1012</a>/// # Runtime changes
+<a href=#1013 id=1013 data-nosnippet>1013</a>///
+<a href=#1014 id=1014 data-nosnippet>1014</a>/// Changing `path` or `unit` at runtime via the fast-path setter
+<a href=#1015 id=1015 data-nosnippet>1015</a>/// (`mounted.set_property("unit", "hz")`) updates the emitted value on the
+<a href=#1016 id=1016 data-nosnippet>1016</a>/// next audio block. Transitions are instantaneous — the signal jumps to
+<a href=#1017 id=1017 data-nosnippet>1017</a>/// the new scaled length.
+<a href=#1018 id=1018 data-nosnippet>1018</a>///
+<a href=#1019 id=1019 data-nosnippet>1019</a>/// # Example
+<a href=#1020 id=1020 data-nosnippet>1020</a>///
+<a href=#1021 id=1021 data-nosnippet>1021</a>/// ```ignore
+<a href=#1022 id=1022 data-nosnippet>1022</a>/// use elemaudio_rs::{extra, Graph, Runtime};
+<a href=#1023 id=1023 data-nosnippet>1023</a>/// use serde_json::json;
+<a href=#1024 id=1024 data-nosnippet>1024</a>///
+<a href=#1025 id=1025 data-nosnippet>1025</a>/// let runtime = Runtime::new()
+<a href=#1026 id=1026 data-nosnippet>1026</a>///     .sample_rate(48_000.0)
+<a href=#1027 id=1027 data-nosnippet>1027</a>///     .buffer_size(64)
+<a href=#1028 id=1028 data-nosnippet>1028</a>///     .call()
+<a href=#1029 id=1029 data-nosnippet>1029</a>///     .unwrap();
+<a href=#1030 id=1030 data-nosnippet>1030</a>///
+<a href=#1031 id=1031 data-nosnippet>1031</a>/// let samples: Vec&lt;f32&gt; = vec![0.0; 48_000]; // exactly 1 second
+<a href=#1032 id=1032 data-nosnippet>1032</a>/// runtime.add_shared_resource_f32("my-asset", &amp;samples).unwrap();
+<a href=#1033 id=1033 data-nosnippet>1033</a>///
+<a href=#1034 id=1034 data-nosnippet>1034</a>/// // 48000.0 on every output sample.
+<a href=#1035 id=1035 data-nosnippet>1035</a>/// let len_samp = extra::sample_count(json!({ "path": "my-asset" }));
+<a href=#1036 id=1036 data-nosnippet>1036</a>///
+<a href=#1037 id=1037 data-nosnippet>1037</a>/// // 1000.0 — asset duration in milliseconds.
+<a href=#1038 id=1038 data-nosnippet>1038</a>/// let len_ms = extra::sample_count(json!({ "path": "my-asset", "unit": "ms" }));
+<a href=#1039 id=1039 data-nosnippet>1039</a>///
+<a href=#1040 id=1040 data-nosnippet>1040</a>/// // 1.0 Hz — the asset's fundamental period.
+<a href=#1041 id=1041 data-nosnippet>1041</a>/// let len_hz = extra::sample_count(json!({ "path": "my-asset", "unit": "hz" }));
+<a href=#1042 id=1042 data-nosnippet>1042</a>/// ```
+<a href=#1043 id=1043 data-nosnippet>1043</a></span><span class="kw">pub fn </span>sample_count(props: serde_json::Value) -&gt; Node {
+<a href=#1044 id=1044 data-nosnippet>1044</a>    Node::new(<span class="string">"sampleCount"</span>, props, <span class="macro">vec!</span>[])
+<a href=#1045 id=1045 data-nosnippet>1045</a>}
 </code></pre></div></section></main></body></html>
