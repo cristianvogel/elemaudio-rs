@@ -44,28 +44,28 @@ const layout = `
             <span>Delay</span>
             <span id="delay-time-value">250 ms</span>
           </label>
-          <input id="delay-time" type="range" min="10" max="1200" value="500" step="1" />
+          <input id="delay-time" type="range" min="10" max="1200" value="1200" step="1" />
         </div>
         <div class="dial">
           <label for="delay-feedback">
             <span>Feedback</span>
             <span id="delay-feedback-value">0%</span>
           </label>
-          <input id="delay-feedback" type="range" min="0" max="95" value="55" step="1" />
+          <input id="delay-feedback" type="range" min="0" max="95" value="80" step="1" />
         </div>
         <div class="dial">
           <label for="delay-transition">
             <span>Transition</span>
             <span id="delay-transition-value">20 ms</span>
           </label>
-          <input id="delay-transition" type="range" min="1" max="250" value="20" step="1" />
+          <input id="delay-transition" type="range" min="1" max="250" value="100" step="1" />
         </div>
         <div class="dial">
           <label for="delay-insert-cutoff">
             <span>FB Filter</span>
             <span id="delay-insert-cutoff-value">4000 Hz</span>
           </label>
-          <input id="delay-insert-cutoff" type="range" min="200" max="12000" value="650" step="1" />
+          <input id="delay-insert-cutoff" type="range" min="200" max="12000" value="1618" step="1" />
         </div>
         <div class="dial">
           <label for="delay-method">
