@@ -23,6 +23,10 @@
 // Inputs: [0] dur (samples), [1] trigger (rising-edge gate).
 // Property: blocking (bool, default true).
 #include <extra/ramp00.h>
+// DustNode: sparse bipolar impulses with a vactrol-like pinged decay.
+// Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
+// Property: seed (number, optional).
+#include <extra/dust.h>
 
 extern "C" {
 
@@ -86,6 +90,14 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         // Property: blocking (bool, default true) — block retriggers while running.
         handle->runtime->registerNodeType("ramp00", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
+        });
+
+        // "dust" — DustNode.
+        // Sparse bipolar impulses with a pinged, vactrol-like trail.
+        // Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
+        // Property: seed (number, optional).
+        handle->runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::DustNode<double>>(id, fs, bs);
         });
 
         return handle.release();

@@ -961,3 +961,47 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 
     serde_json::Value::Object(map)
 }
+
+/// Sparse bipolar impulses with a vactrol-like pinged decay.
+///
+/// The `density` child is the average number of trigger attempts per second.
+/// The `trails` child is an audio-rate decay time in seconds. When a trigger
+/// lands, the node emits a bipolar ping (`-1` or `+1`) and then decays with a
+/// two-stage response: a faster component for the initial "ping" and a slower
+/// component for the tail. Retriggers are blocked while a trail is still
+/// active, so each impulse gets to ring out before the next one can land.
+///
+/// # Arguments (AGENTS.md order: props first, inputs last)
+/// - `props` — optional `seed` and/or `key`
+/// - `density` — impulses per second (signal)
+/// - `trails` — decay time in seconds (signal, audio-rate)
+///
+/// # Props
+/// - `seed`: optional deterministic RNG seed
+/// - `key`: optional authoring key for stable identity
+///
+/// # Behavior
+/// - `density <= 0` means no new triggers, but an active trail continues to decay.
+/// - `trails <= 0` collapses to Dust2-like one-sample impulses.
+/// - The decay curve has slight per-trigger variation to keep the response
+///   organic and vactrol-like rather than mechanically uniform.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// let dust = extra::dust(
+///     json!({ "seed": 1 }),
+///     el::const_(200.0),
+///     el::const_(0.05),
+/// );
+/// ```
+pub fn dust(
+    props: serde_json::Value,
+    density: impl Into<ElemNode>,
+    trails: impl Into<ElemNode>,
+) -> Node {
+    Node::new("dust", props, vec![resolve(density), resolve(trails)])
+}

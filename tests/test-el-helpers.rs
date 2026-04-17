@@ -894,6 +894,19 @@ fn covers_extra_helpers() {
         serde_json::json!({"blocking": true}),
         2,
     );
+
+    // dust: seed prop preserved; two signal children (density, trails).
+    let dust_node = extra::dust(
+        serde_json::json!({"seed": 1234}),
+        ElemNode::from(node(200.0)),
+        ElemNode::from(node(0.05)),
+    );
+    assert_node(
+        &dust_node,
+        "dust",
+        serde_json::json!({"seed": 1234}),
+        2,
+    );
 }
 
 #[test]

@@ -1021,3 +1021,57 @@ export function ramp00(
   const resolvedProps = { ...other, blocking };
   return createNode("ramp00", resolvedProps, [resolve(dur), resolve(x)]);
 }
+
+// ---------------------------------------------------------------------------
+// dust
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for `el.extra.dust(...)`.
+ */
+export interface DustProps extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /** Optional deterministic RNG seed. */
+  seed?: number;
+}
+
+/**
+ * Sparse bipolar impulses with a vactrol-like pinged decay.
+ *
+ * `density` controls the average number of trigger attempts per second.
+ * `trails` is an audio-rate decay time in seconds. When a trigger lands,
+ * the node emits a bipolar ping (`-1` or `+1`) and then decays with a
+ * two-stage response: a faster component for the initial "ping" and a
+ * slower component for the tail. Retriggers are blocked while a trail is
+ * still active, so each impulse gets to ring out before the next one can
+ * land.
+ *
+ * ### Behavior
+ *
+ * - `density <= 0` means no new triggers, but an active trail continues to
+ *   decay.
+ * - `trails <= 0` collapses to Dust2-like one-sample impulses.
+ * - The decay curve includes slight per-trigger variation to keep the
+ *   response organic rather than mechanically uniform.
+ *
+ * @param props   - see {@link DustProps}
+ * @param density - impulses per second (signal)
+ * @param trails  - decay time in seconds (signal, audio-rate)
+ *
+ * @example
+ * ```ts
+ * const dust = el.extra.dust(
+ *   { seed: 1 },
+ *   el.const(200),
+ *   el.const(0.05),
+ * );
+ * ```
+ */
+export function dust(
+  props: DustProps,
+  density: ElemNode,
+  trails: ElemNode,
+): NodeRepr_t {
+  return createNode("dust", props, [resolve(density), resolve(trails)]);
+}
