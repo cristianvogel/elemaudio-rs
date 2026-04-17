@@ -12,6 +12,7 @@
 //   "stridedelay"  — StrideDelayNode
 //   "vocoder"      — VocoderNode       (STFT channel vocoder, 4-in 2-out)
 //   "ramp00"       — Ramp00Node        (sample-accurate one-shot 0→1 ramp)
+//   "sampleCount"  — SampleCountNode   (VFS resource length as a constant signal)
 //   "convolve"     — ConvolutionNode   (WASM-only)
 //   "fft"          — FFTNode           (WASM-only)
 //   "metro"        — MetronomeNode     (WASM-only)
@@ -32,6 +33,7 @@
 #include "../../../../native/extra/stridedelay.h"
 #include "../../../../native/extra/vocoder.h"
 #include "../../../../native/extra/ramp00.h"
+#include "../../../../native/extra/sample_count.h"
 #include "Metro.h"
 #include "SampleTime.h"
 
@@ -116,6 +118,13 @@ public:
         // Property: blocking (bool, default true).
         runtime->registerNodeType("ramp00", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
+        });
+
+        // SampleCountNode: emits the length (in samples) of a VFS-resident
+        // audio resource as a constant-valued signal. Zero children.
+        // Property: path (string, required) — VFS key of the resource.
+        runtime->registerNodeType("sampleCount", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("fft", [](elem::NodeId const id, double fs, int const bs) {

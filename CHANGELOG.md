@@ -31,6 +31,59 @@ While the crate is pre-1.0, breaking changes bump the **minor** version.
   - Browser users: WASM artifact must be rebuilt (requires Emscripten
     `3.1.52`, see AGENTS.md). Native Rust users get `ramp00` immediately.
 
+- **`el::extra::sample_count`** — emits the exact length of a VFS-resident
+  audio resource as a constant signal, optionally scaled into a natural
+  domain. Register as native kind `"sampleCount"`. Available identically
+  from Rust (`el::extra::sample_count`) and TypeScript
+  (`el.extra.sampleCount`).
+  - Zero children. Required prop `path: string` (VFS key of a
+    previously-added resource). Optional prop
+    `unit: "samp" | "ms" | "hz"` (default `"samp"`) selects the output
+    domain:
+    - `"samp"`: raw per-channel sample count (e.g. 48000 for a 1s asset @ 48 kHz).
+    - `"ms"`: duration in milliseconds — `1000 × len / sr`.
+    - `"hz"`: fundamental period frequency — `sr / len`. Useful as a
+      `phasor` / `train` rate to loop the asset exactly once per cycle.
+    - Unknown unit tokens are rejected with `InvalidPropertyValue`.
+    - The scaling is done once on the message thread at `setProperty`
+      time; the audio loop stays a plain `std::fill_n`.
+  - Output shape matches `el::sr()` / `el::time()`: a constant-valued
+    signal, one value per output sample.
+  - Missing-resource behavior: `setProperty` returns
+    `InvalidPropertyValue` (same contract as `el::sample` / `el::table`).
+    Author must register the resource via
+    `Runtime::add_shared_resource_f32(...)` /
+    `renderer.updateVirtualFileSystem(...)` before rendering.
+  - Runtime swap: changing `path` or `unit` via `mounted.set_property`
+    updates the emitted value on the next block, no re-mount required.
+  - Native: `src/native/extra/sample_count.h` (header-only, RT-safe:
+    SPSC queue carries scaled `FloatType` across threads, no allocs in
+    `process()`). Registered in `src/ffi/elementary_bridge.cpp` and
+    `src/vendor/elementary/wasm/Main.cpp`.
+  - Tests: `tests/sample_count.rs` (**9 end-to-end runtime tests**:
+    analytic length output, unknown-path error propagation, runtime
+    path swap, composition with `el::sr()` for seconds, `"ms"` mode,
+    `"hz"` mode, default `unit` is `"samp"`, unknown unit rejected,
+    runtime `unit` swap via `set_property`) plus graph-construction
+    coverage in `tests/test-el-helpers.rs`.
+  - Web demo: the existing `resource-manager` demo now retriggers the
+    sampler with `el.train(el.extra.sampleCount({ path, unit: "hz" }))`,
+    i.e. exactly one clean loop per asset length — no drift, no gap, no
+    overlap, regardless of file duration.
+  - Browser users: WASM artifact must be rebuilt (same flow as `ramp00`).
+
+### Changed
+- VFS FFI (`elementary_runtime_add_shared_resource_f32`,
+  `elementary_runtime_add_shared_resource_f32_multi`) is no longer gated
+  behind the `ELEM_RS_ENABLE_RESOURCES` / `resources` cargo feature.
+  These functions are pure wrappers over the built-in
+  `SharedResourceMap::add` — they have no dependency on the optional
+  `elemaudio-resources` crate and are needed by every VFS-consuming extra
+  (`el::sample`, `el::table`, `el::extra::sample_count`). The `resources`
+  feature still exists and still controls the external resources crate
+  integration; this ungating just fixes a link error when calling
+  `Runtime::add_shared_resource_f32` without the feature enabled.
+
 ## [0.2.0] - 2026-04-17
 
 ### Added

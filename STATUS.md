@@ -34,9 +34,6 @@ PURPOSE: Track project progress, status, and metrics across development sessions
       `DspParameters != last_dsp_params` check; keeps audio thread allocation-free
       on steady-state blocks
 - [x] `DspParameters` now derives `PartialEq`
-- [x] Test suite: 22 lib tests (was 21) + integration tests, all passing
-- [x] **Version bump: `elemaudio-rs 0.1.0 → 0.2.0`** (SemVer minor bump for the
-      breaking `DspGraph::Params: PartialEq` requirement) + `CHANGELOG.md` added
 - [x] **Version bump: `elemaudio-rs 0.1.0 → 0.2.0`** (SemVer minor bump for the
       breaking `DspGraph::Params: PartialEq` requirement) + `CHANGELOG.md` added
 - [x] **New native extra: `el::extra::ramp00`** — sample-accurate one-shot
@@ -47,8 +44,37 @@ PURPOSE: Track project progress, status, and metrics across development sessions
       per-sample rising-edge detection when the trigger is a real audio-rate
       signal (`el::train`). Version bump deferred — will batch with
       additional low-level extras in this session.
-- [x] Test suite: 22 lib tests (was 21) + integration tests (now including 5
-      new `tests/ramp00.rs` tests), all passing
+- [x] **Web demo: `ramp00` signal-utility demo** — new entry in the
+      Signal Utilities category of `examples/web-ui`. Oscilloscope
+      (default 16× zoom), stochastic trigger source
+      (`el.ge(el.latch(el.train(rate), el.rand), threshold)`) repeatedly
+      attempts to retrigger; blocking toggle plus duration / clock /
+      threshold sliders. No audio output (silenced stereo via
+      `el.mul(0, scopeInsert)`).
+- [x] **New native extra: `el::extra::sample_count`** — emits the exact
+      length of a VFS-resident audio resource as a constant signal, with
+      an optional `unit` prop (`"samp"` default, `"ms"`, `"hz"`) that
+      scales the output into the author's natural domain. Full Rust + TS
+      parity; registered in native bridge and browser WASM `Main.cpp`.
+      9 end-to-end runtime tests covering every mode, missing/unknown
+      inputs, runtime path + unit swaps via `mounted.set_property`, and
+      composition with `el::sr()` to derive seconds. The `"hz"` mode
+      computes `sr / len` — the asset's fundamental period frequency —
+      which makes `el.train(el.extra.sampleCount({ path, unit: "hz" }))`
+      a drop-in exact-length retrigger.
+- [x] **Web demo updated: `resource-manager`** now loops each mirrored
+      asset at its natural period via
+      `el.train(el.extra.sampleCount({ path, unit: "hz" }))`. No manual
+      rate configuration; switching the mirrored path automatically
+      retunes the loop rate (the keyed `sampleCount` node's fast-path
+      `setProperty` update handles it).
+- [x] **Fix: VFS FFI always linkable.** Ungated
+      `elementary_runtime_add_shared_resource_f32[_multi]` from the
+      `ELEM_RS_ENABLE_RESOURCES` cargo feature — they were mis-gated and
+      blocked anyone from using `Runtime::add_shared_resource_f32`
+      without pulling in the optional `elemaudio-resources` crate.
+- [x] Test suite: 22 lib tests + integration tests (including 6 ramp00
+      tests and 4 sample_count tests), all passing.
 
 ### Completed Previous Session (2026-04-13)
 - [x] Framework hardening: `mount()` returns `Result<MountedGraph, MountError>` (no panics)
@@ -82,6 +108,9 @@ PURPOSE: Track project progress, status, and metrics across development sessions
 - ✅ Self-contained CLAP plugin example with macOS bundler
 - ✅ File logging via `log` crate
 - ✅ `Engine::set_params` RT-safe early-return (Tier 1) + plugin-side gate (Tier 2)
+- ✅ `el::extra::ramp00` — sample-accurate one-shot ramp (Rust + TS + demo)
+- ✅ `el::extra::sample_count` — VFS asset length as a constant signal
+- ✅ VFS FFI (`add_shared_resource_f32[_multi]`) always linkable
 
 ### In Progress
 - 🔄 Documentation pass for the new APIs

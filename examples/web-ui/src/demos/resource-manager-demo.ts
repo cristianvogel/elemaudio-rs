@@ -58,6 +58,11 @@ app.innerHTML = `
   <div class="panel">
     <h1>elemaudio-rs resource manager demo</h1>
     <p>Uploads browser files into the Rust resource manager, then mirrors the selected Rust resource into the browser VFS for playback.</p>
+    <p>
+      Playback retriggers exactly at the asset's natural period using
+      <code>el.train(el.extra.sampleCount({ path, unit: "hz" }))</code> &mdash;
+      one clean loop per asset length, no gap, no overlap, whatever the file is.
+    </p>
     <div class="controls">
       <div class="row">
         <label>
@@ -214,7 +219,21 @@ function buildGraph(): NodeRepr_t[] {
     return [el.const({ value: 0 }), el.const({ value: 0 })];
   }
 
-  const trigger = el.train(el.const({ value: 0.2 }));
+  // Exact-length loop: the trigger fires once every `1 / duration_seconds`
+  // seconds, which is precisely the asset's length. The rate signal is
+  // driven by `el.extra.sampleCount` in `"hz"` mode (= sr / len), so the
+  // loop automatically retunes whenever the user switches assets. No
+  // manual measuring, no host-side math, no drift.
+  //
+  // The trigger `key` is stable across graph rebuilds so that swapping
+  // the mirrored path updates the rate signal in-place rather than
+  // restarting the train phase.
+  const loopRate = el.extra.sampleCount({
+    key: "rm:loopRate",
+    path: activeMirrorPath,
+    unit: "hz",
+  });
+  const trigger = el.train(loopRate);
 
   if (activeMirrorChannels > 1) {
     const roots = el.mc.sample({ path: activeMirrorPath, channels: activeMirrorChannels }, trigger);

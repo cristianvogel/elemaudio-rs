@@ -894,6 +894,25 @@ fn covers_extra_helpers() {
         serde_json::json!({"blocking": true}),
         2,
     );
+
+    // sampleCount: zero children, props pass through verbatim.
+    let sample_count_node = extra::sample_count(serde_json::json!({"path": "drums/kick.wav"}));
+    assert_node(
+        &sample_count_node,
+        "sampleCount",
+        serde_json::json!({"path": "drums/kick.wav"}),
+        0,
+    );
+
+    // sampleCount: authoring key is preserved alongside path.
+    let sample_count_keyed =
+        extra::sample_count(serde_json::json!({"path": "drums/snare.wav", "key": "snare-len"}));
+    assert_node(
+        &sample_count_keyed,
+        "sampleCount",
+        serde_json::json!({"path": "drums/snare.wav", "key": "snare-len"}),
+        0,
+    );
 }
 
 #[test]

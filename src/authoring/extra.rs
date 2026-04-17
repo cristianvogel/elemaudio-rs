@@ -961,3 +961,85 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 
     serde_json::Value::Object(map)
 }
+
+/// Emit the length of a VFS-resident audio resource as a constant signal,
+/// optionally scaled into a natural domain (`samp`, `ms`, or `hz`).
+///
+/// Shape mirrors [`el::sr`](crate::el::sr) and [`el::time`](crate::el::time):
+/// zero children, one output, a constant value per sample. The native node
+/// computes the scaled value once on the message thread (at `setProperty`
+/// time) and streams it out through a `std::fill_n` — the audio loop does
+/// no division, no unit parsing, and no allocation.
+///
+/// # Props
+///
+/// | Key    | Type     | Required | Default  | Notes                                                                             |
+/// |--------|----------|----------|----------|-----------------------------------------------------------------------------------|
+/// | `path` | `String` | yes      | —        | VFS key of a previously-added resource                                            |
+/// | `unit` | `String` | no       | `"samp"` | Output domain: `"samp"` (raw sample count), `"ms"`, or `"hz"` (1/duration)        |
+/// | `key`  | `String` | no       | —        | Optional authoring key for stable identity                                        |
+///
+/// ## Unit semantics
+///
+/// Let `len` be the asset's per-channel frame count and `sr` the current
+/// runtime sample rate:
+///
+/// | `unit`   | Output value              | Example (1s @ 48 kHz)      |
+/// |----------|---------------------------|-----------------------------|
+/// | `"samp"` | `len`                     | 48000                       |
+/// | `"ms"`   | `1000 × len / sr`         | 1000.0                      |
+/// | `"hz"`   | `sr / len`                | 1.0                         |
+///
+/// The `"hz"` mode is the fundamental *period* frequency — the reciprocal
+/// of the asset's duration in seconds. For a 2-second asset this is
+/// `0.5 Hz`. Useful as a `phasor` rate to clock the asset exactly once per
+/// cycle.
+///
+/// # Missing resource
+///
+/// If the `path` prop names a resource that has **not** been added to the
+/// runtime's shared-resource map at the time this node's graph is applied,
+/// the underlying `setProperty` returns `InvalidPropertyValue` and the
+/// error surfaces through `Runtime::apply_instructions`. Same contract as
+/// `el::sample` / `el::table` — add the resource first (e.g. via
+/// `Runtime::add_shared_resource_f32`) before rendering.
+///
+/// # Unknown unit string
+///
+/// `"samp"`, `"ms"`, and `"hz"` are the only accepted tokens (case-sensitive).
+/// Anything else causes the runtime to return `InvalidPropertyValue`.
+///
+/// # Runtime changes
+///
+/// Changing `path` or `unit` at runtime via the fast-path setter
+/// (`mounted.set_property("unit", "hz")`) updates the emitted value on the
+/// next audio block. Transitions are instantaneous — the signal jumps to
+/// the new scaled length.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{extra, Graph, Runtime};
+/// use serde_json::json;
+///
+/// let runtime = Runtime::new()
+///     .sample_rate(48_000.0)
+///     .buffer_size(64)
+///     .call()
+///     .unwrap();
+///
+/// let samples: Vec<f32> = vec![0.0; 48_000]; // exactly 1 second
+/// runtime.add_shared_resource_f32("my-asset", &samples).unwrap();
+///
+/// // 48000.0 on every output sample.
+/// let len_samp = extra::sample_count(json!({ "path": "my-asset" }));
+///
+/// // 1000.0 — asset duration in milliseconds.
+/// let len_ms = extra::sample_count(json!({ "path": "my-asset", "unit": "ms" }));
+///
+/// // 1.0 Hz — the asset's fundamental period.
+/// let len_hz = extra::sample_count(json!({ "path": "my-asset", "unit": "hz" }));
+/// ```
+pub fn sample_count(props: serde_json::Value) -> Node {
+    Node::new("sampleCount", props, vec![])
+}

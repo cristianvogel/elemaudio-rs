@@ -1021,3 +1021,103 @@ export function ramp00(
   const resolvedProps = { ...other, blocking };
   return createNode("ramp00", resolvedProps, [resolve(dur), resolve(x)]);
 }
+
+// ---------------------------------------------------------------------------
+// sampleCount
+// ---------------------------------------------------------------------------
+
+/**
+ * Output domain for `el.extra.sampleCount(...)`.
+ *
+ * - `"samp"` — raw per-channel sample count (e.g. 48000 for a 1s asset @ 48 kHz).
+ * - `"ms"`   — duration in milliseconds: `1000 × len / sr`.
+ * - `"hz"`   — fundamental period frequency: `sr / len`. For a 2-second asset this
+ *             is 0.5 Hz. Useful as a `phasor` rate to clock the asset exactly
+ *             once per cycle.
+ */
+export type SampleCountUnit = "samp" | "ms" | "hz";
+
+/**
+ * Props for `el.extra.sampleCount(...)`.
+ */
+export interface SampleCountProps extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /**
+   * VFS key of a resource previously added via
+   * `renderer.updateVirtualFileSystem({ [path]: Float32Array | Float32Array[] })`.
+   */
+  path: string;
+  /**
+   * Output domain. Default is `"samp"`. See {@link SampleCountUnit}.
+   */
+  unit?: SampleCountUnit;
+}
+
+/**
+ * Emit the length of a VFS-resident audio resource as a constant signal,
+ * optionally scaled into a natural domain (`samp`, `ms`, or `hz`).
+ *
+ * Zero children; one scalar output. The native node computes the scaled
+ * value once on the message thread at `setProperty` time and streams it
+ * out with a plain `std::fill_n` — the audio loop does no division, no
+ * string parsing, and no allocation.
+ *
+ * ### Units
+ *
+ * Let `len` be the asset's per-channel frame count and `sr` the current
+ * runtime sample rate:
+ *
+ * | `unit`   | Output value               | Example (1s @ 48 kHz) |
+ * |----------|----------------------------|------------------------|
+ * | `"samp"` | `len`                      | 48000                  |
+ * | `"ms"`   | `1000 × len / sr`          | 1000.0                 |
+ * | `"hz"`   | `sr / len`                 | 1.0                    |
+ *
+ * The `"hz"` mode is the fundamental *period* frequency — the reciprocal
+ * of the asset's duration in seconds. For a 2-second asset this is
+ * `0.5 Hz`. Useful as a `phasor` rate to clock the asset exactly once per
+ * cycle.
+ *
+ * ### Missing-resource behavior
+ *
+ * If `path` names a resource that has not yet been added to the runtime's
+ * VFS at the moment this graph is applied, the underlying `setProperty`
+ * returns `InvalidPropertyValue` and the error propagates through the
+ * `renderer.render(...)` promise. Same contract as `el.sample` and
+ * `el.table` — call `renderer.updateVirtualFileSystem({...})` first.
+ *
+ * ### Unknown unit
+ *
+ * `"samp"`, `"ms"`, `"hz"` are the only accepted tokens. Passing anything
+ * else results in `InvalidPropertyValue`.
+ *
+ * ### Runtime changes
+ *
+ * Re-rendering the graph with a new `path` or `unit` updates the emitted
+ * value on the next audio block after the `setProperty` call lands. The
+ * transition is not smoothed — the signal jumps instantly.
+ *
+ * @param props - see {@link SampleCountProps}
+ *
+ * @example
+ * ```ts
+ * await renderer.updateVirtualFileSystem({
+ *   "kicks/kick-01": kickFloat32Array,  // say, 48000 samples
+ * });
+ *
+ * // 48000 on every sample.
+ * const lenSamp = el.extra.sampleCount({ path: "kicks/kick-01" });
+ *
+ * // 1000.0 — duration in milliseconds.
+ * const lenMs = el.extra.sampleCount({ path: "kicks/kick-01", unit: "ms" });
+ *
+ * // 1.0 Hz — clock a phasor to loop the asset exactly once per cycle.
+ * const loopRate = el.extra.sampleCount({ path: "kicks/kick-01", unit: "hz" });
+ * const pos = el.phasor(loopRate);                // sweeps 0..1 across asset
+ * const trig = el.train(loopRate);                // rising edge once per loop
+ * ```
+ */
+export function sampleCount(props: SampleCountProps): NodeRepr_t {
+  return createNode("sampleCount", props, []);
+}
