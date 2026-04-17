@@ -867,6 +867,33 @@ fn covers_extra_helpers() {
     );
     // After extracting thresh and amp, remaining props is an empty object.
     assert_node(&foldback_node, "mul", serde_json::json!({}), 2);
+
+    // ramp00: explicit blocking prop preserved; two signal children in order
+    // (dur first, trigger last per AGENTS.md "input nodes last" rule).
+    let ramp00_explicit = extra::ramp00(
+        serde_json::json!({"blocking": false}),
+        ElemNode::from(node(480.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &ramp00_explicit,
+        "ramp00",
+        serde_json::json!({"blocking": false}),
+        2,
+    );
+
+    // ramp00: empty props default-fill blocking=true.
+    let ramp00_default = extra::ramp00(
+        serde_json::json!({}),
+        ElemNode::from(node(480.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &ramp00_default,
+        "ramp00",
+        serde_json::json!({"blocking": true}),
+        2,
+    );
 }
 
 #[test]

@@ -19,6 +19,10 @@
 // Inputs: [0] carrier L, [1] carrier R, [2] modulator L, [3] modulator R.
 // Properties: windowMs, smoothingMs, maxGainDb, swapInputs.
 #include <extra/vocoder.h>
+// Ramp00Node: sample-accurate one-shot 0→1 ramp that drops to 0 on peak.
+// Inputs: [0] dur (samples), [1] trigger (rising-edge gate).
+// Property: blocking (bool, default true).
+#include <extra/ramp00.h>
 
 extern "C" {
 
@@ -74,6 +78,14 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         // STFT channel vocoder. 4 inputs (carrier L/R, modulator L/R), 2 outputs.
         handle->runtime->registerNodeType("vocoder", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::VocoderNode<double>>(id, fs, bs);
+        });
+
+        // "ramp00" — Ramp00Node.
+        // Sample-accurate one-shot 0→1 ramp that drops to 0 immediately on peak.
+        // Inputs: [0] dur in samples, [1] trigger.
+        // Property: blocking (bool, default true) — block retriggers while running.
+        handle->runtime->registerNodeType("ramp00", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
         });
 
         return handle.release();

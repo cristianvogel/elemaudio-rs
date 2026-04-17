@@ -64,8 +64,11 @@ const synthOut = (f: number) => [
 ];
 
 function crunchBranch(key: string, input: NodeRepr_t, p: SynthParams): NodeRepr_t {
-    if (!p.crunchEnabled) return input;
-    return el.extra.crunch({
+    // Keep the crunch node in the graph always. Bypass via a keyed mix
+    // const so the graph topology stays stable — toggling on/off does not
+    // add/remove nodes, which would cause audio dropouts and clicks when
+    // downstream state (e.g. stride delay buffer) is disrupted.
+    const crunched = el.extra.crunch({
         key,
         channels: 1,
         drive: p.crunchDrive,
@@ -75,6 +78,10 @@ function crunchBranch(key: string, input: NodeRepr_t, p: SynthParams): NodeRepr_
         outGain: p.crunchOutGain,
         autoGain: true
     }, input)[0];
+
+    // mix: 0 = dry input, 1 = crunched
+    const mix = el.const({ key: `${key}:mix`, value: p.crunchEnabled ? 1 : 0 });
+    return el.select(mix, crunched, input);
 }
 
 function makeStrideDelay(vn: number, x: NodeRepr_t, p: SynthParams) {

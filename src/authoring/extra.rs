@@ -902,3 +902,62 @@ fn stride_delay_resolve_defaults(props: serde_json::Value) -> serde_json::Value 
 
     serde_json::Value::Object(map)
 }
+
+/// Sample-accurate one-shot 0→1 ramp.
+///
+/// On a rising edge of `x` (trigger crossing 0.5 upward), the signal increments
+/// linearly from 0 to 1 over `dur` samples, then drops instantly back to 0 on
+/// the next sample — hence the `00` suffix: the output starts at 0 and ends at
+/// 0. Ideal as a sample-accurate envelope gate, a percussive modulator trigger,
+/// or a duration-controlled one-shot LFO.
+///
+/// # Arguments (AGENTS.md order: props first, trigger/input last)
+/// - `props` — see below
+/// - `dur`  — ramp duration in **samples** (signal; may vary per-sample)
+/// - `x`    — trigger signal; a rising edge through 0.5 starts the ramp
+///
+/// # Props
+/// - `key`     : optional authoring key for stable identity
+/// - `blocking`: `bool`, default `true`. When `true`, triggers are ignored
+///   while the ramp is running (i.e. until the output returns to exactly 0).
+///   When `false`, any rising edge restarts the ramp from 0.
+///
+/// # dur semantics
+/// - `dur` is read every sample and the per-sample increment is `1 / dur`.
+/// - If `dur` changes mid-ramp, the current value is preserved and only the
+///   slope updates (smooth continuation at the new rate).
+/// - If `dur <= 0` at the moment of a would-be trigger, the trigger is ignored.
+/// - If `dur <= 0` while the ramp is running, the ramp aborts and the output
+///   snaps to 0.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// // 4800-sample (100 ms @ 48kHz) ramp, retriggered by a 2 Hz train,
+/// // with retrigger blocking while the ramp is running.
+/// let ramp = extra::ramp00(
+///     json!({ "blocking": true }),
+///     el::const_(4800.0),
+///     el::train(el::const_(2.0)),
+/// );
+/// ```
+pub fn ramp00(props: serde_json::Value, dur: impl Into<ElemNode>, x: impl Into<ElemNode>) -> Node {
+    let resolved_props = ramp00_resolve_defaults(props);
+    Node::new("ramp00", resolved_props, vec![resolve(dur), resolve(x)])
+}
+
+/// Apply defaults for `ramp00` props.
+fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
+    let mut map = match props {
+        serde_json::Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+
+    map.entry("blocking")
+        .or_insert_with(|| serde_json::Value::from(true));
+
+    serde_json::Value::Object(map)
+}

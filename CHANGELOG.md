@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the crate is pre-1.0, breaking changes bump the **minor** version.
 
+## [Unreleased]
+
+### Added
+- **`el::extra::ramp00`** — sample-accurate one-shot `0 → 1` ramp that drops
+  to `0` on peak. Register as native kind `"ramp00"`. Available identically
+  from Rust (`el::extra::ramp00`) and TypeScript (`el.extra.ramp00`).
+  - Signal children: `dur` (duration in samples; per-sample signal, may
+    vary continuously) and `x` (trigger; rising edge through `0.5` starts
+    the ramp).
+  - Prop: `blocking` (bool, default `true`). When `true`, further triggers
+    are ignored while the ramp is running; when `false`, any rising edge
+    restarts the ramp from 0.
+  - Edge cases: `dur <= 0` at trigger time ignores the trigger; `dur <= 0`
+    mid-ramp aborts the ramp to 0.
+  - Native: `src/native/extra/ramp00.h` (header-only, RT-safe: no allocs,
+    atomic-relaxed prop loads). Registered in
+    `src/ffi/elementary_bridge.cpp` and `src/vendor/elementary/wasm/Main.cpp`.
+  - Tests: `tests/ramp00.rs` (6 end-to-end runtime tests asserting analytic
+    ramp shape, blocking/non-blocking retrigger semantics, `dur <= 0` edge
+    cases, and **per-sample rising-edge detection inside a block** when the
+    trigger is a real audio-rate signal such as `el::train(rate)`) plus
+    graph-construction coverage in `tests/test-el-helpers.rs`.
+  - Browser users: WASM artifact must be rebuilt (requires Emscripten
+    `3.1.52`, see AGENTS.md). Native Rust users get `ramp00` immediately.
+
 ## [0.2.0] - 2026-04-17
 
 ### Added

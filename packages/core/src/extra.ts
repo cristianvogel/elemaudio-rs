@@ -961,3 +961,63 @@ function interpolateNBarberpole(
 
   return weighted.reduce((acc, x) => createNode("add", {}, [acc, x]));
 }
+
+// ---------------------------------------------------------------------------
+// ramp00
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for `el.extra.ramp00(...)`.
+ */
+export interface Ramp00Props extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /**
+   * When `true` (default), triggers are ignored while the ramp is running —
+   * i.e. until the output returns to exactly 0. When `false`, any rising edge
+   * on the trigger restarts the ramp from 0.
+   */
+  blocking?: boolean;
+}
+
+/**
+ * Sample-accurate one-shot 0→1 ramp.
+ *
+ * On a rising edge of the trigger `x` (crossing 0.5 upward), the signal
+ * increments linearly from 0 to 1 over `dur` samples, then drops instantly
+ * back to 0 on the next sample — hence the `00` suffix: the output starts
+ * at 0 and ends at 0. Ideal as a sample-accurate envelope gate, a percussive
+ * modulator trigger, or a duration-controlled one-shot LFO.
+ *
+ * @param props - see {@link Ramp00Props}
+ * @param dur   - ramp duration in **samples** (signal; may vary per-sample)
+ * @param x     - trigger signal; a rising edge through 0.5 starts the ramp
+ *
+ * ### dur semantics
+ * - `dur` is read every sample and the per-sample increment is `1 / dur`.
+ * - If `dur` changes mid-ramp, the current value is preserved and only the
+ *   slope updates (smooth continuation at the new rate).
+ * - If `dur <= 0` at the moment of a would-be trigger, the trigger is ignored.
+ * - If `dur <= 0` while the ramp is running, the ramp aborts and the output
+ *   snaps to 0.
+ *
+ * @example
+ * ```ts
+ * // 100 ms ramp @ current SR, retriggered by a 2 Hz train, retriggers
+ * // blocked while running.
+ * const ramp = el.extra.ramp00(
+ *   { blocking: true },
+ *   el.ms2samps(100),
+ *   el.train(2),
+ * );
+ * ```
+ */
+export function ramp00(
+  props: Ramp00Props,
+  dur: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  const { blocking = true, ...other } = props;
+  const resolvedProps = { ...other, blocking };
+  return createNode("ramp00", resolvedProps, [resolve(dur), resolve(x)]);
+}
