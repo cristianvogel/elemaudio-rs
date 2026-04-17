@@ -24,15 +24,17 @@ export interface DustBankParams {
   jitter: number;
   /** Fundamental frequency in Hz. */
   fundamental: number;
-  /** Bandpass Q (resonance sharpness) at the fundamental. */
-  q: number;
   /**
-   * Self-resonance amount 0.0–1.0. Mapped internally to loop-gain
-   * `fb_eff = fb * α / Q` where α≈0.95. At fb=1.0 the filter is right at
-   * its self-oscillation threshold regardless of Q — below that it rings
-   * without running away, above it would run away (clipped by tanh).
+   * Resonance 0.0–1.0. Drives both Q and feedback in a single coupled
+   * parameter:
+   *   Q  = Q_MIN + resonate * (Q_MAX - Q_MIN)   linear ramp
+   *   fb = resonate^2                            squared curve
+   *   fb_eff = fb * STABILITY_MARGIN / Q         Nyquist-stable
+   *
+   * At resonate=0 the filter is a mild bandpass. At resonate=1 it is at
+   * its self-oscillation threshold, ringing indefinitely.
    */
-  fb: number;
+  resonate: number;
   /** Number of partials in the bank. */
   partials: number;
   /** Per-partial detune percent. */
@@ -44,44 +46,53 @@ export interface DustBankParams {
 }
 
 /**
- * Build one self-resonating partial.
+ * Build one tuned resonator partial.
  *
+ * Karplus-Strong-style delay-line resonator:
  * ```
- * exciter ──┐
- *           │
- *   tapIn ──► * fb ──┐
- *                     ├──► + ──► bandpass(fc, Q) ──► tanh ──► tapOut ──► out
- * exciter ────────────┘
+ *   y[n] = bp(exciter) + fb * y[n - period]
  * ```
- * Feedback path has 1-block latency (tapIn/tapOut).
+ * where period = sr/fc. The band-limited input pre-filter `bp` shapes
+ * the exciter into a pitched impulse. Sample-accurate feedback through
+ * the delay line gives clean pitched resonance — no block latency.
+ *
+ * As fb approaches 1.0 the ring time approaches infinity. A short
+ * lowpass on the feedback path gives the classic "plucked string"
+ * decay character (higher partials decay faster than lower ones).
  */
 function resonator(
   tag: string,
   exciter: NodeRepr_t,
   fc: number,
-  q: number,
   fb: number,
   outGain: number,
 ): NodeRepr_t {
-  const tapName = `bank:res:${tag}`;
-  const fbReturn = el.tapIn({ name: tapName });
-
-  const input = el.add(
-    exciter,
-    el.mul(el.const({ key: `bank:fb:${tag}`, value: fb }), fbReturn),
-  );
-
-  const voice = el.bandpass(
+  // Delay length = sr / fc, computed inside the graph so it tracks the
+  // context sample rate automatically.
+  const period = el.div(
+    el.sr(),
     el.const({ key: `bank:fc:${tag}`, value: fc }),
-    el.const({ key: `bank:q:${tag}`, value: q }),
-    input,
   );
 
-  // Soft clip the feedback return so self-oscillation doesn't explode.
-  const limited = el.tanh(el.mul(1.2, voice));
-  const tapped = el.tapOut({ name: tapName }, limited);
+  // Shape the exciter with a narrow bandpass at fc so energy lands near
+  // the resonator's natural frequency. Moderate Q — the sustain comes
+  // from the delay-line feedback, not the prefilter.
+  const shaped = el.bandpass(
+    el.const({ key: `bank:fc2:${tag}`, value: fc }),
+    el.const({ value: 20 }),
+    exciter,
+  );
 
-  return el.mul(el.const({ key: `bank:g:${tag}`, value: outGain }), tapped);
+  // Max delay buffer sized for low fundamentals — 8192 samples handles
+  // fc down to ~6 Hz at 48 kHz.
+  const rung = el.delay(
+    { key: `bank:dly:${tag}`, size: 8192 },
+    period,
+    el.const({ key: `bank:fb:${tag}`, value: fb }),
+    shaped,
+  );
+
+  return el.mul(el.const({ key: `bank:g:${tag}`, value: outGain }), rung);
 }
 
 /**
@@ -94,11 +105,19 @@ function buildBank(
   const leftVoices: NodeRepr_t[] = [];
   const rightVoices: NodeRepr_t[] = [];
 
-  // Nyquist stability: loop gain at resonance = fb * Q, so fb = α/Q
-  // keeps the system just below the self-oscillation threshold.
-  // α < 1 leaves a small safety margin so fb=1.0 rings very long but
-  // does not actually run away.
-  const STABILITY_MARGIN = 0.95;
+  // Resonance → feedback mapping for the delay-line resonator.
+  //
+  // Ring time in cycles ≈ ln(0.001)/ln(fb). So:
+  //   fb=0.80 → 31 cycles   (short ping)
+  //   fb=0.95 → 135 cycles  (bell)
+  //   fb=0.99 → 687 cycles  (long sustain)
+  //   fb=0.999 → 6900 cycles (near infinite)
+  //
+  // Non-linear map gives intuitive feel across the slider range.
+  // At resonate=0 fb=0.5 (very short click), at 1.0 fb=0.9995.
+  const FB_MIN = 0.5;
+  const FB_MAX = 0.9995;
+  const fbBase = FB_MIN + (FB_MAX - FB_MIN) * Math.pow(p.resonate, 0.5);
 
   for (let i = 0; i < p.partials; i++) {
     const harmonic = i + 1;
@@ -106,22 +125,14 @@ function buildBank(
     const detune = 1 + detuneSign * (p.spreadPct / 100) * Math.log2(harmonic + 1) * 0.5;
     const fc = p.fundamental * harmonic * detune;
 
-    // Frequency-dependent damping: higher partials need more damping.
-    // At 20 kHz we want roughly 0.25× the Q of the fundamental so the
-    // resonator stays tame. Use a 1/(1 + fc/dampStart) rolloff.
-    const DAMP_START_HZ = 2000;
-    const freqDamping = 1 / (1 + fc / DAMP_START_HZ);
-    const qScaled = p.q * freqDamping;
-
-    // Couple the user-facing fb knob to Q so the oscillation threshold
-    // lands at fb=1.0 regardless of the final effective Q:
-    //   fb_eff = fb * STABILITY_MARGIN / Q
-    const fbEff = (p.fb * STABILITY_MARGIN) / qScaled;
+    // Higher partials decay faster (plucked-string style): reduce fb
+    // slightly per harmonic. At harmonic=1 → fbBase, at harmonic=12 → fbBase^1.5.
+    const fbPartial = Math.pow(fbBase, 1 + Math.log2(harmonic) * 0.2);
 
     // Per-partial output gain compensation.
     const outGain = 1 / Math.sqrt(harmonic);
 
-    const voice = resonator(String(i), exciter, fc, qScaled, fbEff, outGain);
+    const voice = resonator(String(i), exciter, fc, fbPartial, outGain);
 
     if (i % 2 === 0) {
       leftVoices.push(voice);

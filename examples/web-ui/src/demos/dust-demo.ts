@@ -17,11 +17,9 @@ const layout = `
     <h3>dust resonator bank</h3>
     <p>
       Sparse bipolar impulses from <code>el.extra.dust</code> excite a bank
-      of self-resonating bandpass filters. Each resonator wraps a bandpass
-      in a tapIn/tapOut feedback loop; the feedback gain is coupled as
-      <code>fb_eff = fb · 0.95 / Q</code> so the self-oscillation threshold
-      lands at <strong>100%</strong> regardless of Q — push past ~85% for
-      long sustains.
+      of self-resonating bandpass filters. A single <strong>Resonance</strong>
+      control drives both Q and feedback, coupled for Nyquist stability at
+      100%. Low values click, medium ring like bells, high values sustain.
     </p>
     <div class="controls">
       <div class="button-row">
@@ -47,19 +45,11 @@ const layout = `
         </div>
 
         <div class="dial">
-          <label for="q">
-            <span>Resonance (Q)</span>
-            <span id="q-value">80</span>
+          <label for="resonate">
+            <span>Resonance</span>
+            <span id="resonate-value">70 %</span>
           </label>
-          <input id="q" type="range" min="5" max="200" value="80" step="1" />
-        </div>
-
-        <div class="dial">
-          <label for="fb">
-            <span>Self-resonance</span>
-            <span id="fb-value">85 %</span>
-          </label>
-          <input id="fb" type="range" min="0" max="100" value="85" step="1" />
+          <input id="resonate" type="range" min="0" max="100" value="70" step="1" />
         </div>
       </div>
 
@@ -121,10 +111,8 @@ let densitySlider: HTMLInputElement;
 let densityValue: HTMLSpanElement;
 let fundamentalSlider: HTMLInputElement;
 let fundamentalValue: HTMLSpanElement;
-let qSlider: HTMLInputElement;
-let qValue: HTMLSpanElement;
-let fbSlider: HTMLInputElement;
-let fbValue: HTMLSpanElement;
+let resonateSlider: HTMLInputElement;
+let resonateValue: HTMLSpanElement;
 let trailsSlider: HTMLInputElement;
 let trailsValue: HTMLSpanElement;
 let jitterSlider: HTMLInputElement;
@@ -156,8 +144,7 @@ function currentParams(): DustBankParams {
     trailsMs: Number(trailsSlider.value),
     jitter: Number(jitterSlider.value) / 100,
     fundamental: Number(fundamentalSlider.value),
-    q: Number(qSlider.value),
-    fb: Number(fbSlider.value) / 100, // 0–100 → 0.0–1.0 (coupled to 1/Q inside DSP)
+    resonate: Number(resonateSlider.value) / 100,
     partials: Number(partialsSlider.value),
     spreadPct: Number(spreadSlider.value) / 10, // 0–50 → 0–5 %
     gain: Number(gainSlider.value) / 100,
@@ -188,10 +175,8 @@ densitySlider = q<HTMLInputElement>("#density");
 densityValue = q<HTMLSpanElement>("#density-value");
 fundamentalSlider = q<HTMLInputElement>("#fundamental");
 fundamentalValue = q<HTMLSpanElement>("#fundamental-value");
-qSlider = q<HTMLInputElement>("#q");
-qValue = q<HTMLSpanElement>("#q-value");
-fbSlider = q<HTMLInputElement>("#fb");
-fbValue = q<HTMLSpanElement>("#fb-value");
+resonateSlider = q<HTMLInputElement>("#resonate");
+resonateValue = q<HTMLSpanElement>("#resonate-value");
 trailsSlider = q<HTMLInputElement>("#trails");
 trailsValue = q<HTMLSpanElement>("#trails-value");
 jitterSlider = q<HTMLInputElement>("#jitter");
@@ -215,8 +200,7 @@ startButton.addEventListener("click", () => {
 wireControls([
   densitySlider,
   fundamentalSlider,
-  qSlider,
-  fbSlider,
+  resonateSlider,
   trailsSlider,
   jitterSlider,
   partialsSlider,
@@ -256,8 +240,7 @@ function updateReadouts() {
   const densityText = d < 1 ? `${d.toFixed(2)} Hz` : `${d.toFixed(1)} Hz`;
   densityValue.textContent = densityText;
   fundamentalValue.textContent = `${Number(fundamentalSlider.value)} Hz`;
-  qValue.textContent = `${Number(qSlider.value)}`;
-  fbValue.textContent = `${Number(fbSlider.value)} %`;
+  resonateValue.textContent = `${Number(resonateSlider.value)} %`;
   trailsValue.textContent = `${Number(trailsSlider.value)} ms`;
   jitterValue.textContent = `${Number(jitterSlider.value)} %`;
   partialsValue.textContent = `${Number(partialsSlider.value)}`;
