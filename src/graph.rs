@@ -926,4 +926,95 @@ mod tests {
         }
         assert!(found_repeat, "insert delay should produce feedback repeats");
     }
+
+    #[test]
+    fn interpolate_n_barberpole_wrapping() {
+        use crate::Runtime;
+
+        let sr = 44100.0;
+        let block = 64;
+        let runtime = Runtime::new()
+            .sample_rate(sr)
+            .buffer_size(block)
+            .call()
+            .expect("runtime creation");
+
+        // 3 constant signals on a ring: A=0.2, B=0.5, C=0.9
+        // Ring positions: A=0, B=1, C=2 (N=3)
+
+        // t=0.0 → fract=0, pos=0 → fully node A (0.2)
+        let mix_at_0 = extra::interpolate_n(
+            serde_json::json!({"barberpole": true}),
+            el::const_(0.0),
+            vec![el::const_(0.2), el::const_(0.5), el::const_(0.9)],
+        );
+
+        // t=1.0 → fract=0 (wraps!), pos=0 → fully node A (0.2) again
+        let mix_at_1 = extra::interpolate_n(
+            serde_json::json!({"barberpole": true}),
+            el::const_(1.0),
+            vec![el::const_(0.2), el::const_(0.5), el::const_(0.9)],
+        );
+
+        // t=1/3 → fract=1/3, pos=1 → fully node B (0.5)
+        let mix_at_third = extra::interpolate_n(
+            serde_json::json!({"barberpole": true}),
+            el::const_(1.0 / 3.0),
+            vec![el::const_(0.2), el::const_(0.5), el::const_(0.9)],
+        );
+
+        // t=2/3 → fract=2/3, pos=2 → fully node C (0.9)
+        let mix_at_two_thirds = extra::interpolate_n(
+            serde_json::json!({"barberpole": true}),
+            el::const_(2.0 / 3.0),
+            vec![el::const_(0.2), el::const_(0.5), el::const_(0.9)],
+        );
+
+        let graph = Graph::new().render(vec![mix_at_0, mix_at_1, mix_at_third, mix_at_two_thirds]);
+        let mounted = graph.mount().expect("mount");
+        runtime
+            .apply_instructions(mounted.batch())
+            .expect("apply instructions");
+
+        // Deep graph tree needs warmup blocks to propagate constants.
+        let inputs: [&[f64]; 0] = [];
+        let (mut s0, mut s1, mut s2, mut s3) = (0.0, 0.0, 0.0, 0.0);
+
+        for _ in 0..50 {
+            let mut o0 = vec![0.0_f64; block];
+            let mut o1 = vec![0.0_f64; block];
+            let mut o2 = vec![0.0_f64; block];
+            let mut o3 = vec![0.0_f64; block];
+            let mut outputs = [
+                o0.as_mut_slice(),
+                o1.as_mut_slice(),
+                o2.as_mut_slice(),
+                o3.as_mut_slice(),
+            ];
+            runtime
+                .process(block, &inputs, &mut outputs)
+                .expect("process");
+            s0 = outputs[0][block - 1];
+            s1 = outputs[1][block - 1];
+            s2 = outputs[2][block - 1];
+            s3 = outputs[3][block - 1];
+        }
+
+        assert!(
+            (s0 - 0.2).abs() < 0.02,
+            "t=0 should output node A (~0.2), got {s0}"
+        );
+        assert!(
+            (s1 - 0.2).abs() < 0.02,
+            "t=1 should wrap to node A (~0.2), got {s1}"
+        );
+        assert!(
+            (s2 - 0.5).abs() < 0.02,
+            "t=1/3 should output node B (~0.5), got {s2}"
+        );
+        assert!(
+            (s3 - 0.9).abs() < 0.02,
+            "t=2/3 should output node C (~0.9), got {s3}"
+        );
+    }
 }
