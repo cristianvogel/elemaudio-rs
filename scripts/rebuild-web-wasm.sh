@@ -16,6 +16,10 @@ if ! command -v emmake >/dev/null 2>&1; then
   exit 1
 fi
 
+# Clean the build directory — incremental emscripten builds have been
+# observed to produce a stripped output missing the embedded SINGLE_FILE
+# WASM binary after C++ header changes. A clean build is cheap and safe.
+rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 emcmake cmake \

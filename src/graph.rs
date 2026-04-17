@@ -926,4 +926,101 @@ mod tests {
         }
         assert!(found_repeat, "insert delay should produce feedback repeats");
     }
+
+    #[test]
+    fn dust_produces_sparse_random_impulses() {
+        use crate::Runtime;
+
+        let sr = 44100.0;
+        let block = 4096;
+        let runtime = Runtime::new()
+            .sample_rate(sr)
+            .buffer_size(block)
+            .call()
+            .expect("runtime creation");
+
+        // 100 Hz density, single-sample impulses (no trail)
+        let density = el::const_(100.0);
+        let trails = el::const_(0.0);
+        let dust = extra::dust(
+            serde_json::json!({ "seed": 42, "bipolar": false }),
+            density,
+            trails,
+        );
+
+        let graph = Graph::new().render(vec![dust]);
+        let mounted = graph.mount().expect("mount");
+        runtime
+            .apply_instructions(mounted.batch())
+            .expect("apply instructions");
+
+        // Collect output over several blocks
+        let mut all_samples = Vec::<f64>::with_capacity(block * 10);
+        let inputs: [&[f64]; 0] = [];
+        for _ in 0..10 {
+            let mut out = vec![0.0_f64; block];
+            let mut outputs = [out.as_mut_slice()];
+            runtime.process(block, &inputs, &mut outputs).expect("process");
+            all_samples.extend_from_slice(outputs[0]);
+        }
+
+        // Count impulses (non-zero samples)
+        let impulse_count = all_samples.iter().filter(|&&s| s > 0.5).count();
+
+        // Expected: 100 Hz * (block * 10 / sr) seconds
+        let expected_count = (100.0 * (block * 10) as f64 / sr) as usize;
+
+        eprintln!(
+            "dust: impulses={}, expected~{}, first 20 non-zero indices:",
+            impulse_count, expected_count
+        );
+
+        let indices: Vec<usize> = all_samples
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &s)| if s > 0.5 { Some(i) } else { None })
+            .collect();
+        eprintln!("  first 30 impulse indices: {:?}", &indices[..30.min(indices.len())]);
+
+        // Check gaps between consecutive impulses — should be variable (random)
+        if indices.len() >= 2 {
+            let gaps: Vec<i64> = indices
+                .windows(2)
+                .map(|w| w[1] as i64 - w[0] as i64)
+                .collect();
+            eprintln!("  first 30 gaps: {:?}", &gaps[..30.min(gaps.len())]);
+
+            // Check for periodicity: is there a repeat pattern in gaps?
+            // Scan for smallest cycle length.
+            let n = gaps.len();
+            for cycle_len in 1..=(n / 2) {
+                let cycles_found = n / cycle_len;
+                if cycles_found < 3 {
+                    continue;
+                }
+                let mut periodic = true;
+                for i in 0..(cycles_found - 1) * cycle_len {
+                    if gaps[i] != gaps[i + cycle_len] {
+                        periodic = false;
+                        break;
+                    }
+                }
+                if periodic {
+                    panic!(
+                        "dust output is periodic with cycle length {cycle_len} impulses (total {} impulses in sample)",
+                        gaps.len()
+                    );
+                }
+            }
+        }
+
+        // Should produce roughly the expected count (within 50% tolerance)
+        let lo = expected_count as f64 * 0.5;
+        let hi = expected_count as f64 * 2.0;
+        let actual = impulse_count as f64;
+        assert!(
+            actual > lo && actual < hi,
+            "dust produced {impulse_count} impulses, expected ~{expected_count}"
+        );
+    }
 }

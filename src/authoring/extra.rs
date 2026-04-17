@@ -962,29 +962,31 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-/// Sparse bipolar impulses with a vactrol-like pinged decay.
+/// Sparse random impulses with optional decaying trails.
 ///
-/// The `density` child is the average number of trigger attempts per second.
-/// The `trails` child is an audio-rate decay time in seconds. When a trigger
-/// lands, the node emits a bipolar ping (`-1` or `+1`) and then decays with a
-/// two-stage response: a faster component for the initial "ping" and a slower
-/// component for the tail. Retriggers are blocked while a trail is still
-/// active, so each impulse gets to ring out before the next one can land.
+/// Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+/// can have a trailing exponential decay instead of being a single-sample
+/// spike. Trails overlap and sum (polyphonic voice pool of 64).
 ///
 /// # Arguments (AGENTS.md order: props first, inputs last)
-/// - `props` — optional `seed` and/or `key`
-/// - `density` — impulses per second (signal)
-/// - `trails` — decay time in seconds (signal, audio-rate)
+/// - `props` — optional `seed`, `bipolar`, and/or `key`
+/// - `density` — impulses per second (Poisson rate, signal)
+/// - `trails` — T60 decay time in seconds per impulse (signal, audio-rate)
 ///
 /// # Props
-/// - `seed`: optional deterministic RNG seed
-/// - `key`: optional authoring key for stable identity
+/// | Key       | Type | Default | Notes                                      |
+/// |-----------|------|---------|--------------------------------------------|
+/// | `seed`    | num  | random  | Deterministic RNG seed (0 treated as 1)   |
+/// | `bipolar` | bool | `true`  | `true` = Dust2 (-1/+1), `false` = Dust (0..1) |
+/// | `key`     | str  | —       | Optional authoring key                     |
 ///
-/// # Behavior
-/// - `density <= 0` means no new triggers, but an active trail continues to decay.
-/// - `trails <= 0` collapses to Dust2-like one-sample impulses.
-/// - The decay curve has slight per-trigger variation to keep the response
-///   organic and vactrol-like rather than mechanically uniform.
+/// # Behaviour
+/// - Each sample runs a Bernoulli trial with probability `density / sr`.
+/// - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+/// - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+/// - If all 64 voice slots are busy, new triggers are dropped.
+/// - `trails <= 0` → single-sample impulse (voice expires immediately after firing).
+/// - `density <= 0` → no new triggers, existing trails keep decaying.
 ///
 /// # Example
 ///
@@ -992,10 +994,18 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 /// use elemaudio_rs::{el, extra};
 /// use serde_json::json;
 ///
-/// let dust = extra::dust(
-///     json!({ "seed": 1 }),
+/// // Dense bipolar dust with 50ms trails
+/// let noise = extra::dust(
+///     json!({ "seed": 1, "bipolar": true }),
 ///     el::const_(200.0),
 ///     el::const_(0.05),
+/// );
+///
+/// // Classic SC-Dust (unipolar, single-sample impulses)
+/// let clicks = extra::dust(
+///     json!({ "bipolar": false }),
+///     el::const_(10.0),
+///     el::const_(0.0),
 /// );
 /// ```
 pub fn dust(

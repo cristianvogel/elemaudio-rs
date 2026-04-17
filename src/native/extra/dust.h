@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -11,34 +12,33 @@
 
 namespace elem
 {
-    // DustNode — sparse random impulses with a vactrol-ish decaying trail.
+    // DustNode — sparse random impulses with optional decaying trails.
     //
-    // Shape:
-    //   - `density` is the average number of trigger attempts per second.
-    //   - `trails` is an audio-rate decay time in seconds.
-    //   - Each accepted trigger produces a bipolar ping (`-1` or `+1`) and
-    //     then decays with a fast/slow two-stage envelope. The fast component
-    //     gives the "ping"; the slower component gives the tail.
-    //   - Retriggers are blocked while a trail is still active. This keeps the
-    //     node musically close to a pinged vactrol: one strike, then a return
-    //     to rest before the next strike can land.
+    // Inspired by SuperCollider's Dust / Dust2 with a twist: each impulse
+    // can have a trailing exponential decay instead of being a single-sample
+    // spike. Trails overlap and sum (polyphonic voice pool).
     //
-    // Inputs:
-    //   [0] density — impulses per second (signal)
-    //   [1] trails  — decay time in seconds (signal)
+    // Inputs (signals, sample-rate):
+    //   [0] density — impulses per second (Poisson rate)
+    //   [1] trails  — T60 decay time in seconds per impulse
     //
     // Props:
-    //   seed (number, optional) — deterministic RNG seed. Defaults to a
-    //   std::rand()-derived value at construction.
+    //   seed     (number, optional) — deterministic RNG seed
+    //   bipolar  (bool, optional, default true) — Dust2-style -1..+1 sign
+    //                                              (false = Dust 0..1)
+    //   jitter   (number, optional, default 0)  — per-impulse amplitude
+    //            randomness, 0.0 = all impulses at amp 1, 1.0 = amp is
+    //            uniformly distributed in [0, 1].
     //
-    // Notes:
-    //   - Density <= 0 means no new triggers, but an already-running trail is
-    //     allowed to finish decaying.
-    //   - Trails <= 0 collapses the node back to Dust2-like impulses (one
-    //     sample only, no trail).
-    //   - The decay curve is intentionally not perfectly linear: a fast and a
-    //     slow envelope are blended with a little per-trigger variation, to
-    //     evoke the uneven response of a vactrol being "pinged".
+    // Behaviour:
+    //   - Each sample: Bernoulli trial with probability density/sr
+    //   - On trigger: spawn a new voice in the pool with amplitude 1
+    //     (and random sign if bipolar)
+    //   - Each voice decays exponentially: value *= coeff per sample,
+    //     where coeff = exp(ln(0.001) / (trails * sr))
+    //   - Voices sum into the output
+    //   - If all voices in the pool are busy, the new trigger is dropped
+    //   - trails <= 0 → single-sample impulse (voice expires next sample)
 
     template <typename FloatType>
     struct DustNode : public GraphNode<FloatType> {
@@ -49,19 +49,38 @@ namespace elem
         static constexpr size_t CHILD_TRAILS = 1;
         static constexpr size_t NUM_CHILDREN = 2;
 
+        // Fixed voice pool — bounded, no heap allocation on audio thread.
+        static constexpr size_t MAX_VOICES = 64;
+
         DustNode(NodeId id, double sr, int blockSize)
             : GraphNode<FloatType>(id, sr, blockSize)
-            , seedTarget(static_cast<uint32_t>(std::rand()))
-        {}
+        {
+            // Non-zero seed required for xorshift32. Request counter starts
+            // at 0 (will be applied on first reset/process).
+            auto const s = static_cast<uint32_t>(std::rand()) | 1u;
+            seedTarget.store(s, std::memory_order_relaxed);
+            seed = s;
+            voices.fill(Sample(0));
+        }
 
         int setProperty(std::string const& key, js::Value const& val, SharedResourceMap&) override
         {
             if (key == "seed") {
-                if (!val.isNumber()) {
-                    return ReturnCode::InvalidPropertyType();
-                }
-
-                seedTarget.store(static_cast<uint32_t>((js::Number) val), std::memory_order_relaxed);
+                if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
+                auto raw = static_cast<uint32_t>((js::Number) val);
+                // xorshift32 requires non-zero seed
+                if (raw == 0) raw = 1;
+                seedTarget.store(raw, std::memory_order_relaxed);
+                // Increment request counter so process() picks up the new seed.
+                seedRequest.fetch_add(1, std::memory_order_relaxed);
+            } else if (key == "bipolar") {
+                if (!val.isBool()) return ReturnCode::InvalidPropertyType();
+                bipolarTarget.store(static_cast<bool>((js::Boolean) val), std::memory_order_relaxed);
+            } else if (key == "jitter") {
+                if (!val.isNumber()) return ReturnCode::InvalidPropertyType();
+                auto raw = static_cast<float>((js::Number) val);
+                auto clamped = std::max(0.0f, std::min(1.0f, raw));
+                jitterTarget.store(clamped, std::memory_order_relaxed);
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
@@ -70,13 +89,10 @@ namespace elem
         void reset() override
         {
             seed = seedTarget.load(std::memory_order_relaxed);
-            active = false;
-            fastEnv = Sample(0);
-            slowEnv = Sample(0);
-            sign = Sample(0);
-            fastMix = Sample(0.7);
-            fastTauScale = Sample(0.18);
-            slowTauScale = Sample(0.9);
+            if (seed == 0) seed = 1;
+            seedApplied = seedRequest.load(std::memory_order_relaxed);
+            voices.fill(Sample(0));
+            activeCount = 0;
         }
 
         void process(BlockContext<FloatType> const& ctx) override
@@ -96,32 +112,57 @@ namespace elem
             auto const* trailsSignal = ctx.inputData[CHILD_TRAILS];
             auto* out = ctx.outputData[0];
             auto const sampleRate = Sample(GraphNode<FloatType>::getSampleRate());
+            auto const bipolar = bipolarTarget.load(std::memory_order_relaxed);
+            auto const jitter = Sample(jitterTarget.load(std::memory_order_relaxed));
 
-            syncSeedIfNeeded();
+            // Only re-seed when the user explicitly set a new seed prop.
+            // Checking seedTarget != seed is wrong because seed evolves each
+            // call to fastRand() — it would reset every block.
+            auto const request = seedRequest.load(std::memory_order_relaxed);
+            if (request != seedApplied) {
+                seed = seedTarget.load(std::memory_order_relaxed);
+                if (seed == 0) seed = 1;
+                seedApplied = request;
+                voices.fill(Sample(0));
+                activeCount = 0;
+            }
 
+            // Cache decay coefficient per sample only when trails changes
+            // meaningfully. Since trails is a signal, recompute per sample;
+            // the cost is one exp() but only when an active voice exists.
             for (size_t i = 0; i < numSamples; ++i) {
                 Sample density = densitySignal[i];
                 Sample trails = trailsSignal[i];
 
-                // Convert impulses/sec to per-sample probability.
+                // Trigger trial
                 Sample triggerProb = density <= Sample(0)
                     ? Sample(0)
                     : std::min(Sample(1), density / sampleRate);
 
-                // A new ping starts only when the trail is idle. This gives the
-                // "pinged vactrol" behavior the user asked for: a trigger can
-                // set off a response, but the response must fall back before the
-                // next trigger is allowed to land.
-                if (!active && random01() < triggerProb) {
-                    startPing();
+                if (triggerProb > Sample(0) && random01() < triggerProb) {
+                    spawnVoice(bipolar, jitter);
                 }
 
-                if (active) {
-                    out[i] = sign * (fastMix * fastEnv + (Sample(1) - fastMix) * slowEnv);
-                    advanceTrail(trails, sampleRate);
-                } else {
-                    out[i] = Sample(0);
+                // Accumulate all active voices, decay them
+                Sample sum = Sample(0);
+                if (activeCount > 0) {
+                    Sample coeff = decayCoeff(trails, sampleRate);
+
+                    for (size_t v = 0; v < MAX_VOICES; ++v) {
+                        if (voices[v] != Sample(0)) {
+                            sum += voices[v];
+                            voices[v] *= coeff;
+
+                            // Expire very small voices
+                            if (std::fabs(voices[v]) < Sample(1e-6)) {
+                                voices[v] = Sample(0);
+                                activeCount -= 1;
+                            }
+                        }
+                    }
                 }
+
+                out[i] = sum;
             }
 
             for (size_t c = 1; c < numOuts; ++c) {
@@ -130,89 +171,68 @@ namespace elem
         }
 
     private:
-        void syncSeedIfNeeded()
+        void spawnVoice(bool bipolar, Sample jitter)
         {
-            auto const target = seedTarget.load(std::memory_order_relaxed);
-            if (target != seed) {
-                seed = target;
-                active = false;
-                fastEnv = Sample(0);
-                slowEnv = Sample(0);
-            }
-        }
+            // Find a free voice slot. If none free, drop the trigger.
+            if (activeCount >= MAX_VOICES) return;
 
-        void startPing()
-        {
-            sign = (fastRand() & 1) ? Sample(1) : Sample(-1);
+            for (size_t v = 0; v < MAX_VOICES; ++v) {
+                if (voices[v] == Sample(0)) {
+                    // Amplitude scale: (1 - jitter) + jitter * rand01
+                    // At jitter=0 → amp=1. At jitter=1 → amp ∈ [0,1] uniform.
+                    Sample amp = Sample(1) - jitter + jitter * random01();
+                    // Guard against exact zero — voices[v] == 0 marks a
+                    // free slot. A floor of 1e-4 is inaudible but keeps
+                    // slot accounting correct.
+                    if (amp < Sample(1e-4)) amp = Sample(1e-4);
 
-            // Per-trigger variation gives a slightly more organic vactrol feel.
-            auto const mixJitter = random01();
-            auto const fastJitter = random01();
-            auto const slowJitter = random01();
-
-            fastMix = Sample(0.58) + Sample(0.22) * mixJitter;
-            fastTauScale = Sample(0.12) + Sample(0.10) * fastJitter;
-            slowTauScale = Sample(0.82) + Sample(0.28) * slowJitter;
-
-            fastEnv = Sample(1);
-            slowEnv = Sample(1);
-            active = true;
-        }
-
-        void advanceTrail(Sample trails, Sample sampleRate)
-        {
-            if (trails <= Sample(0)) {
-                active = false;
-                fastEnv = Sample(0);
-                slowEnv = Sample(0);
-                return;
-            }
-
-            auto const fastCoeff = decayCoeff(trails * fastTauScale, sampleRate);
-            auto const slowCoeff = decayCoeff(trails * slowTauScale, sampleRate);
-
-            fastEnv *= fastCoeff;
-            slowEnv *= slowCoeff;
-
-            if (fastEnv < Sample(1e-6) && slowEnv < Sample(1e-6)) {
-                active = false;
-                fastEnv = Sample(0);
-                slowEnv = Sample(0);
+                    if (bipolar) {
+                        amp *= (fastRand() & 1) ? Sample(1) : Sample(-1);
+                    }
+                    voices[v] = amp;
+                    activeCount += 1;
+                    return;
+                }
             }
         }
 
         static Sample decayCoeff(Sample decaySeconds, Sample sampleRate)
         {
             if (decaySeconds <= Sample(0) || sampleRate <= Sample(0)) {
+                // Zero coefficient — voice expires immediately after this sample
                 return Sample(0);
             }
-
-            // -60 dB after `decaySeconds`.
+            // T60: value decays to 0.001 after `decaySeconds`
             auto const t60 = decaySeconds * sampleRate;
             return static_cast<Sample>(std::exp(std::log(0.001) / t60));
         }
 
+        // xorshift32 — faster and better distribution than LCG
         inline uint32_t fastRand()
         {
-            seed = 214013u * seed + 2531011u;
-            return (seed >> 16) & 0x7FFFu;
+            uint32_t x = seed;
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            seed = x;
+            return x;
         }
 
         inline Sample random01()
         {
-            return static_cast<Sample>(fastRand()) / static_cast<Sample>(0x7FFF);
+            // Upper 24 bits for better distribution, normalised to [0, 1)
+            return static_cast<Sample>(fastRand() >> 8) / static_cast<Sample>(1u << 24);
         }
 
-        std::atomic<uint32_t> seedTarget;
-        uint32_t seed = 0;
+        std::atomic<uint32_t> seedTarget{1};
+        std::atomic<uint32_t> seedRequest{0};
+        std::atomic<bool> bipolarTarget{true};
+        std::atomic<float> jitterTarget{0.0f};
 
-        bool active = false;
-        Sample sign = Sample(0);
-        Sample fastEnv = Sample(0);
-        Sample slowEnv = Sample(0);
-        Sample fastMix = Sample(0.7);
-        Sample fastTauScale = Sample(0.18);
-        Sample slowTauScale = Sample(0.9);
+        uint32_t seed = 1;
+        uint32_t seedApplied = 0;
+        std::array<Sample, MAX_VOICES> voices{};
+        size_t activeCount = 0;
     };
 
 } // namespace elem

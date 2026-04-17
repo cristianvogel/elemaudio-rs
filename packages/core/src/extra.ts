@@ -1032,39 +1032,56 @@ export function ramp00(
 export interface DustProps extends Record<string, unknown> {
   /** Optional authoring key for stable identity. */
   key?: string;
-  /** Optional deterministic RNG seed. */
+  /** Optional deterministic RNG seed (0 treated as 1). */
   seed?: number;
+  /**
+   * `true` (default) = Dust2-style bipolar output (-1 or +1 per impulse).
+   * `false` = SC Dust-style unipolar output (always +1).
+   */
+  bipolar?: boolean;
+  /**
+   * Per-impulse amplitude randomness, 0.0–1.0. Default 0.
+   * - 0.0 = all impulses at amplitude 1 (constant)
+   * - 0.5 = amplitude uniformly in [0.5, 1.0]
+   * - 1.0 = amplitude uniformly in [0, 1]
+   */
+  jitter?: number;
 }
 
 /**
- * Sparse bipolar impulses with a vactrol-like pinged decay.
+ * Sparse random impulses with optional decaying trails.
  *
- * `density` controls the average number of trigger attempts per second.
- * `trails` is an audio-rate decay time in seconds. When a trigger lands,
- * the node emits a bipolar ping (`-1` or `+1`) and then decays with a
- * two-stage response: a faster component for the initial "ping" and a
- * slower component for the tail. Retriggers are blocked while a trail is
- * still active, so each impulse gets to ring out before the next one can
- * land.
+ * Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+ * can have a trailing exponential decay instead of being a single-sample
+ * spike. Trails overlap and sum (polyphonic voice pool of 64).
  *
- * ### Behavior
+ * ### Behaviour
  *
- * - `density <= 0` means no new triggers, but an active trail continues to
- *   decay.
- * - `trails <= 0` collapses to Dust2-like one-sample impulses.
- * - The decay curve includes slight per-trigger variation to keep the
- *   response organic rather than mechanically uniform.
+ * - Each sample runs a Bernoulli trial with probability `density / sr`.
+ * - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+ * - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+ * - If all 64 voice slots are busy, new triggers are dropped.
+ * - `trails <= 0` → single-sample impulse (voice expires immediately).
+ * - `density <= 0` → no new triggers, existing trails keep decaying.
  *
  * @param props   - see {@link DustProps}
- * @param density - impulses per second (signal)
- * @param trails  - decay time in seconds (signal, audio-rate)
+ * @param density - impulses per second (Poisson rate, signal)
+ * @param trails  - T60 decay time in seconds per impulse (signal, audio-rate)
  *
  * @example
  * ```ts
- * const dust = el.extra.dust(
- *   { seed: 1 },
- *   el.const(200),
- *   el.const(0.05),
+ * // Dense bipolar dust with 50ms trails
+ * const noise = el.extra.dust(
+ *   { seed: 1, bipolar: true },
+ *   el.const({ value: 200 }),
+ *   el.const({ value: 0.05 }),
+ * );
+ *
+ * // Classic SC-Dust (unipolar, single-sample impulses)
+ * const clicks = el.extra.dust(
+ *   { bipolar: false },
+ *   el.const({ value: 10 }),
+ *   el.const({ value: 0 }),
  * );
  * ```
  */
