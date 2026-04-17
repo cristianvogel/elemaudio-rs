@@ -7,7 +7,7 @@
 
 import {MAX_ZOOM} from "../components/Oscilloscope";
 import { buildGraph as dspBuildGraph, SCOPE_NAME } from "../demo-dsp/boxsum-demo.dsp";
-import { initDemo } from "./demo-harness";
+import {initDemo, mustQuery} from "./demo-harness";
 import "../components/Oscilloscope";
 
 // ---- layout -----------------------------------------------------------
@@ -20,7 +20,11 @@ const layout = `
     <h3>box-sum modulation demo</h3>
     <p>Uses <code>el.extra.boxSum(windowSamplesNode, x)</code> or <code>el.extra.boxAverage(windowSamplesNode, x)</code> to smooth white noise and modulate oscillator frequency.</p>
     <div class="controls">
-      <button id="start" class="start-button">Start audio</button>
+    <div class="button-row">
+     <button id="start" class="state-button">Start audio</button>
+   <button id="stop" class="state-button">Stop audio</button>
+</div>
+     
       <div class="row toggle-row">
         <label class="toggle-label" for="mode-select">
           <span>Mode</span>
@@ -85,8 +89,10 @@ let toneHzValue: HTMLSpanElement;
 let oscilloscope: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
+let stopButton: HTMLButtonElement;
+let isStopped = false;
 
-const { mustQuery: q, wireControls } = initDemo({
+const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph: () => dspBuildGraph({
     mode: modeSelect.value as "sum" | "average",
@@ -94,6 +100,7 @@ const { mustQuery: q, wireControls } = initDemo({
     toneHz: Number(toneHzSlider.value),
     modRange: Number(boxModRangeSlider.value),
     attenuation: Number(boxsumAttenuationSlider.value),
+    isStopped,
   }),
   updateReadouts,
   onScopeEvent: (event: any) => {
@@ -119,6 +126,12 @@ toneHzValue = q<HTMLSpanElement>("#tone-hz-value");
 oscilloscope = q<any>("elemaudio-oscilloscope");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
+stopButton = q<HTMLButtonElement>( "#stop");
+
+const startButton = q<HTMLButtonElement>("#start");
+startButton.addEventListener("click", () => {
+    isStopped = false;
+});
 
 wireControls([modeSelect, windowLengthSlider, boxModRangeSlider, boxsumAttenuationSlider, toneHzSlider]);
 
@@ -142,6 +155,11 @@ zoomButton.addEventListener("click", () => {
   oscilloscope.setAttribute("zoom", String(currentZoom));
   zoomButton.textContent = `Zoom: ${currentZoom}×`;
 });
+
+stopButton.addEventListener("click", async () => {
+    isStopped = true;
+    await renderCurrentGraph();
+})
 
 function updateReadouts() {
   modeValue.textContent = modeSelect.value;

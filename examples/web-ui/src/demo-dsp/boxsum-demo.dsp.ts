@@ -14,11 +14,16 @@ export interface BoxsumParams {
   toneHz: number;
   modRange: number;
   attenuation: number;
+  isStopped?: boolean;
 }
 
 export function buildGraph(p: BoxsumParams): NodeRepr_t[] {
+  if (p.isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
+
   const noise = el.noise({ key: "boxsum:noise", seed: 7 });
-  const windowLength = el.const({ key: "boxsum:window", value: p.windowLength });
+    const windowLength = el.const({ key: "boxsum:window", value: p.windowLength });
   const toneBaseFreq = el.const({ key: "oscFreq:0", value: p.toneHz });
   const modRange = el.const({ key: "boxModRange", value: p.modRange });
   const boxsumAttenuation = el.const({ key: "boxsum:attenuation", value: p.attenuation });

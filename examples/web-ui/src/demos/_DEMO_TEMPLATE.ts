@@ -81,7 +81,10 @@ const layout = `
     <h3>${DEMO_TITLE}</h3>
     <p>${DEMO_DESCRIPTION}</p>
     <div class="controls">
-      <button id="start" class="start-button">Start audio</button>
+      <div class="button-row">
+        <button id="start" class="state-button">Start audio</button>
+        <button id="stop" class="state-button">Stop audio</button>
+      </div>
 
       <!-- Add controls here, for example: -->
       <div class="row">
@@ -99,7 +102,12 @@ const layout = `
 
 // ---- DSP --------------------------------------------------------------
 
+let isStopped = false;
+
 function buildGraph(): NodeRepr_t[] {
+  if (isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
   // Replace with the actual graph composition.
   const tone = el.cycle(el.const({ key: `${DEMO_TITLE}:freq`, value: 220 }));
   return [el.mul(0.25, tone), el.mul(0.25, tone)];
@@ -107,7 +115,7 @@ function buildGraph(): NodeRepr_t[] {
 
 // ---- init + bindings --------------------------------------------------
 
-const { mustQuery: q, wireControls } = initDemo({
+const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph,
   updateReadouts,
@@ -122,9 +130,20 @@ const { mustQuery: q, wireControls } = initDemo({
 
 const paramASlider = q<HTMLInputElement>("#param-a");
 const paramAValue = q<HTMLSpanElement>("#param-a-value");
+const stopButton = q<HTMLButtonElement>("#stop");
 // const oscilloscope = q<any>("elemaudio-oscilloscope");
 
+const startButton = q<HTMLButtonElement>("#start");
+startButton.addEventListener("click", () => {
+  isStopped = false;
+});
+
 wireControls([paramASlider]);
+
+stopButton.addEventListener("click", async () => {
+  isStopped = true;
+  await renderCurrentGraph();
+});
 
 function updateReadouts() {
   paramAValue.textContent = Number(paramASlider.value).toFixed(2);
