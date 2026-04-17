@@ -35,6 +35,8 @@ PURPOSE: Track project progress, status, and metrics across development sessions
       on steady-state blocks
 - [x] `DspParameters` now derives `PartialEq`
 - [x] Test suite: 22 lib tests (was 21) + integration tests, all passing
+- [x] **Version bump: `elemaudio-rs 0.1.0 → 0.2.0`** (SemVer minor bump for the
+      breaking `DspGraph::Params: PartialEq` requirement) + `CHANGELOG.md` added
 
 ### Completed Previous Session (2026-04-13)
 - [x] Framework hardening: `mount()` returns `Result<MountedGraph, MountError>` (no panics)
