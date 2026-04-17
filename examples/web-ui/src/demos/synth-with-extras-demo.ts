@@ -13,7 +13,7 @@ import { initDemo } from "./demo-harness";
 const layout = `
   <div class="panel">
     <h1>Synth + Extras</h1>
-    <p>Click start to open the browser audio engine, build a JS graph, and stream it into the runtime.</p>
+    <p>Demos a complex graph, mixing <code>el.＊</code> with <code>el.extra.＊</code> nodes. </p>
     <div class="controls">
       <button id="start" class="start-button">Start audio</button>
       <div class="row">
@@ -21,7 +21,7 @@ const layout = `
           <span>Synth Fc</span>
           <span id="frequency-value">220 Hz</span>
         </label>
-        <input id="frequency" type="range" min="60" max="1200" value="220" step="1" />
+        <input id="frequency" type="range" min="60" max="1200" value="360" step="1" />
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
       <div class="row toggle-row">
@@ -35,7 +35,7 @@ const layout = `
           <span>Drive limiter</span>
           <span id="drive-limiter-value">8.0x</span>
         </label>
-        <input id="drive-limiter" type="range" min="1" max="8" value="1" step="0.1" />
+        <input id="drive-limiter" type="range" min="1" max="8" value="1.5" step="0.1" />
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
       <div class="dial-strip" aria-label="Stride delay controls">
@@ -44,14 +44,14 @@ const layout = `
             <span>Delay</span>
             <span id="delay-time-value">250 ms</span>
           </label>
-          <input id="delay-time" type="range" min="10" max="1200" value="250" step="1" />
+          <input id="delay-time" type="range" min="10" max="1200" value="500" step="1" />
         </div>
         <div class="dial">
           <label for="delay-feedback">
             <span>Feedback</span>
             <span id="delay-feedback-value">0%</span>
           </label>
-          <input id="delay-feedback" type="range" min="0" max="95" value="0" step="1" />
+          <input id="delay-feedback" type="range" min="0" max="95" value="25" step="1" />
         </div>
         <div class="dial">
           <label for="delay-transition">
@@ -115,7 +115,7 @@ const layout = `
         <label class="toggle-label" for="crunch-enable">
           <span>Enable crunch</span>
         </label>
-        <input id="crunch-enable" class="toggle-input" type="checkbox" checked />
+        <input id="crunch-enable" class="toggle-input" type="checkbox"  />
       </div>
       <hr style="width: 100%; opacity: 0.125"/>
       <div class="status" id="status">Idle</div>

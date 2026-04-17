@@ -926,3 +926,146 @@ fn stride_delay_resolve_defaults(props: serde_json::Value) -> serde_json::Value 
 
     serde_json::Value::Object(map)
 }
+
+// ---- interpolateN (energy-preserving N-way crossfade) -----------------
+
+/// Energy-preserving N-way crossfading mixer.
+///
+/// Crossfades between a vector of N mono signal nodes using a normalised
+/// interpolator index. All nodes are equally spaced along the
+/// interpolator path.
+///
+/// ## Props
+///
+/// | Key         | Type | Default | Notes                                      |
+/// |-------------|------|---------|--------------------------------------------|
+/// | `barberpole`| bool | false   | Wrap the interpolator circularly (ring)    |
+///
+/// **Without barberpole** (default): interpolator is clamped to [0, 1].
+/// `0` = first node, `1` = last node. Linear path.
+///
+/// **With barberpole**: nodes are on a circular ring. `0` and `1` both
+/// map to the first node. The last node crossfades back into the first.
+/// Values outside [0, 1] wrap seamlessly.
+///
+/// The crossfade uses the Signalsmith cheap energy-preserving curve:
+/// `smoothstep(x) = 3x² − 2x³` passed through `sqrt` for equal-power
+/// behaviour. See <https://signalsmith-audio.co.uk/writing/2021/cheap-energy-crossfade/>
+///
+/// # Arguments
+///
+/// - `props` — optional `{ "barberpole": true }`
+/// - `interpolator` — position signal
+/// - `nodes` — vector of mono signal nodes to crossfade between
+///
+/// Returns silence if fewer than 2 nodes are provided.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// // Linear (clamped) crossfade between 3 oscillators
+/// let mix = extra::interpolate_n(
+///     json!({}),
+///     el::const_with_key("xfade", 0.5),
+///     vec![osc_a, osc_b, osc_c],
+/// );
+///
+/// // Barberpole: wraps around, bipolar LFO is fine
+/// let morph = extra::interpolate_n(
+///     json!({ "barberpole": true }),
+///     el::cycle(el::const_(0.1)),
+///     vec![osc_a, osc_b, osc_c],
+/// );
+/// ```
+pub fn interpolate_n(
+    props: serde_json::Value,
+    interpolator: impl Into<ElemNode>,
+    nodes: Vec<impl Into<ElemNode>>,
+) -> Node {
+    let n = nodes.len();
+    if n < 2 {
+        log::error!("interpolate_n: requires at least 2 nodes, got {n}");
+        return match nodes.into_iter().next() {
+            Some(node) => resolve(node),
+            None => el::const_(0.0),
+        };
+    }
+
+    let barberpole = props
+        .get("barberpole")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let resolved: Vec<Node> = nodes.into_iter().map(resolve).collect();
+    let interp = resolve(interpolator);
+
+    if barberpole {
+        interpolate_n_barberpole(interp, resolved, n)
+    } else {
+        interpolate_n_clamped(interp, resolved, n)
+    }
+}
+
+/// Clamped linear interpolation: [0, 1] maps to [first, last].
+fn interpolate_n_clamped(interp: Node, resolved: Vec<Node>, n: usize) -> Node {
+    // Clamp to [0, 1]
+    let clamped = el::min(1.0, el::max(0.0, interp));
+
+    // pos = clamped * (N - 1), maps [0,1] to [0, N-1]
+    let pos = el::mul((clamped, (n - 1) as f64));
+
+    let weighted: Vec<Node> = resolved
+        .into_iter()
+        .enumerate()
+        .map(|(i, node)| {
+            let dist = el::abs(el::sub((pos.clone(), i as f64)));
+            let proximity = el::max(0.0, el::sub((1.0, dist)));
+            let ss = el::mul((
+                el::mul((proximity.clone(), proximity.clone())),
+                el::sub((3.0, el::mul((2.0, proximity)))),
+            ));
+            let gain = el::sqrt(ss);
+            el::mul((node, gain))
+        })
+        .collect();
+
+    weighted
+        .into_iter()
+        .reduce(|acc, x| el::add((acc, x)))
+        .unwrap_or_else(|| el::const_(0.0))
+}
+
+/// Barberpole wrapping: nodes on a circular ring, [0, 1) wraps.
+fn interpolate_n_barberpole(interp: Node, resolved: Vec<Node>, n: usize) -> Node {
+    // fract(x) = x - floor(x) — wraps any value to [0, 1)
+    let fract = el::sub((interp.clone(), el::floor(interp)));
+
+    // pos = fract * N, maps [0, 1) to [0, N)
+    let n_f = n as f64;
+    let pos = el::mul((fract, n_f));
+
+    let weighted: Vec<Node> = resolved
+        .into_iter()
+        .enumerate()
+        .map(|(i, node)| {
+            let linear_dist = el::abs(el::sub((pos.clone(), i as f64)));
+            // Circular distance: min(linear, N - linear)
+            let circular_dist = el::min(linear_dist.clone(), el::sub((n_f, linear_dist)));
+            let proximity = el::max(0.0, el::sub((1.0, circular_dist)));
+            let ss = el::mul((
+                el::mul((proximity.clone(), proximity.clone())),
+                el::sub((3.0, el::mul((2.0, proximity)))),
+            ));
+            let gain = el::sqrt(ss);
+            el::mul((node, gain))
+        })
+        .collect();
+
+    weighted
+        .into_iter()
+        .reduce(|acc, x| el::add((acc, x)))
+        .unwrap_or_else(|| el::const_(0.0))
+}
