@@ -42,6 +42,7 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
         synth: resolve(__dirname, "synth.html"),
         sample: resolve(__dirname, "sample.html"),
+        dust: resolve(__dirname, "dust.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
         ramp00: resolve(__dirname, "ramp00.html"),
         waveshaper: resolve(__dirname, "waveshaper.html"),

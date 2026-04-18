@@ -913,6 +913,19 @@ fn covers_extra_helpers() {
         serde_json::json!({"path": "drums/snare.wav", "key": "snare-len"}),
         0,
     );
+
+    // dust: seed prop preserved; two signal children (density, trails).
+    let dust_node = extra::dust(
+        serde_json::json!({"seed": 1234, "bipolar": false, "jitter": 0.25}),
+        ElemNode::from(node(200.0)),
+        ElemNode::from(node(0.05)),
+    );
+    assert_node(
+        &dust_node,
+        "dust",
+        serde_json::json!({"seed": 1234, "bipolar": false, "jitter": 0.25}),
+        2,
+    );
 }
 
 #[test]

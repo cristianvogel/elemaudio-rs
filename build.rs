@@ -13,6 +13,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed=src/ffi/elementary_bridge.cpp");
     println!("cargo:rerun-if-changed=src/vendor/elementary/runtime");
+    println!("cargo:rerun-if-changed=src/native");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_RESOURCES");
 
     let mut build = cc::Build::new();

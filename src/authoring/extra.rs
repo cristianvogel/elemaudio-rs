@@ -1162,27 +1162,6 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 /// `0.5 Hz`. Useful as a `phasor` rate to clock the asset exactly once per
 /// cycle.
 ///
-/// # Missing resource
-///
-/// If the `path` prop names a resource that has **not** been added to the
-/// runtime's shared-resource map at the time this node's graph is applied,
-/// the underlying `setProperty` returns `InvalidPropertyValue` and the
-/// error surfaces through `Runtime::apply_instructions`. Same contract as
-/// `el::sample` / `el::table` — add the resource first (e.g. via
-/// `Runtime::add_shared_resource_f32`) before rendering.
-///
-/// # Unknown unit string
-///
-/// `"samp"`, `"ms"`, and `"hz"` are the only accepted tokens (case-sensitive).
-/// Anything else causes the runtime to return `InvalidPropertyValue`.
-///
-/// # Runtime changes
-///
-/// Changing `path` or `unit` at runtime via the fast-path setter
-/// (`mounted.set_property("unit", "hz")`) updates the emitted value on the
-/// next audio block. Transitions are instantaneous — the signal jumps to
-/// the new scaled length.
-///
 /// # Example
 ///
 /// ```ignore
@@ -1195,18 +1174,58 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 ///     .call()
 ///     .unwrap();
 ///
-/// let samples: Vec<f32> = vec![0.0; 48_000]; // exactly 1 second
+/// let samples: Vec<f32> = vec![0.0; 48_000];
 /// runtime.add_shared_resource_f32("my-asset", &samples).unwrap();
-///
-/// // 48000.0 on every output sample.
-/// let len_samp = extra::sample_count(json!({ "path": "my-asset" }));
-///
-/// // 1000.0 — asset duration in milliseconds.
-/// let len_ms = extra::sample_count(json!({ "path": "my-asset", "unit": "ms" }));
-///
-/// // 1.0 Hz — the asset's fundamental period.
 /// let len_hz = extra::sample_count(json!({ "path": "my-asset", "unit": "hz" }));
 /// ```
 pub fn sample_count(props: serde_json::Value) -> Node {
     Node::new("sampleCount", props, vec![])
+}
+
+/// Sparse random impulses with optional decaying trails.
+///
+/// Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+/// can have a trailing exponential decay instead of being a single-sample
+/// spike. Trails overlap and sum (polyphonic voice pool of 64).
+///
+/// # Arguments (AGENTS.md order: props first, inputs last)
+/// - `props` — optional `seed`, `bipolar`, `jitter`, and/or `key`
+/// - `density` — impulses per second (Poisson rate, signal)
+/// - `trails` — T60 decay time in seconds per impulse (signal, audio-rate)
+///
+/// # Props
+/// | Key       | Type | Default | Notes                                         |
+/// |-----------|------|---------|-----------------------------------------------|
+/// | `seed`    | num  | random  | Deterministic RNG seed (0 treated as 1)       |
+/// | `bipolar` | bool | `true`  | `true` = Dust2 (-1/+1), `false` = Dust (0..1) |
+/// | `jitter`  | num  | `0.0`   | Per-impulse amplitude randomness 0..1         |
+/// | `key`     | str  | —       | Optional authoring key                        |
+///
+/// # Behaviour
+/// - Each sample runs a Bernoulli trial with probability `density / sr`.
+/// - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+/// - `jitter` scales the impulse amplitude randomly per trigger.
+/// - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+/// - If all 64 voice slots are busy, new triggers are dropped.
+/// - `trails <= 0` → single-sample impulse (voice expires immediately after firing).
+/// - `density <= 0` → no new triggers, existing trails keep decaying.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// let noise = extra::dust(
+///     json!({ "seed": 1, "bipolar": true, "jitter": 0.25 }),
+///     el::const_(200.0),
+///     el::const_(0.05),
+/// );
+/// ```
+pub fn dust(
+    props: serde_json::Value,
+    density: impl Into<ElemNode>,
+    trails: impl Into<ElemNode>,
+) -> Node {
+    Node::new("dust", props, vec![resolve(density), resolve(trails)])
 }

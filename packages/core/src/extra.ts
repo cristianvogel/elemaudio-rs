@@ -961,3 +961,159 @@ function interpolateNBarberpole(
 
   return weighted.reduce((acc, x) => createNode("add", {}, [acc, x]));
 }
+
+// ---------------------------------------------------------------------------
+// sampleCount
+// ---------------------------------------------------------------------------
+
+export type SampleCountUnit = "samp" | "ms" | "hz";
+
+/** Props for `el.extra.sampleCount(...)`. */
+export interface SampleCountProps extends Record<string, unknown> {
+  key?: string;
+  path: string;
+  unit?: SampleCountUnit;
+}
+
+/**
+ * Emit VFS resource length as constant signal.
+ *
+ * - `"samp"` raw per-channel sample count
+ * - `"ms"` duration in milliseconds
+ * - `"hz"` reciprocal duration frequency (`sr / len`)
+ */
+export function sampleCount(props: SampleCountProps): NodeRepr_t {
+  return createNode("sampleCount", props, []);
+}
+
+
+// ---------------------------------------------------------------------------
+// ramp00
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for `el.extra.ramp00(...)`.
+ */
+export interface Ramp00Props extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /**
+   * When `true` (default), triggers are ignored while the ramp is running —
+   * i.e. until the output returns to exactly 0. When `false`, any rising edge
+   * on the trigger restarts the ramp from 0.
+   */
+  blocking?: boolean;
+}
+
+/**
+ * Sample-accurate one-shot 0→1 ramp.
+ *
+ * On a rising edge of the trigger `x` (crossing 0.5 upward), the signal
+ * increments linearly from 0 to 1 over `dur` samples, then drops instantly
+ * back to 0 on the next sample — hence the `00` suffix: the output starts
+ * at 0 and ends at 0. Ideal as a sample-accurate envelope gate, a percussive
+ * modulator trigger, or a duration-controlled one-shot LFO.
+ *
+ * @param props - see {@link Ramp00Props}
+ * @param dur   - ramp duration in **samples** (signal; may vary per-sample)
+ * @param x     - trigger signal; a rising edge through 0.5 starts the ramp
+ *
+ * ### dur semantics
+ * - `dur` is read every sample and the per-sample increment is `1 / dur`.
+ * - If `dur` changes mid-ramp, the current value is preserved and only the
+ *   slope updates (smooth continuation at the new rate).
+ * - If `dur <= 0` at the moment of a would-be trigger, the trigger is ignored.
+ * - If `dur <= 0` while the ramp is running, the ramp aborts and the output
+ *   snaps to 0.
+ *
+ * @example
+ * ```ts
+ * // 100 ms ramp @ current SR, retriggered by a 2 Hz train, retriggers
+ * // blocked while running.
+ * const ramp = el.extra.ramp00(
+ *   { blocking: true },
+ *   el.ms2samps(100),
+ *   el.train(2),
+ * );
+ * ```
+ */
+export function ramp00(
+  props: Ramp00Props,
+  dur: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  const { blocking = true, ...other } = props;
+  const resolvedProps = { ...other, blocking };
+  return createNode("ramp00", resolvedProps, [resolve(dur), resolve(x)]);
+}
+
+// ---------------------------------------------------------------------------
+// dust
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for `el.extra.dust(...)`.
+ */
+export interface DustProps extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /** Optional deterministic RNG seed (0 treated as 1). */
+  seed?: number;
+  /**
+   * `true` (default) = Dust2-style bipolar output (-1 or +1 per impulse).
+   * `false` = SC Dust-style unipolar output (always +1).
+   */
+  bipolar?: boolean;
+  /**
+   * Per-impulse amplitude randomness, 0.0–1.0. Default 0.
+   * - 0.0 = all impulses at amplitude 1 (constant)
+   * - 0.5 = amplitude uniformly in [0.5, 1.0]
+   * - 1.0 = amplitude uniformly in [0, 1]
+   */
+  jitter?: number;
+}
+
+/**
+ * Sparse random impulses with optional decaying trails.
+ *
+ * Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+ * can have a trailing exponential decay instead of being a single-sample
+ * spike. Trails overlap and sum (polyphonic voice pool of 64).
+ *
+ * ### Behaviour
+ *
+ * - Each sample runs a Bernoulli trial with probability `density / sr`.
+ * - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+ * - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+ * - If all 64 voice slots are busy, new triggers are dropped.
+ * - `trails <= 0` → single-sample impulse (voice expires immediately).
+ * - `density <= 0` → no new triggers, existing trails keep decaying.
+ *
+ * @param props   - see {@link DustProps}
+ * @param density - impulses per second (Poisson rate, signal)
+ * @param trails  - T60 decay time in seconds per impulse (signal, audio-rate)
+ *
+ * @example
+ * ```ts
+ * // Dense bipolar dust with 50ms trails
+ * const noise = el.extra.dust(
+ *   { seed: 1, bipolar: true },
+ *   el.const({ value: 200 }),
+ *   el.const({ value: 0.05 }),
+ * );
+ *
+ * // Classic SC-Dust (unipolar, single-sample impulses)
+ * const clicks = el.extra.dust(
+ *   { bipolar: false },
+ *   el.const({ value: 10 }),
+ *   el.const({ value: 0 }),
+ * );
+ * ```
+ */
+export function dust(
+  props: DustProps,
+  density: ElemNode,
+  trails: ElemNode,
+): NodeRepr_t {
+  return createNode("dust", props, [resolve(density), resolve(trails)]);
+}

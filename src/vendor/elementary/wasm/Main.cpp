@@ -13,6 +13,7 @@
 //   "vocoder"      — VocoderNode       (STFT channel vocoder, 4-in 2-out)
 //   "ramp00"       — Ramp00Node        (sample-accurate one-shot 0→1 ramp)
 //   "sampleCount"  — SampleCountNode   (VFS resource length as a constant signal)
+//   "dust"         — DustNode          (random impulses with optional trails)
 //   "convolve"     — ConvolutionNode   (WASM-only)
 //   "fft"          — FFTNode           (WASM-only)
 //   "metro"        — MetronomeNode     (WASM-only)
@@ -33,6 +34,8 @@
 #include "../../../../native/extra/stridedelay.h"
 #include "../../../../native/extra/vocoder.h"
 #include "../../../../native/extra/ramp00.h"
+#include "../../../../native/extra/sample_count.h"
+#include "../../../../native/extra/dust.h"
 #include "../../../../native/extra/sample_count.h"
 #include "Metro.h"
 #include "SampleTime.h"
@@ -125,6 +128,13 @@ public:
         // Property: path (string, required) — VFS key of the resource.
         runtime->registerNodeType("sampleCount", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
+        });
+
+        // DustNode: sparse bipolar impulses with a pinged, vactrol-like trail.
+        // Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
+        // Properties: seed, bipolar, jitter.
+        runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::DustNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("fft", [](elem::NodeId const id, double fs, int const bs) {

@@ -27,6 +27,10 @@
 // audio resource as a constant-valued signal. Zero children.
 // Property: path (string, required) — VFS key of the resource.
 #include <extra/sample_count.h>
+// DustNode: sparse bipolar impulses with a vactrol-like pinged decay.
+// Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
+// Properties: seed (number, optional), bipolar (bool), jitter (0..1).
+#include <extra/dust.h>
 
 extern "C" {
 
@@ -97,6 +101,14 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         // of the VFS resource named by the `path` prop. Zero children.
         handle->runtime->registerNodeType("sampleCount", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
+        });
+
+        // "dust" — DustNode.
+        // Sparse random impulses with optional overlapping decaying trails.
+        // Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
+        // Properties: seed, bipolar, jitter.
+        handle->runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::DustNode<double>>(id, fs, bs);
         });
 
         return handle.release();
