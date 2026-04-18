@@ -120,11 +120,11 @@ export function resonatorBankReference(
         const excArg = el.mul(Math.PI * n, spClamped);
         const posWeight = el.sin(excArg);
 
-        // Brightness tilt: blend between flat response (brightness=0) and
-        // 1/sqrt(n) upper-mode attenuation (brightness=1).
+        // Brightness tilt: blend between darker 1/sqrt(n) upper-mode
+        // attenuation (brightness=0) and flat response (brightness=1).
         const brClamped = el.max(0, el.min(1, brightness));
-        const flatTerm = el.sub(1, brClamped);
-        const tiltedTerm = el.mul(brClamped, 1 / Math.sqrt(n));
+        const flatTerm = brClamped;
+        const tiltedTerm = el.mul(el.sub(1, brClamped), 1 / Math.sqrt(n));
         const brightWeight = el.add(flatTerm, tiltedTerm);
 
         const weight = el.mul(posWeight, brightWeight);
@@ -323,7 +323,7 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
 
     const strikePosWithJitter: NodeRepr_t = wrap01(el.add( strikePos,
         el.select(strikePosJitter,
-             el.abs( el.latch( el.ge(exciter, 0.1), el.cycle(0.0137))),
+             el.abs( el.latch( el.ge(exciter, 0.1), el.extra.foldback( {thresh: 0.5, amp: 1.0}, el.cycle(0.0137) )) ),
             0
         )));
     // --- Build bank ---------------------------------------------------

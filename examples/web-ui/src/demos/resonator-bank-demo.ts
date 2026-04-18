@@ -36,8 +36,8 @@ const layout = `
       tuned Karplus-Strong-style delay resonator with per-mode damping
       ( dispersive wave propagation ).
       Excite with a <em>hammer</em> (velocity + hardness) or
-      <em>dust</em> for A/B. TS reference implementation; a native
-      <code>el.extra.resonatorBank</code> will replace it later.
+      <em>dust</em> for A/B. TS reference implementation; the Rust
+      <code>el::extra::resonator_bank</code> is still in the works.
     </p>
     <div class="controls">
       <div class="button-row">
