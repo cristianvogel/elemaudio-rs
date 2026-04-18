@@ -47,7 +47,7 @@ fn dust_is_silent_when_density_is_zero() {
 }
 
 #[test]
-fn dust_trails_overlap_and_shorter_trails_decay_faster() {
+fn dust_releases_overlap_and_shorter_releases_decay_faster() {
     let sample_rate = 48_000.0;
     let buffer_size = 64;
 
@@ -57,14 +57,14 @@ fn dust_trails_overlap_and_shorter_trails_decay_faster() {
         .call()
         .expect("runtime");
 
-    // High density + long trails should create overlapping voices with
+    // High density + long releases should create overlapping voices with
     // substantial output energy.
     let density = elemaudio_rs::el::const_with_key("density", sample_rate);
-    let trails = elemaudio_rs::el::const_with_key("trails", 0.05);
+    let release = elemaudio_rs::el::const_with_key("release", 0.05);
     let graph = Graph::new().render(extra::dust(
         json!({ "seed": 1234, "bipolar": false, "jitter": 0.0 }),
         density,
-        trails,
+        release,
     ));
     let mounted = graph.mount().expect("mount");
     runtime.apply_instructions(mounted.batch()).expect("apply");
@@ -78,13 +78,13 @@ fn dust_trails_overlap_and_shorter_trails_decay_faster() {
     }
 
     let energy_long: f64 = out.iter().map(|s| s.abs()).sum();
-    assert!(energy_long > 10.0, "long overlapping trails should produce substantial energy: {energy_long}");
+    assert!(energy_long > 10.0, "long overlapping releases should produce substantial energy: {energy_long}");
 
-    // Shorten the trail at runtime and verify the same node now decays faster.
-    let len_node = mounted.node_with_key("trails").expect("keyed trails");
+    // Shorten the release at runtime and verify the same node now decays faster.
+    let len_node = mounted.node_with_key("release").expect("keyed release");
     runtime
         .apply_instructions(&len_node.set_const_value(0.005))
-        .expect("apply trails update");
+        .expect("apply release update");
 
     {
         let mut outputs = [out.as_mut_slice()];
@@ -92,5 +92,5 @@ fn dust_trails_overlap_and_shorter_trails_decay_faster() {
     }
 
     let energy_short: f64 = out.iter().map(|s| s.abs()).sum();
-    assert!(energy_short < energy_long, "shorter trails should reduce total energy: short={energy_short}, long={energy_long}");
+    assert!(energy_short < energy_long, "shorter releases should reduce total energy: short={energy_short}, long={energy_long}");
 }

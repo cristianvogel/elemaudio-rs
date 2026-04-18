@@ -36,11 +36,12 @@
  * `hardness` and `velocity` signals, gated by a `trigger` signal.
  */
 
-import type { NodeRepr_t, ElemNode } from "@elem-rs/core";
+import type { NodeRepr_t } from "@elem-rs/core";
 import { el } from "@elem-rs/core";
 import { TIME_SCALE } from "../components/Oscilloscope";
 
-export const SCOPE_NAME = "resonator-bank-scope";
+export const SCOPE_HAMMER = "resonator-bank-scope-hammer";
+export const SCOPE_OUTPUT = "resonator-bank-scope-output";
 
 // Clamp range for modes. The bank cost is O(modes) graph nodes.
 const MODES_MIN = 1;
@@ -64,12 +65,12 @@ export interface ResonatorBankProps {
  */
 export function resonatorBankReference(
   props: ResonatorBankProps,
-  f0: ElemNode,
-  inharmonicity: ElemNode,
-  strikePos: ElemNode,
-  brightness: ElemNode,
-  decay: ElemNode,
-  exciter: ElemNode,
+  f0: NodeRepr_t,
+  inharmonicity: NodeRepr_t,
+  strikePos: NodeRepr_t,
+  brightness: NodeRepr_t,
+  decay: NodeRepr_t,
+  exciter: NodeRepr_t,
 ): NodeRepr_t {
   const modes = Math.max(
     MODES_MIN,
@@ -77,18 +78,22 @@ export function resonatorBankReference(
   );
   const key = props.key ?? "rbank";
 
-  const f0N = f0 as NodeRepr_t;
-  const B = inharmonicity as NodeRepr_t;
-  const sp = strikePos as NodeRepr_t;
-  const br = brightness as NodeRepr_t;
-  const dk = decay as NodeRepr_t;
-  const ex = exciter as NodeRepr_t;
-
   // Clamp decay to (0, 1) softly to keep fb < 1. Map macro decay to a
-  // feedback factor: fb_macro = FB_HEAD_ROOM * sqrt(decay). sqrt gives
-  // a more linear feel than raw decay because ring-time is geometric.
-  const decayClamped = el.max(0, el.min(1, dk));
-  const fbMacro = el.mul(FB_HEAD_ROOM, el.sqrt(decayClamped));
+  // feedback factor with a strongly front-loaded curve so musical ring
+  // opens up early in the slider:
+  //
+  //   fb_macro = FB_HEAD_ROOM * decay ^ DECAY_CURVE
+  //
+  // DECAY_CURVE ≈ 0.1956 was chosen so that decay=0.40 yields roughly
+  // the same fb as the previous sqrt-based curve did at 0.70
+  // (fb_macro ≈ 0.836 * FB_HEAD_ROOM). At decay=1.0 the mapping still
+  // reaches FB_HEAD_ROOM. The curve is monotonic and keeps the top end
+  // musical while giving the first half of the slider more audible
+  // reach — the ear follows ring-time geometrically in fb, so a
+  // sub-linear curve matches perception better than sqrt.
+  const DECAY_CURVE = 0.1956;
+  const decayClamped = el.max(0, el.min(1, decay));
+  const fbMacro = el.mul(FB_HEAD_ROOM, el.pow(decayClamped, DECAY_CURVE));
 
   const modeOutputs: NodeRepr_t[] = [];
 
@@ -99,8 +104,8 @@ export function resonatorBankReference(
     // --- Frequency -------------------------------------------------
     // f_n = n * f0 * sqrt(1 + B * n^2)
     const nSq = n * n;
-    const stretch = el.sqrt(el.add(1, el.mul(nSq, B)));
-    const fn = el.mul(n, el.mul(f0N, stretch));
+    const stretch = el.sqrt(el.add(1, el.mul(nSq, inharmonicity)));
+    const fn = el.mul(n, el.mul(f0, stretch));
 
     // Clamp to audible range. Above Nyquist/0.4 the SVF-backed
     // bandpass becomes unstable anyway.
@@ -111,13 +116,13 @@ export function resonatorBankReference(
 
     // --- Excitation weight -----------------------------------------
     // sin(pi * n * strikePos) — struck-string modal amplitude.
-    const spClamped = el.max(0.001, el.min(0.999, sp));
+    const spClamped = el.max(0.001, el.min(0.999, strikePos));
     const excArg = el.mul(Math.PI * n, spClamped);
     const posWeight = el.sin(excArg);
 
     // Brightness tilt: blend between flat response (brightness=0) and
     // 1/sqrt(n) upper-mode attenuation (brightness=1).
-    const brClamped = el.max(0, el.min(1, br));
+    const brClamped = el.max(0, el.min(1, brightness));
     const flatTerm = el.sub(1, brClamped);
     const tiltedTerm = el.mul(brClamped, 1 / Math.sqrt(n));
     const brightWeight = el.add(flatTerm, tiltedTerm);
@@ -131,7 +136,7 @@ export function resonatorBankReference(
     const fbPartial = el.pow(fbMacro, fbExponent);
 
     // --- Pre-shape the exciter at f_n ------------------------------
-    const shaped = el.bandpass(fnClamped, el.const({ value: 160 }), ex);
+    const shaped = el.bandpass(fnClamped, el.const({ value: 160 }), exciter);
 
     const drive = el.mul(weight, shaped);
 
@@ -152,7 +157,7 @@ export function resonatorBankReference(
   // even for modes=1.
   const sum = modeOutputs.reduce<NodeRepr_t>(
     (acc, v) => el.add(acc, v),
-    el.const({ value: 0 }) as NodeRepr_t,
+    el.const({ value: 0 }),
   );
 
   // Loose normalization by sqrt(modes) so sweeping modes doesn't
@@ -184,17 +189,14 @@ export interface HammerStrikeProps {
  */
 export function hammerStrikeReference(
   props: HammerStrikeProps,
-  trigger: ElemNode,
-  velocity: ElemNode,
-  hardness: ElemNode,
+  trigger: NodeRepr_t,
+  velocity: NodeRepr_t,
+  hardness: NodeRepr_t,
 ): NodeRepr_t {
   const key = props.key ?? "hammer";
-  const trig = trigger as NodeRepr_t;
-  const vel = velocity as NodeRepr_t;
-  const hard = hardness as NodeRepr_t;
 
-  const velClamp = el.max(0, el.min(1, vel));
-  const hardClamp = el.max(0, el.min(1, hard));
+  const velClamp = el.max(0, el.min(1, velocity));
+  const hardClamp = el.max(0, el.min(1, hardness));
 
   // Attack time: 0.5 ms (hard) → 8 ms (soft felt).
   const attackMs = el.sub(8, el.mul(7.5, hardClamp));
@@ -207,7 +209,7 @@ export function hammerStrikeReference(
 
   // ADSR envelope: the burst shape (attack, release, sustain=0,
   // release-after-gate=very short, gate=trigger).
-  const env = el.adsr(attackSec, releaseSec, 0, 0.001, trig);
+  const env = el.adsr(attackSec, releaseSec, 0, 0.001, trigger);
 
   // Contact noise body, shaped by hardness. Soft hammers sound duller.
   // Cutoff maps 400 Hz (soft) → 7 kHz (hard).
@@ -257,8 +259,10 @@ export interface ResonatorBankParams {
   // --- Dust exciter (for A/B) ---------------------------------------
   /** Dust density in impulses/sec. */
   dustDensity: number;
-  /** Dust tail ms. */
-  dustTrailsMs: number;
+  /** Dust release in ms. */
+  dustReleaseMs: number;
+  /** Dust amp jitter 0..1. */
+  dustJitter: number;
 
   // --- Output --------------------------------------------------------
   /** Final output gain 0..1. */
@@ -296,9 +300,9 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
   } else {
     // Dust path for A/B comparison against the hammer.
     exciter = el.extra.dust(
-      { key: "rb:dust", seed: 7, bipolar: true, jitter: 0 },
+      { key: "rb:dust", seed: 7, bipolar: true, jitter: p.dustJitter },
       el.const({ key: "rb:dustDensity", value: p.dustDensity }),
-      el.const({ key: "rb:dustTrails", value: p.dustTrailsMs / 1000 }),
+      el.const({ key: "rb:dustRelease", value: p.dustReleaseMs / 1000 }),
     );
   }
 
@@ -330,16 +334,21 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
         )
       : el.tanh(pre);
 
-  // Scope the mono output for visualization without altering audio.
-  const scopeInsert = el.scope(
-    { name: SCOPE_NAME, size: TIME_SCALE, channels: 1 },
+  // Scope the hammer exciter before the bank.
+  const scopeHammer = el.scope(
+    { name: SCOPE_HAMMER, size: TIME_SCALE, channels: 1 },
+    exciter,
+  );
+
+  // Scope the mono output without altering the audible signal.
+  const scopeOutput = el.scope(
+    { name: SCOPE_OUTPUT, size: TIME_SCALE, channels: 1 },
     out,
   );
 
-  // Duplicate to stereo and absorb the scope insert (multiplied by 0)
-  // so it stays in the graph without affecting the audible signal.
-  const l = el.add(out, el.mul(0, scopeInsert));
+  // Duplicate to stereo and absorb both scope inserts (multiplied by 0)
+  // so they stay in the graph without affecting the audible signal.
+  const l = el.add(out, el.mul(0, scopeHammer, scopeOutput));
   const r = out;
   return [l, r];
 }
-

@@ -10,24 +10,31 @@ import "../components/Oscilloscope";
 import { initDemo } from "./demo-harness";
 import {
   buildGraph as buildDspGraph,
-  SCOPE_NAME,
+  SCOPE_HAMMER,
+  SCOPE_OUTPUT,
   type ResonatorBankParams,
   type ExciterKind,
   type ClipMode,
 } from "../demo-dsp/resonator-bank-demo.dsp";
 
 const layout = `
-  <elemaudio-oscilloscope id="scope" zoom="2"></elemaudio-oscilloscope>
-  <div class="scope-title"><p>Resonator bank output</p></div>
+  <div class="scope-row" style="display:flex; gap:1rem; justify-content:center;">
+    <div class="scope-col" style="text-align:center;">
+      <elemaudio-oscilloscope id="scope-hammer"></elemaudio-oscilloscope>
+      <div class="scope-title"><p>Hammer</p></div>
+    </div>
+    <div class="scope-col" style="text-align:center;">
+      <elemaudio-oscilloscope id="scope-output"></elemaudio-oscilloscope>
+      <div class="scope-title"><p>Output</p></div>
+    </div>
+  </div>
   <div class="panel">
     <h1>elemaudio-rs</h1>
     <h3>modal stiff-string resonator bank</h3>
     <p>
-      A modal bank built from stiff-string PDE intuition:
-      <code>f<sub>n</sub> = n · f<sub>0</sub> · √(1 + B · n²)</code>,
-      struck at position <code>p</code> so
-      <code>w<sub>n</sub> = sin(π · n · p)</code>. Each partial is a
-      tuned Karplus-Strong-style delay resonator with per-mode damping.
+      A modal bank built from stiff-string maths. Each partial is a
+      tuned Karplus-Strong-style delay resonator with per-mode damping
+      ( dispersive wave propagation ).
       Excite with a <em>hammer</em> (velocity + hardness) or
       <em>dust</em> for A/B. TS reference implementation; a native
       <code>el.extra.resonatorBank</code> will replace it later.
@@ -137,11 +144,19 @@ const layout = `
         </div>
 
         <div class="dial">
-          <label for="dustTrailsMs">
-            <span>Dust trails</span>
-            <span id="dustTrailsMs-value">1 ms</span>
+          <label for="dustReleaseMs">
+            <span>Dust release</span>
+            <span id="dustReleaseMs-value">1 ms</span>
           </label>
-          <input id="dustTrailsMs" type="range" min="0" max="200" value="1" step="1" />
+          <input id="dustReleaseMs" type="range" min="0" max="200" value="1" step="1" />
+        </div>
+
+        <div class="dial">
+          <label for="dustJitter">
+            <span>Dust jitter</span>
+            <span id="dustJitter-value">0 %</span>
+          </label>
+          <input id="dustJitter" type="range" min="0" max="100" value="0" step="1" />
         </div>
 
         <div class="dial">
@@ -198,13 +213,16 @@ let hardnessSlider: HTMLInputElement;
 let hardnessValue: HTMLSpanElement;
 let dustDensitySlider: HTMLInputElement;
 let dustDensityValue: HTMLSpanElement;
-let dustTrailsSlider: HTMLInputElement;
-let dustTrailsValue: HTMLSpanElement;
+let dustReleaseSlider: HTMLInputElement;
+let dustReleaseValue: HTMLSpanElement;
+let dustJitterSlider: HTMLInputElement;
+let dustJitterValue: HTMLSpanElement;
 let gainSlider: HTMLInputElement;
 let gainValue: HTMLSpanElement;
 let clipModeSelect: HTMLSelectElement;
 let clipModeValue: HTMLSpanElement;
-let oscilloscope: any;
+let hammerScope: any;
+let outputScope: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
 let stopButton: HTMLButtonElement;
@@ -241,7 +259,8 @@ function currentParams(): ResonatorBankParams {
     velocity: Number(velocitySlider.value) / 100,
     hardness: Number(hardnessSlider.value) / 100,
     dustDensity: Number(dustDensitySlider.value),
-    dustTrailsMs: Number(dustTrailsSlider.value),
+    dustReleaseMs: Number(dustReleaseSlider.value),
+    dustJitter: Number(dustJitterSlider.value) / 100,
     gain: 0.65 * Math.pow(Number(gainSlider.value) / 100, 2.4),
     clipMode: clipModeSelect.value as ClipMode,
     isStopped,
@@ -258,11 +277,15 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   updateReadouts,
   renderOptions: { rootFadeInMs: 0, rootFadeOutMs: 20 },
   onScopeEvent: (event: any) => {
-    if (event.source === SCOPE_NAME) {
-      const firstBlock = event.data?.[0];
-      if (firstBlock) {
-        oscilloscope.data = Array.from(firstBlock as Float32Array);
-      }
+    const firstBlock = event.data?.[0];
+    if (!firstBlock) return;
+
+    if (event.source === SCOPE_HAMMER && hammerScope) {
+      hammerScope.data = Array.from(firstBlock as Float32Array);
+    }
+
+    if (event.source === SCOPE_OUTPUT && outputScope) {
+      outputScope.data = Array.from(firstBlock as Float32Array);
     }
   },
 });
@@ -289,13 +312,16 @@ hardnessSlider = q<HTMLInputElement>("#hardness");
 hardnessValue = q<HTMLSpanElement>("#hardness-value");
 dustDensitySlider = q<HTMLInputElement>("#dustDensity");
 dustDensityValue = q<HTMLSpanElement>("#dustDensity-value");
-dustTrailsSlider = q<HTMLInputElement>("#dustTrailsMs");
-dustTrailsValue = q<HTMLSpanElement>("#dustTrailsMs-value");
+dustReleaseSlider = q<HTMLInputElement>("#dustReleaseMs");
+dustReleaseValue = q<HTMLSpanElement>("#dustReleaseMs-value");
+dustJitterSlider = q<HTMLInputElement>("#dustJitter");
+dustJitterValue = q<HTMLSpanElement>("#dustJitter-value");
 gainSlider = q<HTMLInputElement>("#gain");
 gainValue = q<HTMLSpanElement>("#gain-value");
 clipModeSelect = q<HTMLSelectElement>("#clip-mode");
 clipModeValue = q<HTMLSpanElement>("#clip-mode-value");
-oscilloscope = q<any>("elemaudio-oscilloscope");
+hammerScope = q<any>("#scope-hammer");
+outputScope = q<any>("#scope-output");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
 stopButton = q<HTMLButtonElement>("#stop");
@@ -317,7 +343,8 @@ wireControls([
   velocitySlider,
   hardnessSlider,
   dustDensitySlider,
-  dustTrailsSlider,
+  dustReleaseSlider,
+  dustJitterSlider,
   gainSlider,
   clipModeSelect,
 ]);
@@ -328,23 +355,27 @@ stopButton.addEventListener("click", async () => {
 });
 
 freezeButton.addEventListener("click", () => {
-  const isFrozen = oscilloscope.hasAttribute("freeze");
+  const isFrozen = hammerScope.hasAttribute("freeze");
   if (isFrozen) {
-    oscilloscope.removeAttribute("freeze");
+    hammerScope.removeAttribute("freeze");
+    outputScope.removeAttribute("freeze");
     freezeButton.textContent = "Freeze";
   } else {
-    oscilloscope.setAttribute("freeze", "");
+    hammerScope.setAttribute("freeze", "");
+    outputScope.setAttribute("freeze", "");
     freezeButton.textContent = "Unfreeze";
   }
 });
 
-let currentZoom = 2;
-oscilloscope.setAttribute("zoom", String(currentZoom));
+let currentZoom = MAX_ZOOM;
+hammerScope.setAttribute("zoom", String(currentZoom));
+outputScope.setAttribute("zoom", String(currentZoom));
 zoomButton.textContent = `Zoom: ${currentZoom}×`;
 
 zoomButton.addEventListener("click", () => {
   currentZoom = currentZoom === MAX_ZOOM ? 1 : currentZoom * 2;
-  oscilloscope.setAttribute("zoom", String(currentZoom));
+  hammerScope.setAttribute("zoom", String(currentZoom));
+  outputScope.setAttribute("zoom", String(currentZoom));
   zoomButton.textContent = `Zoom: ${currentZoom}×`;
 });
 
@@ -363,7 +394,8 @@ function updateReadouts() {
   velocityValue.textContent = `${Number(velocitySlider.value)} %`;
   hardnessValue.textContent = `${Number(hardnessSlider.value)} %`;
   dustDensityValue.textContent = `${Number(dustDensitySlider.value)} Hz`;
-  dustTrailsValue.textContent = `${Number(dustTrailsSlider.value)} ms`;
+  dustReleaseValue.textContent = `${Number(dustReleaseSlider.value)} ms`;
+  dustJitterValue.textContent = `${Number(dustJitterSlider.value)} %`;
   gainValue.textContent = `${Number(gainSlider.value)} %`;
   clipModeValue.textContent = clipModeSelect.value === "limiter" ? "Limiter" : "Soft";
 }

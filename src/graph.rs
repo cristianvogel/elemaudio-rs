@@ -1031,11 +1031,11 @@ mod tests {
             .expect("runtime creation");
 
         let density = el::const_(100.0);
-        let trails = el::const_(0.0);
+        let release = el::const_(0.0);
         let dust = extra::dust(
             serde_json::json!({ "seed": 42, "bipolar": false }),
             density,
-            trails,
+            release,
         );
 
         let graph = Graph::new().render(vec![dust]);

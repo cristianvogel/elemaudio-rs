@@ -1074,28 +1074,28 @@ export interface DustProps extends Record<string, unknown> {
 }
 
 /**
- * Sparse random impulses with optional decaying trails.
+ * Sparse random impulses with optional decaying release.
  *
  * Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
- * can have a trailing exponential decay instead of being a single-sample
- * spike. Trails overlap and sum (polyphonic voice pool of 64).
+ * can have a trailing exponential release instead of being a single-sample
+ * spike. Releases overlap and sum (polyphonic voice pool of 64).
  *
  * ### Behaviour
  *
  * - Each sample runs a Bernoulli trial with probability `density / sr`.
  * - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
- * - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+ * - Voices decay exponentially at T60 = `release` seconds and sum at the output.
  * - If all 64 voice slots are busy, new triggers are dropped.
- * - `trails <= 0` → single-sample impulse (voice expires immediately).
- * - `density <= 0` → no new triggers, existing trails keep decaying.
+ * - `release <= 0` → single-sample impulse (voice expires immediately).
+ * - `density <= 0` → no new triggers, existing releases keep decaying.
  *
  * @param props   - see {@link DustProps}
  * @param density - impulses per second (Poisson rate, signal)
- * @param trails  - T60 decay time in seconds per impulse (signal, audio-rate)
+ * @param release - T60 decay time in seconds per impulse (signal, audio-rate)
  *
  * @example
  * ```ts
- * // Dense bipolar dust with 50ms trails
+ * // Dense bipolar dust with 50ms release
  * const noise = el.extra.dust(
  *   { seed: 1, bipolar: true },
  *   el.const({ value: 200 }),
@@ -1113,7 +1113,7 @@ export interface DustProps extends Record<string, unknown> {
 export function dust(
   props: DustProps,
   density: ElemNode,
-  trails: ElemNode,
+  release: ElemNode,
 ): NodeRepr_t {
-  return createNode("dust", props, [resolve(density), resolve(trails)]);
+  return createNode("dust", props, [resolve(density), resolve(release)]);
 }

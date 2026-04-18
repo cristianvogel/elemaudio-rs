@@ -1182,16 +1182,16 @@ pub fn sample_count(props: serde_json::Value) -> Node {
     Node::new("sampleCount", props, vec![])
 }
 
-/// Sparse random impulses with optional decaying trails.
+/// Sparse random impulses with optional decaying release.
 ///
 /// Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
 /// can have a trailing exponential decay instead of being a single-sample
-/// spike. Trails overlap and sum (polyphonic voice pool of 64).
+/// spike. Releases overlap and sum (polyphonic voice pool of 64).
 ///
 /// # Arguments (AGENTS.md order: props first, inputs last)
 /// - `props` — optional `seed`, `bipolar`, `jitter`, and/or `key`
 /// - `density` — impulses per second (Poisson rate, signal)
-/// - `trails` — T60 decay time in seconds per impulse (signal, audio-rate)
+/// - `release` — T60 decay time in seconds per impulse (signal, audio-rate)
 ///
 /// # Props
 /// | Key       | Type | Default | Notes                                         |
@@ -1205,10 +1205,10 @@ pub fn sample_count(props: serde_json::Value) -> Node {
 /// - Each sample runs a Bernoulli trial with probability `density / sr`.
 /// - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
 /// - `jitter` scales the impulse amplitude randomly per trigger.
-/// - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+/// - Voices decay exponentially at T60 = `release` seconds and sum at the output.
 /// - If all 64 voice slots are busy, new triggers are dropped.
-/// - `trails <= 0` → single-sample impulse (voice expires immediately after firing).
-/// - `density <= 0` → no new triggers, existing trails keep decaying.
+/// - `release <= 0` → single-sample impulse (voice expires immediately after firing).
+/// - `density <= 0` → no new triggers, existing releases keep decaying.
 ///
 /// # Example
 ///
@@ -1225,7 +1225,7 @@ pub fn sample_count(props: serde_json::Value) -> Node {
 pub fn dust(
     props: serde_json::Value,
     density: impl Into<ElemNode>,
-    trails: impl Into<ElemNode>,
+    release: impl Into<ElemNode>,
 ) -> Node {
-    Node::new("dust", props, vec![resolve(density), resolve(trails)])
+    Node::new("dust", props, vec![resolve(density), resolve(release)])
 }

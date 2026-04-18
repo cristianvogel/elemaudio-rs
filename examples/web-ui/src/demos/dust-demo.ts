@@ -1,30 +1,32 @@
 /**
- * elemaudio-rs dust resonator bank demo.
+ * elemaudio-rs dust signal utility demo.
  *
- * UI shell only — the DSP graph lives in `../demo-dsp/dust-demo.dsp.ts`.
+ * Shows sparse bipolar impulses from `el.extra.dust` and their characteristics.
+ * No audio output — only a scope visualization. The graph is still rendered
+ * (so the dust generator ticks), but the final output is muted.
  */
 
 import { MAX_ZOOM } from "../components/Oscilloscope";
 import "../components/Oscilloscope";
 import { initDemo } from "./demo-harness";
-import { buildGraph as buildDspGraph, SCOPE_NAME, type DustBankParams } from "../demo-dsp/dust-demo.dsp";
+import { buildGraph as buildDspGraph, SCOPE_NAME, type DustParams } from "../demo-dsp/dust-demo.dsp";
 
 const layout = `
-  <elemaudio-oscilloscope id="scope" zoom="2"></elemaudio-oscilloscope>
-  <div class="scope-title"><p>Resonator bank output</p></div>
+  <elemaudio-oscilloscope id="scope" zoom="16"></elemaudio-oscilloscope>
+  <div class="scope-title"><p>Dust impulses (no audio)</p></div>
   <div class="panel">
     <h1>elemaudio-rs</h1>
-    <h3>dust resonator bank</h3>
+    <h3>dust — sparse impulse generator</h3>
     <p>
-      Sparse bipolar impulses from <code>el.extra.dust</code> excite a bank
-      of self-resonating bandpass filters. A single <strong>Resonance</strong>
-      control drives both Q and feedback, coupled for Nyquist stability at
-      100%. Low values click, medium ring like bells, high values sustain.
+      Visualize sparse bipolar impulses from <code>el.extra.dust</code>.
+      Density controls impulse rate in Hz. Release (duration) and jitter
+      (amplitude randomness) shape each burst. This is a scope-only
+      visualization; no audio is output.
     </p>
     <div class="controls">
       <div class="button-row">
-        <button id="start" class="state-button">Start audio</button>
-        <button id="stop" class="state-button">Stop audio</button>
+        <button id="start" class="state-button">Start</button>
+        <button id="stop" class="state-button">Stop</button>
       </div>
 
       <div class="dial-strip">
@@ -37,80 +39,33 @@ const layout = `
         </div>
 
         <div class="dial">
-          <label for="fundamental">
-            <span>Fundamental</span>
-            <span id="fundamental-value">110 Hz</span>
+          <label for="release">
+            <span>Release</span>
+            <span id="release-value">1 ms</span>
           </label>
-          <input id="fundamental" type="range" min="40" max="880" value="110" step="1" />
-        </div>
-
-        <div class="dial">
-          <label for="resonate">
-            <span>Resonance</span>
-            <span id="resonate-value">70 %</span>
-          </label>
-          <input id="resonate" type="range" min="0" max="100" value="70" step="1" />
-        </div>
-      </div>
-
-      <div class="dial-strip">
-        <div class="dial">
-          <label for="trails">
-            <span>Exciter trail</span>
-            <span id="trails-value">1 ms</span>
-          </label>
-          <input id="trails" type="range" min="0" max="200" value="1" step="1" />
+          <input id="release" type="range" min="0" max="200" value="1" step="1" />
         </div>
 
         <div class="dial">
           <label for="jitter">
-            <span>Amp jitter</span>
+            <span>Jitter</span>
             <span id="jitter-value">0 %</span>
           </label>
           <input id="jitter" type="range" min="0" max="100" value="0" step="1" />
         </div>
 
         <div class="dial">
-          <label for="partials">
-            <span>Partials</span>
-            <span id="partials-value">7</span>
+          <label for="bipolar">
+            <span>Bipolar</span>
+            <span id="bipolar-value">on</span>
           </label>
-          <input id="partials" type="range" min="1" max="12" value="7" step="1" />
-        </div>
-
-        <div class="dial">
-          <label for="spread">
-            <span>Detune</span>
-            <span id="spread-value">1.5 %</span>
-          </label>
-          <input id="spread" type="range" min="0" max="50" value="15" step="1" />
-        </div>
-
-        <div class="dial">
-          <label for="gain">
-            <span>Output gain</span>
-            <span id="gain-value">50 %</span>
-          </label>
-          <input id="gain" type="range" min="0" max="100" value="50" step="1" />
-        </div>
-
-        <div class="dial">
-          <label for="clip-mode">
-            <span>Clip flavour</span>
-            <span id="clip-mode-value">Soft</span>
-          </label>
-          <select id="clip-mode">
-            <option value="soft" selected>Soft tanh</option>
-            <option value="limiter">Limiter</option>
-          </select>
+          <input id="bipolar" type="checkbox" checked />
         </div>
       </div>
 
       <div class="row">
-        <div class="buttons">
-          <button id="freeze-scope" class="freeze-button">Freeze</button>
-          <button id="zoomButton" class="zoom-button">Zoom: 2×</button>
-        </div>
+        <button id="freeze-scope" class="freeze-button">Freeze</button>
+        <button id="zoomButton" class="zoom-button">Zoom: 16×</button>
       </div>
 
       <div class="status" id="status">Idle</div>
@@ -120,22 +75,12 @@ const layout = `
 
 let densitySlider: HTMLInputElement;
 let densityValue: HTMLSpanElement;
-let fundamentalSlider: HTMLInputElement;
-let fundamentalValue: HTMLSpanElement;
-let resonateSlider: HTMLInputElement;
-let resonateValue: HTMLSpanElement;
-let trailsSlider: HTMLInputElement;
-let trailsValue: HTMLSpanElement;
+let releaseSlider: HTMLInputElement;
+let releaseValue: HTMLSpanElement;
 let jitterSlider: HTMLInputElement;
 let jitterValue: HTMLSpanElement;
-let partialsSlider: HTMLInputElement;
-let partialsValue: HTMLSpanElement;
-let spreadSlider: HTMLInputElement;
-let spreadValue: HTMLSpanElement;
-let gainSlider: HTMLInputElement;
-let gainValue: HTMLSpanElement;
-let clipModeSelect: HTMLSelectElement;
-let clipModeValue: HTMLSpanElement;
+let bipolarToggle: HTMLInputElement;
+let bipolarValue: HTMLSpanElement;
 let oscilloscope: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
@@ -145,23 +90,18 @@ let isStopped = false;
 // Exponential density taper — slider 0..1000 maps to 0.25 Hz .. 500 Hz
 // log-linearly, so low-density values get much more resolution.
 const DENSITY_MIN_HZ = 0.25;
-const DENSITY_MAX_HZ = 1000;
+const DENSITY_MAX_HZ = 500;
 function densityFromSlider(v: number): number {
   const t = v / 1000;
   return DENSITY_MIN_HZ * Math.pow(DENSITY_MAX_HZ / DENSITY_MIN_HZ, t);
 }
 
-function currentParams(): DustBankParams {
+function currentParams(): DustParams {
   return {
     density: densityFromSlider(Number(densitySlider.value)),
-    trailsMs: Number(trailsSlider.value),
+    releaseMs: Number(releaseSlider.value),
     jitter: Number(jitterSlider.value) / 100,
-    fundamental: Number(fundamentalSlider.value),
-    resonate: Number(resonateSlider.value) / 100,
-    partials: Number(partialsSlider.value),
-    spreadPct: Number(spreadSlider.value) / 10, // 0–50 → 0–5 %
-    gain:  0.65 * Math.pow(Number(gainSlider.value) / 100, 2.4),
-    clipMode: clipModeSelect.value as "soft" | "limiter",
+    bipolar: bipolarToggle.checked,
     isStopped,
   };
 }
@@ -174,7 +114,6 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph,
   updateReadouts,
-  renderOptions: { rootFadeInMs: 0, rootFadeOutMs: 20 },
   onScopeEvent: (event: any) => {
     if (event.source === SCOPE_NAME) {
       const firstBlock = event.data?.[0];
@@ -187,22 +126,12 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
 
 densitySlider = q<HTMLInputElement>("#density");
 densityValue = q<HTMLSpanElement>("#density-value");
-fundamentalSlider = q<HTMLInputElement>("#fundamental");
-fundamentalValue = q<HTMLSpanElement>("#fundamental-value");
-resonateSlider = q<HTMLInputElement>("#resonate");
-resonateValue = q<HTMLSpanElement>("#resonate-value");
-trailsSlider = q<HTMLInputElement>("#trails");
-trailsValue = q<HTMLSpanElement>("#trails-value");
+releaseSlider = q<HTMLInputElement>("#release");
+releaseValue = q<HTMLSpanElement>("#release-value");
 jitterSlider = q<HTMLInputElement>("#jitter");
 jitterValue = q<HTMLSpanElement>("#jitter-value");
-partialsSlider = q<HTMLInputElement>("#partials");
-partialsValue = q<HTMLSpanElement>("#partials-value");
-spreadSlider = q<HTMLInputElement>("#spread");
-spreadValue = q<HTMLSpanElement>("#spread-value");
-gainSlider = q<HTMLInputElement>("#gain");
-gainValue = q<HTMLSpanElement>("#gain-value");
-clipModeSelect = q<HTMLSelectElement>("#clip-mode");
-clipModeValue = q<HTMLSpanElement>("#clip-mode-value");
+bipolarToggle = q<HTMLInputElement>("#bipolar");
+bipolarValue = q<HTMLSpanElement>("#bipolar-value");
 oscilloscope = q<any>("elemaudio-oscilloscope");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
@@ -213,17 +142,7 @@ startButton.addEventListener("click", () => {
   isStopped = false;
 });
 
-wireControls([
-  densitySlider,
-  fundamentalSlider,
-  resonateSlider,
-  trailsSlider,
-  jitterSlider,
-  partialsSlider,
-  spreadSlider,
-  gainSlider,
-  clipModeSelect,
-]);
+wireControls([densitySlider, releaseSlider, jitterSlider, bipolarToggle]);
 
 stopButton.addEventListener("click", async () => {
   isStopped = true;
@@ -241,7 +160,7 @@ freezeButton.addEventListener("click", () => {
   }
 });
 
-let currentZoom = 2;
+let currentZoom = 16;
 oscilloscope.setAttribute("zoom", String(currentZoom));
 zoomButton.textContent = `Zoom: ${currentZoom}×`;
 
@@ -253,17 +172,11 @@ zoomButton.addEventListener("click", () => {
 
 function updateReadouts() {
   const d = densityFromSlider(Number(densitySlider.value));
-  // Finer formatting at low density for visibility below 1 Hz.
   const densityText = d < 1 ? `${d.toFixed(2)} Hz` : `${d.toFixed(1)} Hz`;
   densityValue.textContent = densityText;
-  fundamentalValue.textContent = `${Number(fundamentalSlider.value)} Hz`;
-  resonateValue.textContent = `${Number(resonateSlider.value)} %`;
-  trailsValue.textContent = `${Number(trailsSlider.value)} ms`;
+  releaseValue.textContent = `${Number(releaseSlider.value)} ms`;
   jitterValue.textContent = `${Number(jitterSlider.value)} %`;
-  partialsValue.textContent = `${Number(partialsSlider.value)}`;
-  spreadValue.textContent = `${(Number(spreadSlider.value) / 10).toFixed(1)} %`;
-  gainValue.textContent = `${Number(gainSlider.value)} %`;
-  clipModeValue.textContent = clipModeSelect.value === "limiter" ? "Limiter" : "Soft";
+  bipolarValue.textContent = bipolarToggle.checked ? "on" : "off";
 }
 
 updateReadouts();

@@ -28,7 +28,7 @@
 // Property: path (string, required) — VFS key of the resource.
 #include <extra/sample_count.h>
 // DustNode: sparse bipolar impulses with a vactrol-like pinged decay.
-// Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
+// Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
 // Properties: seed (number, optional), bipolar (bool), jitter (0..1).
 #include <extra/dust.h>
 
@@ -104,8 +104,8 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         });
 
         // "dust" — DustNode.
-        // Sparse random impulses with optional overlapping decaying trails.
-        // Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
+        // Sparse random impulses with optional overlapping decaying releases.
+        // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
         // Properties: seed, bipolar, jitter.
         handle->runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::DustNode<double>>(id, fs, bs);

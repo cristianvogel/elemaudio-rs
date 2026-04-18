@@ -12,15 +12,15 @@
 
 namespace elem
 {
-    // DustNode — sparse random impulses with optional decaying trails.
+    // DustNode — sparse random impulses with optional decaying release.
     //
     // Inspired by SuperCollider's Dust / Dust2 with a twist: each impulse
-    // can have a trailing exponential decay instead of being a single-sample
-    // spike. Trails overlap and sum (polyphonic voice pool).
+    // can have a trailing exponential release instead of being a single-sample
+    // spike. Releases overlap and sum (polyphonic voice pool).
     //
     // Inputs (signals, sample-rate):
     //   [0] density — impulses per second (Poisson rate)
-    //   [1] trails  — T60 decay time in seconds per impulse
+    //   [1] release — T60 decay time in seconds per impulse
     //
     // Props:
     //   seed     (number, optional) — deterministic RNG seed
@@ -35,18 +35,18 @@ namespace elem
     //   - On trigger: spawn a new voice in the pool with amplitude 1
     //     (and random sign if bipolar)
     //   - Each voice decays exponentially: value *= coeff per sample,
-    //     where coeff = exp(ln(0.001) / (trails * sr))
+    //     where coeff = exp(ln(0.001) / (release * sr))
     //   - Voices sum into the output
     //   - If all voices in the pool are busy, the new trigger is dropped
-    //   - trails <= 0 → single-sample impulse (voice expires next sample)
+    //   - release <= 0 → single-sample impulse (voice expires next sample)
 
     template <typename FloatType>
     struct DustNode : public GraphNode<FloatType> {
         using GraphNode<FloatType>::GraphNode;
         using Sample = FloatType;
 
-        static constexpr size_t CHILD_DENSITY = 0;
-        static constexpr size_t CHILD_TRAILS = 1;
+    static constexpr size_t CHILD_DENSITY = 0;
+    static constexpr size_t CHILD_RELEASE = 1;
         static constexpr size_t NUM_CHILDREN = 2;
 
         // Fixed voice pool — bounded, no heap allocation on audio thread.
@@ -109,7 +109,7 @@ namespace elem
             }
 
             auto const* densitySignal = ctx.inputData[CHILD_DENSITY];
-            auto const* trailsSignal = ctx.inputData[CHILD_TRAILS];
+            auto const* releaseSignal = ctx.inputData[CHILD_RELEASE];
             auto* out = ctx.outputData[0];
             auto const sampleRate = Sample(GraphNode<FloatType>::getSampleRate());
             auto const bipolar = bipolarTarget.load(std::memory_order_relaxed);
@@ -127,12 +127,12 @@ namespace elem
                 activeCount = 0;
             }
 
-            // Cache decay coefficient per sample only when trails changes
-            // meaningfully. Since trails is a signal, recompute per sample;
+            // Cache decay coefficient per sample only when release changes
+            // meaningfully. Since release is a signal, recompute per sample;
             // the cost is one exp() but only when an active voice exists.
             for (size_t i = 0; i < numSamples; ++i) {
                 Sample density = densitySignal[i];
-                Sample trails = trailsSignal[i];
+                Sample release = releaseSignal[i];
 
                 // Trigger trial
                 Sample triggerProb = density <= Sample(0)
@@ -146,7 +146,7 @@ namespace elem
                 // Accumulate all active voices, decay them
                 Sample sum = Sample(0);
                 if (activeCount > 0) {
-                    Sample coeff = decayCoeff(trails, sampleRate);
+                    Sample coeff = decayCoeff(release, sampleRate);
 
                     for (size_t v = 0; v < MAX_VOICES; ++v) {
                         if (voices[v] != Sample(0)) {

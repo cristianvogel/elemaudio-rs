@@ -914,7 +914,7 @@ fn covers_extra_helpers() {
         0,
     );
 
-    // dust: seed prop preserved; two signal children (density, trails).
+    // dust: seed prop preserved; two signal children (density, release).
     let dust_node = extra::dust(
         serde_json::json!({"seed": 1234, "bipolar": false, "jitter": 0.25}),
         ElemNode::from(node(200.0)),
