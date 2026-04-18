@@ -32,8 +32,12 @@ fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value
     let channels = props
         .get("channels")
         .and_then(|value| value.as_u64())
-        .expect("extra helper props must include a positive integer `channels`")
-        as usize;
+        .unwrap_or_else(|| {
+            log::error!(
+                "extra helper: props missing required positive integer 'channels', defaulting to 1"
+            );
+            1
+        }) as usize;
 
     if let serde_json::Value::Object(map) = &mut props {
         map.remove("channels");
@@ -126,14 +130,15 @@ pub fn foldback(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     let mut props = props;
 
     // Extract and validate threshold
-    let thresh = props
-        .get("thresh")
-        .and_then(|value| value.as_f64())
-        .expect("foldback helper props must include a positive `thresh` value");
-
-    if !(thresh.is_finite() && thresh > 0.0) {
-        panic!("foldback helper props must include a positive `thresh` value");
-    }
+    let thresh = match props.get("thresh").and_then(|v| v.as_f64()) {
+        Some(t) if t.is_finite() && t > 0.0 => t,
+        _ => {
+            log::error!(
+                "foldback: props missing required positive 'thresh' value, returning passthrough"
+            );
+            return resolve(x);
+        }
+    };
 
     // Extract amplitude, defaulting to 1 / thresh
     let amp = props
@@ -409,14 +414,15 @@ fn box_sum_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> Node 
     let mut props = props;
 
     // Extract and validate window length
-    let window = props
-        .get("window")
-        .and_then(|value| value.as_f64())
-        .expect("box_sum helper props must include a positive numeric `window` value");
-
-    if !(window.is_finite() && window > 0.0) {
-        panic!("box_sum helper props must include a positive numeric `window` value");
-    }
+    let window = match props.get("window").and_then(|v| v.as_f64()) {
+        Some(w) if w.is_finite() && w > 0.0 => w,
+        _ => {
+            log::error!(
+                "box_sum: props missing required positive 'window' value, returning silence"
+            );
+            return el::const_(0.0);
+        }
+    };
 
     // Extract optional key prefix for fast-path updates
     let key_prefix = props
@@ -540,14 +546,15 @@ fn box_average_from_props(props: serde_json::Value, x: impl Into<ElemNode>) -> N
     let mut props = props;
 
     // Extract and validate window length
-    let window = props
-        .get("window")
-        .and_then(|value| value.as_f64())
-        .expect("box_average helper props must include a positive numeric `window` value");
-
-    if !(window.is_finite() && window > 0.0) {
-        panic!("box_average helper props must include a positive numeric `window` value");
-    }
+    let window = match props.get("window").and_then(|v| v.as_f64()) {
+        Some(w) if w.is_finite() && w > 0.0 => w,
+        _ => {
+            log::error!(
+                "box_average: props missing required positive 'window' value, returning silence"
+            );
+            return el::const_(0.0);
+        }
+    };
 
     // Extract optional key prefix for fast-path updates
     let key_prefix = props
@@ -740,12 +747,12 @@ pub fn stereo_stride_delay(
 ///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb_loop" }),
 ///     el::const_with_key("delay", 250.0),    // delay time
 ///     el::const_with_key("fb_amt", 0.5),     // feedback amount
-///     el::r#in(json!({"channel": 0}), None), // audio input
 ///     |fb_audio| {
 ///         // fb_audio is the delayed signal coming back through the loop.
 ///         // Filter it so each repeat gets darker.
 ///         el::lowpass(el::const_(2000.0), el::const_(0.707), fb_audio)
 ///     },
+///     el::r#in(json!({"channel": 0}), None), // audio input
 /// );
 /// ```
 ///
@@ -766,17 +773,20 @@ pub fn stride_delay_with_insert(
     props: serde_json::Value,
     delay_ms: impl Into<ElemNode>,
     fb: impl Into<ElemNode>,
-    x: impl Into<ElemNode>,
     insert: impl FnOnce(Node) -> Node,
+    x: impl Into<ElemNode>,
 ) -> Node {
     let mut props = props;
 
-    // Extract fbtap name from props.
-    let fbtap = props
+    // Extract fbtap name from props. Fall back to stride_delay without insert.
+    let Some(fbtap) = props
         .get("fbtap")
         .and_then(|v| v.as_str())
-        .expect("stride_delay_with_insert requires 'fbtap' prop")
-        .to_string();
+        .map(|s| s.to_string())
+    else {
+        log::error!("stride_delay_with_insert: missing 'fbtap' prop, falling back to stride_delay without insert");
+        return stride_delay(props, delay_ms, fb, x);
+    };
 
     // Remove fbtap before passing to the native node.
     if let serde_json::Value::Object(ref mut map) = props {
@@ -827,8 +837,6 @@ pub fn stride_delay_with_insert(
 ///     json!({ "maxDelayMs": 1500, "transitionMs": 60, "fbtap": "fb" }),
 ///     el::const_with_key("delay", 250.0),
 ///     el::const_with_key("fb_amt", 0.5),
-///     el::r#in(json!({"channel": 0}), None),
-///     el::r#in(json!({"channel": 1}), None),
 ///     |fb_audio, tag| {
 ///         el::lowpass(
 ///             el::const_with_key(&format!("insert_fc:{tag}"), 2000.0),
@@ -836,26 +844,42 @@ pub fn stride_delay_with_insert(
 ///             fb_audio,
 ///         )
 ///     },
+///     el::r#in(json!({"channel": 0}), None),
+///     el::r#in(json!({"channel": 1}), None),
 /// );
 /// ```
 pub fn stereo_stride_delay_with_insert(
     props: serde_json::Value,
     delay_ms: impl Into<ElemNode>,
     fb: impl Into<ElemNode>,
+    insert: impl Fn(Node, &str) -> Node,
     left: impl Into<ElemNode>,
     right: impl Into<ElemNode>,
-    insert: impl Fn(Node, &str) -> Node,
 ) -> [Node; 2] {
     let mut props_obj = match props {
         serde_json::Value::Object(m) => m,
         _ => serde_json::Map::new(),
     };
 
-    let fbtap = props_obj
+    let Some(fbtap) = props_obj
         .get("fbtap")
         .and_then(|v| v.as_str())
-        .expect("stereo_stride_delay_with_insert requires 'fbtap' prop")
-        .to_string();
+        .map(|s| s.to_string())
+    else {
+        log::error!("stereo_stride_delay_with_insert: missing 'fbtap' prop, falling back to stereo stride_delay without insert");
+        let props_val = serde_json::Value::Object(props_obj);
+        let resolved = stride_delay_resolve_defaults(props_val);
+        let dl = resolve(delay_ms);
+        let fb_n = resolve(fb);
+        return [
+            Node::new(
+                "stridedelay",
+                resolved.clone(),
+                vec![dl.clone(), fb_n.clone(), resolve(left)],
+            ),
+            Node::new("stridedelay", resolved, vec![dl, fb_n, resolve(right)]),
+        ];
+    };
     props_obj.remove("fbtap");
 
     let resolved_props = stride_delay_resolve_defaults(serde_json::Value::Object(props_obj));
@@ -901,6 +925,149 @@ fn stride_delay_resolve_defaults(props: serde_json::Value) -> serde_json::Value 
         .or_insert_with(|| serde_json::Value::from("linear"));
 
     serde_json::Value::Object(map)
+}
+
+// ---- interpolateN (energy-preserving N-way crossfade) -----------------
+
+/// Energy-preserving N-way crossfading mixer.
+///
+/// Crossfades between a vector of N mono signal nodes using a normalised
+/// interpolator index. All nodes are equally spaced along the
+/// interpolator path.
+///
+/// ## Props
+///
+/// | Key         | Type | Default | Notes                                      |
+/// |-------------|------|---------|--------------------------------------------|
+/// | `barberpole`| bool | false   | Wrap the interpolator circularly (ring)    |
+///
+/// **Without barberpole** (default): interpolator is clamped to [0, 1].
+/// `0` = first node, `1` = last node. Linear path.
+///
+/// **With barberpole**: nodes are on a circular ring. `0` and `1` both
+/// map to the first node. The last node crossfades back into the first.
+/// Values outside [0, 1] wrap seamlessly.
+///
+/// The crossfade uses the Signalsmith cheap energy-preserving curve:
+/// `smoothstep(x) = 3x² − 2x³` passed through `sqrt` for equal-power
+/// behaviour. See <https://signalsmith-audio.co.uk/writing/2021/cheap-energy-crossfade/>
+///
+/// # Arguments
+///
+/// - `props` — optional `{ "barberpole": true }`
+/// - `interpolator` — position signal
+/// - `nodes` — vector of mono signal nodes to crossfade between
+///
+/// Returns silence if fewer than 2 nodes are provided.
+///
+/// # Example
+///
+/// ```ignore
+/// use elemaudio_rs::{el, extra};
+/// use serde_json::json;
+///
+/// // Linear (clamped) crossfade between 3 oscillators
+/// let mix = extra::interpolate_n(
+///     json!({}),
+///     el::const_with_key("xfade", 0.5),
+///     vec![osc_a, osc_b, osc_c],
+/// );
+///
+/// // Barberpole: wraps around, bipolar LFO is fine
+/// let morph = extra::interpolate_n(
+///     json!({ "barberpole": true }),
+///     el::cycle(el::const_(0.1)),
+///     vec![osc_a, osc_b, osc_c],
+/// );
+/// ```
+pub fn interpolate_n(
+    props: serde_json::Value,
+    interpolator: impl Into<ElemNode>,
+    nodes: Vec<impl Into<ElemNode>>,
+) -> Node {
+    let n = nodes.len();
+    if n < 2 {
+        log::error!("interpolate_n: requires at least 2 nodes, got {n}");
+        return match nodes.into_iter().next() {
+            Some(node) => resolve(node),
+            None => el::const_(0.0),
+        };
+    }
+
+    let barberpole = props
+        .get("barberpole")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let resolved: Vec<Node> = nodes.into_iter().map(resolve).collect();
+    let interp = resolve(interpolator);
+
+    if barberpole {
+        interpolate_n_barberpole(interp, resolved, n)
+    } else {
+        interpolate_n_clamped(interp, resolved, n)
+    }
+}
+
+/// Clamped linear interpolation: [0, 1] maps to [first, last].
+fn interpolate_n_clamped(interp: Node, resolved: Vec<Node>, n: usize) -> Node {
+    // Clamp to [0, 1]
+    let clamped = el::min(1.0, el::max(0.0, interp));
+
+    // pos = clamped * (N - 1), maps [0,1] to [0, N-1]
+    let pos = el::mul((clamped, (n - 1) as f64));
+
+    let weighted: Vec<Node> = resolved
+        .into_iter()
+        .enumerate()
+        .map(|(i, node)| {
+            let dist = el::abs(el::sub((pos.clone(), i as f64)));
+            let proximity = el::max(0.0, el::sub((1.0, dist)));
+            let ss = el::mul((
+                el::mul((proximity.clone(), proximity.clone())),
+                el::sub((3.0, el::mul((2.0, proximity)))),
+            ));
+            let gain = el::sqrt(ss);
+            el::mul((node, gain))
+        })
+        .collect();
+
+    weighted
+        .into_iter()
+        .reduce(|acc, x| el::add((acc, x)))
+        .unwrap_or_else(|| el::const_(0.0))
+}
+
+/// Barberpole wrapping: nodes on a circular ring, [0, 1) wraps.
+fn interpolate_n_barberpole(interp: Node, resolved: Vec<Node>, n: usize) -> Node {
+    // fract(x) = x - floor(x) — wraps any value to [0, 1)
+    let fract = el::sub((interp.clone(), el::floor(interp)));
+
+    // pos = fract * N, maps [0, 1) to [0, N)
+    let n_f = n as f64;
+    let pos = el::mul((fract, n_f));
+
+    let weighted: Vec<Node> = resolved
+        .into_iter()
+        .enumerate()
+        .map(|(i, node)| {
+            let linear_dist = el::abs(el::sub((pos.clone(), i as f64)));
+            // Circular distance: min(linear, N - linear)
+            let circular_dist = el::min(linear_dist.clone(), el::sub((n_f, linear_dist)));
+            let proximity = el::max(0.0, el::sub((1.0, circular_dist)));
+            let ss = el::mul((
+                el::mul((proximity.clone(), proximity.clone())),
+                el::sub((3.0, el::mul((2.0, proximity)))),
+            ));
+            let gain = el::sqrt(ss);
+            el::mul((node, gain))
+        })
+        .collect();
+
+    weighted
+        .into_iter()
+        .reduce(|acc, x| el::add((acc, x)))
+        .unwrap_or_else(|| el::const_(0.0))
 }
 
 /// Sample-accurate one-shot 0→1 ramp.
