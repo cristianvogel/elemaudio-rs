@@ -5,17 +5,17 @@
  * the control panel, reads slider values, and renders the graph.
  */
 
-import { MAX_ZOOM } from "../components/Oscilloscope";
+import {MAX_ZOOM} from "../components/Oscilloscope";
 import "../components/Oscilloscope";
-import { initDemo } from "./demo-harness";
 import {
-  buildGraph as buildDspGraph,
-  SCOPE_HAMMER,
-  SCOPE_OUTPUT,
-  type ResonatorBankParams,
-  type ExciterKind,
-  type ClipMode,
+    buildGraph as buildDspGraph,
+    type ClipMode,
+    type ExciterKind,
+    type ResonatorBankParams,
+    SCOPE_HAMMER,
+    SCOPE_OUTPUT
 } from "../demo-dsp/resonator-bank-demo.dsp";
+import {initDemo} from "./demo-harness";
 
 const layout = `
   <div class="scope-row" style="display:flex; gap:1rem; justify-content:center;">
@@ -110,6 +110,13 @@ const layout = `
 
       <div class="dial-strip">
         <div class="dial">
+        <label for="position-jitter">
+            <span >Strike position mod</span>
+            <span id="position-jitter-value">0 %</span>
+        </label>
+        <input id="position-jitter" type="range" min="0" max="100" value="0" step="1" />
+        </div>
+        <div class="dial">
           <label for="strikeRate">
             <span>Strike rate</span>
             <span id="strikeRate-value">1.5 Hz</span>
@@ -201,6 +208,8 @@ let inharmSlider: HTMLInputElement;
 let inharmValue: HTMLSpanElement;
 let strikePosSlider: HTMLInputElement;
 let strikePosValue: HTMLSpanElement;
+let strikePosJitterSlider: HTMLInputElement;
+let strikePosJitterValue: HTMLSpanElement;
 let brightSlider: HTMLInputElement;
 let brightValue: HTMLSpanElement;
 let decaySlider: HTMLInputElement;
@@ -227,67 +236,75 @@ let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
 let stopButton: HTMLButtonElement;
 let isStopped = false;
+const DENSITY_MIN_HZ = 0.25;
+const DENSITY_MAX_HZ = 500;
+
+function densityFromSlider(v: number): number {
+    const t = v / 1000;
+    return DENSITY_MIN_HZ * Math.pow(DENSITY_MAX_HZ / DENSITY_MIN_HZ, t);
+}
 
 // Inharmonicity slider 0..100 maps to 0..0.01 with a mild curve so low
 // values get better resolution (the musical action is sub-0.002).
 function inharmFromSlider(v: number): number {
-  const t = v / 100;
-  return 0.01 * Math.pow(t, 2);
+    const t = v / 100;
+    return 0.01 * Math.pow(t, 2);
 }
 
 // Strike position slider 1..50 maps to 0.01..0.50.
 function strikePosFromSlider(v: number): number {
-  return v / 100;
+    return v / 100;
 }
 
 // Strike rate slider 1..100 maps to 0.1..10 Hz logarithmically.
 function strikeRateFromSlider(v: number): number {
-  const t = (v - 1) / 99;
-  return 0.1 * Math.pow(100, t);
+    const t = (v - 1) / 99;
+    return 0.1 * Math.pow(100, t);
 }
 
 function currentParams(): ResonatorBankParams {
-  return {
-    exciter: exciterSelect.value as ExciterKind,
-    f0: Number(f0Slider.value),
-    inharmonicity: inharmFromSlider(Number(inharmSlider.value)),
-    strikePos: strikePosFromSlider(Number(strikePosSlider.value)),
-    brightness: Number(brightSlider.value) / 100,
-    decay: Number(decaySlider.value) / 100,
-    modes: Number(modesSlider.value),
-    strikeRate: strikeRateFromSlider(Number(strikeRateSlider.value)),
-    velocity: Number(velocitySlider.value) / 100,
-    hardness: Number(hardnessSlider.value) / 100,
-    dustDensity: Number(dustDensitySlider.value),
-    dustReleaseMs: Number(dustReleaseSlider.value),
-    dustJitter: Number(dustJitterSlider.value) / 100,
-    gain: 0.65 * Math.pow(Number(gainSlider.value) / 100, 2.4),
-    clipMode: clipModeSelect.value as ClipMode,
-    isStopped,
-  };
+    return {
+        exciter: exciterSelect.value as ExciterKind,
+        f0: Number(f0Slider.value),
+        inharmonicity: inharmFromSlider(Number(inharmSlider.value)),
+        strikePos: strikePosFromSlider(Number(strikePosSlider.value)),
+        strikePosJitter: Number(strikePosJitterSlider.value) / 100,
+        brightness: Number(brightSlider.value) / 100,
+        decay: Number(decaySlider.value) / 100,
+        modes: Number(modesSlider.value),
+        strikeRate: strikeRateFromSlider(Number(strikeRateSlider.value)),
+        velocity: Number(velocitySlider.value) / 100,
+        hardness: Number(hardnessSlider.value) / 100,
+        dustDensity: Number(dustDensitySlider.value),
+        dustReleaseMs: Number(dustReleaseSlider.value),
+        dustJitter: Number(dustJitterSlider.value) / 100,
+        gain: 0.65 * Math.pow(Number(gainSlider.value) / 100, 2.4),
+        clipMode: clipModeSelect.value as ClipMode,
+        isStopped
+    };
 }
 
 function buildGraph() {
-  return buildDspGraph(currentParams());
+    return buildDspGraph(currentParams());
 }
 
-const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
-  layout,
-  buildGraph,
-  updateReadouts,
-  renderOptions: { rootFadeInMs: 0, rootFadeOutMs: 20 },
-  onScopeEvent: (event: any) => {
-    const firstBlock = event.data?.[0];
-    if (!firstBlock) return;
+const {mustQuery: q, wireControls, renderCurrentGraph} = initDemo({
+    layout,
+    buildGraph,
+    updateReadouts,
+    renderOptions: {rootFadeInMs: 0, rootFadeOutMs: 20},
+    onScopeEvent: (event: any) => {
+        const firstBlock = event.data?.[0];
+        if (!firstBlock) return;
 
-    if (event.source === SCOPE_HAMMER && hammerScope) {
-      hammerScope.data = Array.from(firstBlock as Float32Array);
-    }
+        if (event.source === SCOPE_HAMMER && hammerScope) {
+            hammerScope.data = Array.from(firstBlock as Float32Array);
+        }
 
-    if (event.source === SCOPE_OUTPUT && outputScope) {
-      outputScope.data = Array.from(firstBlock as Float32Array);
+        if (event.source === SCOPE_OUTPUT && outputScope) {
+            outputScope.data = Array.from(firstBlock as Float32Array);
+        }
     }
-  },
 });
 
 exciterSelect = q<HTMLSelectElement>("#exciter");
@@ -300,6 +317,8 @@ inharmSlider = q<HTMLInputElement>("#inharmonicity");
 inharmValue = q<HTMLSpanElement>("#inharmonicity-value");
 strikePosSlider = q<HTMLInputElement>("#strikePos");
 strikePosValue = q<HTMLSpanElement>("#strikePos-value");
+strikePosJitterSlider = q<HTMLInputElement>("#position-jitter");
+strikePosJitterValue = q<HTMLSpanElement>("#position-jitter-value");
 brightSlider = q<HTMLInputElement>("#brightness");
 brightValue = q<HTMLSpanElement>("#brightness-value");
 decaySlider = q<HTMLInputElement>("#decay");
@@ -328,43 +347,44 @@ stopButton = q<HTMLButtonElement>("#stop");
 
 const startButton = q<HTMLButtonElement>("#start");
 startButton.addEventListener("click", () => {
-  isStopped = false;
+    isStopped = false;
 });
 
 wireControls([
-  exciterSelect,
-  f0Slider,
-  modesSlider,
-  inharmSlider,
-  strikePosSlider,
-  brightSlider,
-  decaySlider,
-  strikeRateSlider,
-  velocitySlider,
-  hardnessSlider,
-  dustDensitySlider,
-  dustReleaseSlider,
-  dustJitterSlider,
-  gainSlider,
-  clipModeSelect,
+    exciterSelect,
+    f0Slider,
+    modesSlider,
+    inharmSlider,
+    strikePosSlider,
+    strikePosJitterSlider,
+    brightSlider,
+    decaySlider,
+    strikeRateSlider,
+    velocitySlider,
+    hardnessSlider,
+    dustDensitySlider,
+    dustReleaseSlider,
+    dustJitterSlider,
+    gainSlider,
+    clipModeSelect
 ]);
 
 stopButton.addEventListener("click", async () => {
-  isStopped = true;
-  await renderCurrentGraph();
+    isStopped = true;
+    await renderCurrentGraph();
 });
 
 freezeButton.addEventListener("click", () => {
-  const isFrozen = hammerScope.hasAttribute("freeze");
-  if (isFrozen) {
-    hammerScope.removeAttribute("freeze");
-    outputScope.removeAttribute("freeze");
-    freezeButton.textContent = "Freeze";
-  } else {
-    hammerScope.setAttribute("freeze", "");
-    outputScope.setAttribute("freeze", "");
-    freezeButton.textContent = "Unfreeze";
-  }
+    const isFrozen = hammerScope.hasAttribute("freeze");
+    if (isFrozen) {
+        hammerScope.removeAttribute("freeze");
+        outputScope.removeAttribute("freeze");
+        freezeButton.textContent = "Freeze";
+    } else {
+        hammerScope.setAttribute("freeze", "");
+        outputScope.setAttribute("freeze", "");
+        freezeButton.textContent = "Unfreeze";
+    }
 });
 
 let currentZoom = MAX_ZOOM;
@@ -373,31 +393,34 @@ outputScope.setAttribute("zoom", String(currentZoom));
 zoomButton.textContent = `Zoom: ${currentZoom}×`;
 
 zoomButton.addEventListener("click", () => {
-  currentZoom = currentZoom === MAX_ZOOM ? 1 : currentZoom * 2;
-  hammerScope.setAttribute("zoom", String(currentZoom));
-  outputScope.setAttribute("zoom", String(currentZoom));
-  zoomButton.textContent = `Zoom: ${currentZoom}×`;
+    currentZoom = currentZoom === MAX_ZOOM ? 1 : currentZoom * 2;
+    hammerScope.setAttribute("zoom", String(currentZoom));
+    outputScope.setAttribute("zoom", String(currentZoom));
+    zoomButton.textContent = `Zoom: ${currentZoom}×`;
 });
 
 function updateReadouts() {
-  exciterValue.textContent = exciterSelect.value === "hammer" ? "Hammer" : "Dust";
-  f0Value.textContent = `${Number(f0Slider.value)} Hz`;
-  modesValue.textContent = `${Number(modesSlider.value)}`;
-  const B = inharmFromSlider(Number(inharmSlider.value));
-  inharmValue.textContent = B < 0.001 ? B.toExponential(2) : B.toFixed(4);
-  strikePosValue.textContent = strikePosFromSlider(Number(strikePosSlider.value)).toFixed(2);
-  brightValue.textContent = `${Number(brightSlider.value)} %`;
-  decayValue.textContent = `${Number(decaySlider.value)} %`;
-  const rate = strikeRateFromSlider(Number(strikeRateSlider.value));
-  strikeRateValue.textContent =
-    rate < 1 ? `${rate.toFixed(2)} Hz` : `${rate.toFixed(1)} Hz`;
-  velocityValue.textContent = `${Number(velocitySlider.value)} %`;
-  hardnessValue.textContent = `${Number(hardnessSlider.value)} %`;
-  dustDensityValue.textContent = `${Number(dustDensitySlider.value)} Hz`;
-  dustReleaseValue.textContent = `${Number(dustReleaseSlider.value)} ms`;
-  dustJitterValue.textContent = `${Number(dustJitterSlider.value)} %`;
-  gainValue.textContent = `${Number(gainSlider.value)} %`;
-  clipModeValue.textContent = clipModeSelect.value === "limiter" ? "Limiter" : "Soft";
+    exciterValue.textContent = exciterSelect.value === "hammer" ? "Hammer" : "Dust";
+    f0Value.textContent = `${Number(f0Slider.value)} Hz`;
+    modesValue.textContent = `${Number(modesSlider.value)}`;
+    const B = inharmFromSlider(Number(inharmSlider.value));
+    inharmValue.textContent = B < 0.001 ? B.toExponential(2) : B.toFixed(4);
+    strikePosValue.textContent = strikePosFromSlider(Number(strikePosSlider.value)).toFixed(2);
+    strikePosJitterValue.textContent = `${Number(strikePosJitterSlider.value)} %`;
+    brightValue.textContent = `${Number(brightSlider.value)} %`;
+    decayValue.textContent = `${Number(decaySlider.value)} %`;
+    const rate = strikeRateFromSlider(Number(strikeRateSlider.value));
+    strikeRateValue.textContent =
+        rate < 1 ? `${rate.toFixed(2)} Hz` : `${rate.toFixed(1)} Hz`;
+    velocityValue.textContent = `${Number(velocitySlider.value)} %`;
+    hardnessValue.textContent = `${Number(hardnessSlider.value)} %`;
+    const d = densityFromSlider(Number(dustDensitySlider.value));
+    // Finer formatting at low density for visibility below 1 Hz.
+    dustDensityValue.textContent = d < 1 ? `${d.toFixed(2)} Hz` : `${d.toFixed(1)} Hz`;
+    dustReleaseValue.textContent = `${Number(dustReleaseSlider.value)} ms`;
+    dustJitterValue.textContent = `${Number(dustJitterSlider.value)} %`;
+    gainValue.textContent = `${Number(gainSlider.value)} %`;
+    clipModeValue.textContent = clipModeSelect.value === "limiter" ? "Limiter" : "Soft";
 }
 
 updateReadouts();
