@@ -63,7 +63,7 @@ fn dust_output_stays_bounded_across_release_sweeps() {
     let density = elemaudio_rs::el::const_with_key("density", sample_rate);
     let release = elemaudio_rs::el::const_with_key("release", 0.1);
     let graph = Graph::new().render(extra::dust(
-        json!({ "seed": 1234, "bipolar": false, "jitter": 0.0 }),
+        json!({ "seed": 1234, "jitter": 0.0 }),
         density,
         release,
     ));

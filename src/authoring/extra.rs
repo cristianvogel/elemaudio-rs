@@ -1184,12 +1184,12 @@ pub fn sample_count(props: serde_json::Value) -> Node {
 
 /// Sparse random impulses with optional decaying release.
 ///
-/// Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+/// Inspired by SuperCollider's `Dust` with a twist: each impulse
 /// can have a trailing exponential decay instead of being a single-sample
 /// spike. Releases overlap and sum (polyphonic voice pool of 64).
 ///
 /// # Arguments (AGENTS.md order: props first, inputs last)
-/// - `props` — optional `seed`, `bipolar`, `jitter`, and/or `key`
+/// - `props` — optional `seed`, `jitter`, and/or `key`
 /// - `density` — impulses per second (Poisson rate, signal)
 /// - `release` — T60 decay time in seconds per impulse (signal, audio-rate)
 ///
@@ -1197,36 +1197,28 @@ pub fn sample_count(props: serde_json::Value) -> Node {
 /// | Key       | Type | Default | Notes                                         |
 /// |-----------|------|---------|-----------------------------------------------|
 /// | `seed`    | num  | random  | Deterministic RNG seed (0 treated as 1)       |
-/// | `bipolar` | bool | `true`  | `true` = Dust2 (-1/+1), `false` = Dust (0..1) |
 /// | `jitter`  | num  | `0.0`   | Per-impulse amplitude randomness 0..1         |
 /// | `key`     | str  | —       | Optional authoring key                        |
 ///
 /// # Behaviour
 /// - Each sample runs a Bernoulli trial with probability `density / sr`.
-/// - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+/// - On trigger, a new voice spawns with amplitude 1.
 /// - `jitter` scales the impulse amplitude randomly per trigger.
 /// - Voices decay exponentially at T60 = `release` seconds and sum at the output.
 /// - If all 64 voice slots are busy, new triggers are dropped.
 /// - `release <= 0` → single-sample impulse (voice expires immediately after firing).
 /// - `density <= 0` → no new triggers, existing releases keep decaying.
 ///
-/// # Overlap handling (mode-specific)
-/// - **bipolar** — each new voice spawns at random ±1 amplitude. Signs
-///   cancel on average, so the zero-mean sum stays small. A per-sample
-///   gain `1 / sqrt(1 + density * release / ln(1000))` keeps RMS flat
-///   across density/release sweeps, with a soft `tanh` safety net for
-///   transient concurrent-spawn spikes. Output bounded in ±1.
+/// # Overlap handling
+/// New events use gap-filling spawn. When a trigger fires while the summed
+/// envelope is at level `d`, the new voice is born at amplitude `(1 - d)` so
+/// the envelope jumps back to exactly 1.0 rather than stacking on top.
+/// A vendor-style `dcblock` poststage then recenters the output around 0.
+/// Sonically this reads as a probabilistically-retriggered exponential
+/// envelope whose decay tail shortens as density rises, without drifting DC.
 ///
-/// - **unipolar** — gap-filling spawn. When a new event fires while the
-///   summed envelope is at level `d`, the new voice is born at amplitude
-///   `(1 - d)` so the envelope jumps back to exactly 1.0 rather than
-///   stacking on top. Output is naturally bounded in `[0, 1]` — no RMS
-///   compensation, no tanh, full dynamic range preserved. Sonically this
-///   is a probabilistically-retriggered exponential envelope whose decay
-///   tail shortens as density rises.
-///
-/// For the `release <= 0` impulse mode, voices expire on the next sample
-/// so there is no overlap to manage in either mode.
+/// For the `release <= 0` impulse mode, voices expire on the next sample so
+/// there is no overlap to manage.
 ///
 /// # Example
 ///
@@ -1235,7 +1227,7 @@ pub fn sample_count(props: serde_json::Value) -> Node {
 /// use serde_json::json;
 ///
 /// let noise = extra::dust(
-///     json!({ "seed": 1, "bipolar": true, "jitter": 0.25 }),
+///     json!({ "seed": 1, "jitter": 0.25 }),
 ///     el::const_(200.0),
 ///     el::const_(0.05),
 /// );

@@ -1,7 +1,7 @@
 /**
  * Dust signal utility demo — scope-only DSP graph.
  *
- * Shows sparse bipolar impulses from `el.extra.dust` for visualization.
+ * Shows sparse impulses from `el.extra.dust` for visualization.
  * No audio output — the graph is rendered (so dust ticks) but output is muted.
  */
 
@@ -18,8 +18,6 @@ export interface DustParams {
   releaseMs: number;
   /** Per-impulse amplitude jitter 0.0–1.0. */
   jitter: number;
-  /** Bipolar mode (±1) vs unipolar (0..1). */
-  bipolar: boolean;
   /** Silence flag — mutes output when true. */
   isStopped?: boolean;
 }
@@ -36,7 +34,6 @@ export function buildGraph(p: DustParams): NodeRepr_t[] {
     {
       key: "dust:gen",
       seed: 7,
-      bipolar: p.bipolar,
       jitter: p.jitter,
     },
     el.const({ key: "dust:density", value: p.density }),

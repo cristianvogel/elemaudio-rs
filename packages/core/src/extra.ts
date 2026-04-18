@@ -1060,11 +1060,6 @@ export interface DustProps extends Record<string, unknown> {
   /** Optional deterministic RNG seed (0 treated as 1). */
   seed?: number;
   /**
-   * `true` (default) = Dust2-style bipolar output (-1 or +1 per impulse).
-   * `false` = SC Dust-style unipolar output (always +1).
-   */
-  bipolar?: boolean;
-  /**
    * Per-impulse amplitude randomness, 0.0–1.0. Default 0.
    * - 0.0 = all impulses at amplitude 1 (constant)
    * - 0.5 = amplitude uniformly in [0.5, 1.0]
@@ -1076,37 +1071,30 @@ export interface DustProps extends Record<string, unknown> {
 /**
  * Sparse random impulses with optional decaying release.
  *
- * Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+ * Inspired by SuperCollider's `Dust` with a twist: each impulse
  * can have a trailing exponential release instead of being a single-sample
  * spike. Releases overlap and sum (polyphonic voice pool of 64).
  *
  * ### Behaviour
  *
  * - Each sample runs a Bernoulli trial with probability `density / sr`.
- * - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+ * - On trigger, a new voice spawns with amplitude 1.
  * - Voices decay exponentially at T60 = `release` seconds and sum at the output.
  * - If all 64 voice slots are busy, new triggers are dropped.
  * - `release <= 0` → single-sample impulse (voice expires immediately).
  * - `density <= 0` → no new triggers, existing releases keep decaying.
  *
- * ### Overlap handling (mode-specific)
+ * ### Overlap handling
  *
- * - **bipolar** — each new voice spawns at random ±1 amplitude. Signs
- *   cancel on average, so the zero-mean sum stays small. A per-sample
- *   gain `1 / sqrt(1 + density * release / ln(1000))` keeps RMS flat
- *   across density/release sweeps, with a soft `tanh` safety net for
- *   transient concurrent-spawn spikes. Output bounded in ±1.
+ * New events use gap-filling spawn. When a trigger fires while the summed
+ * envelope is at level `d`, the new voice is born at amplitude `(1 - d)` so
+ * the envelope jumps back to exactly 1.0 rather than stacking on top.
+ * A vendor-style `dcblock` poststage then recenters the output around 0.
+ * Sonically this reads as a probabilistically-retriggered exponential
+ * envelope whose decay tail shortens as density rises, without drifting DC.
  *
- * - **unipolar** — gap-filling spawn. When a new event fires while the
- *   summed envelope is at level `d`, the new voice is born at amplitude
- *   `(1 - d)` so the envelope jumps back to exactly 1.0 rather than
- *   stacking on top. Output is naturally bounded in `[0, 1]` — no RMS
- *   compensation, no tanh, full dynamic range preserved. Sonically this
- *   is a probabilistically-retriggered exponential envelope whose decay
- *   tail shortens as density rises.
- *
- * For the `release <= 0` impulse mode, voices expire on the next sample
- * so there is no overlap to manage in either mode.
+ * For the `release <= 0` impulse mode, voices expire on the next sample so
+ * there is no overlap to manage.
  *
  * @param props   - see {@link DustProps}
  * @param density - impulses per second (Poisson rate, signal)
@@ -1114,16 +1102,16 @@ export interface DustProps extends Record<string, unknown> {
  *
  * @example
  * ```ts
- * // Dense bipolar dust with 50ms release
+ * // Dense dust with 50ms release
  * const noise = el.extra.dust(
- *   { seed: 1, bipolar: true },
+ *   { seed: 1 },
  *   el.const({ value: 200 }),
  *   el.const({ value: 0.05 }),
  * );
  *
- * // Classic SC-Dust (unipolar, single-sample impulses)
+ * // Single-sample impulses
  * const clicks = el.extra.dust(
- *   { bipolar: false },
+ *   {},
  *   el.const({ value: 10 }),
  *   el.const({ value: 0 }),
  * );

@@ -298,7 +298,7 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
 
     let dust: NodeRepr_t =
         el.extra.dust(
-            {key: "rb:dust", seed: 137, bipolar: false, jitter: p.dustJitter},
+            {key: "rb:dust", seed: 137, jitter: p.dustJitter},
             el.const({key: "rb:dustDensity", value: p.dustDensity}),
             el.const({key: "rb:dustRelease", value: p.dustReleaseMs / 1000})
         );

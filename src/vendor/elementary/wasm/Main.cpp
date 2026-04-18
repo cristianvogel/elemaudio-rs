@@ -130,9 +130,9 @@ public:
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
-        // DustNode: sparse bipolar impulses with a pinged, vactrol-like trail.
+        // DustNode: sparse impulses with a pinged, vactrol-like trail.
         // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
-        // Properties: seed, bipolar, jitter.
+        // Properties: seed, jitter.
         runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::DustNode<double>>(id, fs, bs);
         });

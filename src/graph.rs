@@ -1033,7 +1033,7 @@ mod tests {
         let density = el::const_(100.0);
         let release = el::const_(0.0);
         let dust = extra::dust(
-            serde_json::json!({ "seed": 42, "bipolar": false }),
+            serde_json::json!({ "seed": 42 }),
             density,
             release,
         );

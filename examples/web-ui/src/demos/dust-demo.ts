@@ -1,7 +1,7 @@
 /**
  * elemaudio-rs dust signal utility demo.
  *
- * Shows sparse bipolar impulses from `el.extra.dust` and their characteristics.
+ * Shows sparse impulses from `el.extra.dust` and their characteristics.
  * No audio output — only a scope visualization. The graph is still rendered
  * (so the dust generator ticks), but the final output is muted.
  */
@@ -18,9 +18,10 @@ const layout = `
     <h1>elemaudio-rs</h1>
     <h3>dust — sparse impulse generator</h3>
     <p>
-      Visualize sparse bipolar impulses from <code>el.extra.dust</code>.
+      Visualize sparse impulses from <code>el.extra.dust</code>.
       Density controls impulse rate in Hz. Release (duration) and jitter
-      (amplitude randomness) shape each burst. This is a scope-only
+      (amplitude randomness) shape each burst. A native DC blocker keeps
+      the output centered around 0 as releases overlap. This is a scope-only
       visualization; no audio is output.
     </p>
     <div class="controls">
@@ -54,13 +55,6 @@ const layout = `
           <input id="jitter" type="range" min="0" max="100" value="0" step="1" />
         </div>
 
-        <div class="dial">
-          <label for="bipolar">
-            <span>Bipolar</span>
-            <span id="bipolar-value">on</span>
-          </label>
-          <input id="bipolar" type="checkbox" checked />
-        </div>
       </div>
 
       <div class="row">
@@ -79,8 +73,6 @@ let releaseSlider: HTMLInputElement;
 let releaseValue: HTMLSpanElement;
 let jitterSlider: HTMLInputElement;
 let jitterValue: HTMLSpanElement;
-let bipolarToggle: HTMLInputElement;
-let bipolarValue: HTMLSpanElement;
 let oscilloscope: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
@@ -101,7 +93,6 @@ function currentParams(): DustParams {
     density: densityFromSlider(Number(densitySlider.value)),
     releaseMs: Number(releaseSlider.value),
     jitter: Number(jitterSlider.value) / 100,
-    bipolar: bipolarToggle.checked,
     isStopped,
   };
 }
@@ -130,8 +121,6 @@ releaseSlider = q<HTMLInputElement>("#release");
 releaseValue = q<HTMLSpanElement>("#release-value");
 jitterSlider = q<HTMLInputElement>("#jitter");
 jitterValue = q<HTMLSpanElement>("#jitter-value");
-bipolarToggle = q<HTMLInputElement>("#bipolar");
-bipolarValue = q<HTMLSpanElement>("#bipolar-value");
 oscilloscope = q<any>("elemaudio-oscilloscope");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
@@ -142,7 +131,7 @@ startButton.addEventListener("click", () => {
   isStopped = false;
 });
 
-wireControls([densitySlider, releaseSlider, jitterSlider, bipolarToggle]);
+wireControls([densitySlider, releaseSlider, jitterSlider]);
 
 stopButton.addEventListener("click", async () => {
   isStopped = true;
@@ -176,7 +165,6 @@ function updateReadouts() {
   densityValue.textContent = densityText;
   releaseValue.textContent = `${Number(releaseSlider.value)} ms`;
   jitterValue.textContent = `${Number(jitterSlider.value)} %`;
-  bipolarValue.textContent = bipolarToggle.checked ? "on" : "off";
 }
 
 updateReadouts();
