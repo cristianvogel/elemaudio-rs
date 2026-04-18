@@ -93,6 +93,17 @@ const layout = `
           </label>
           <input id="gain" type="range" min="0" max="100" value="50" step="1" />
         </div>
+
+        <div class="dial">
+          <label for="clip-mode">
+            <span>Clip flavour</span>
+            <span id="clip-mode-value">Soft</span>
+          </label>
+          <select id="clip-mode">
+            <option value="soft" selected>Soft tanh</option>
+            <option value="limiter">Limiter</option>
+          </select>
+        </div>
       </div>
 
       <div class="row">
@@ -123,6 +134,8 @@ let spreadSlider: HTMLInputElement;
 let spreadValue: HTMLSpanElement;
 let gainSlider: HTMLInputElement;
 let gainValue: HTMLSpanElement;
+let clipModeSelect: HTMLSelectElement;
+let clipModeValue: HTMLSpanElement;
 let oscilloscope: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
@@ -147,7 +160,8 @@ function currentParams(): DustBankParams {
     resonate: Number(resonateSlider.value) / 100,
     partials: Number(partialsSlider.value),
     spreadPct: Number(spreadSlider.value) / 10, // 0–50 → 0–5 %
-    gain: Number(gainSlider.value) / 100,
+    gain:  0.65 * Math.pow(Number(gainSlider.value) / 100, 2.4),
+    clipMode: clipModeSelect.value as "soft" | "limiter",
     isStopped,
   };
 }
@@ -187,6 +201,8 @@ spreadSlider = q<HTMLInputElement>("#spread");
 spreadValue = q<HTMLSpanElement>("#spread-value");
 gainSlider = q<HTMLInputElement>("#gain");
 gainValue = q<HTMLSpanElement>("#gain-value");
+clipModeSelect = q<HTMLSelectElement>("#clip-mode");
+clipModeValue = q<HTMLSpanElement>("#clip-mode-value");
 oscilloscope = q<any>("elemaudio-oscilloscope");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
@@ -206,6 +222,7 @@ wireControls([
   partialsSlider,
   spreadSlider,
   gainSlider,
+  clipModeSelect,
 ]);
 
 stopButton.addEventListener("click", async () => {
@@ -246,6 +263,7 @@ function updateReadouts() {
   partialsValue.textContent = `${Number(partialsSlider.value)}`;
   spreadValue.textContent = `${(Number(spreadSlider.value) / 10).toFixed(1)} %`;
   gainValue.textContent = `${Number(gainSlider.value)} %`;
+  clipModeValue.textContent = clipModeSelect.value === "limiter" ? "Limiter" : "Soft";
 }
 
 updateReadouts();

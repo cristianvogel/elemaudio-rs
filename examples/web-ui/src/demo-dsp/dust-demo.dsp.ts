@@ -41,6 +41,8 @@ export interface DustBankParams {
   spreadPct: number;
   /** Final output gain 0.0–1.0. */
   gain: number;
+  /** Output clipping flavour. */
+  clipMode: "soft" | "limiter";
   /** Stop flag — returns silent roots when true. */
   isStopped?: boolean;
 }
@@ -75,11 +77,10 @@ function resonator(
   );
 
   // Shape the exciter with a narrow bandpass at fc so energy lands near
-  // the resonator's natural frequency. Moderate Q — the sustain comes
-  // from the delay-line feedback, not the prefilter.
+  // the resonator's natural frequency.
   const shaped = el.bandpass(
     el.const({ key: `bank:fc2:${tag}`, value: fc }),
-    el.const({ value: 20 }),
+    el.const({ value: 160 }),
     exciter,
   );
 
@@ -155,16 +156,26 @@ export function buildGraph(p: DustBankParams): NodeRepr_t[] {
   }
 
   const exciter = el.extra.dust(
-    { key: "bank:exciter", seed: 7, bipolar: true, jitter: p.jitter },
+    { key: "bank:exciter", seed: 7, bipolar: false, jitter: p.jitter },
     el.const({ key: "bank:density", value: p.density }),
     el.const({ key: "bank:trails", value: p.trailsMs / 1000 }),
   );
 
-  const [bankL, bankR] = buildBank(exciter, p);
+  const shapedNoise = el.select( exciter, el.noise({ seed: 7 }), el.mul(2,exciter));
 
-  // Soft limiter on output — high Q can produce large peaks.
-  const outL = el.tanh(el.mul(el.const({ key: "bank:gain:l", value: p.gain }), bankL));
-  const outR = el.tanh(el.mul(el.const({ key: "bank:gain:r", value: p.gain }), bankR));
+  const [bankL, bankR] = buildBank(shapedNoise, p);
+
+  const preL = el.mul(el.const({ key: "bank:gain:l", value: p.gain }), bankL);
+  const preR = el.mul(el.const({ key: "bank:gain:r", value: p.gain }), bankR);
+
+  // Output clipping flavour.
+  const [outL, outR] = p.clipMode === "limiter"
+    ? el.extra.stereoLimiter(
+        { key: "bank:limiter", outputLimit: 0.95, attackMs: 1, holdMs: 0, releaseMs: 20 },
+        preL,
+        preR,
+      )
+    : [el.tanh(preL), el.tanh(preR)];
 
   // Scope the summed output without affecting the audio path.
   const scopeInsert = el.scope(
