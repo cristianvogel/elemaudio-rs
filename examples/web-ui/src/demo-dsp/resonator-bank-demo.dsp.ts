@@ -61,41 +61,31 @@ export interface ResonatorBankProps {
 /**
  * Signal-first reference modal resonator bank.
  *
- * Mono exciter in, mono resonant output. All control inputs are signals.
+ * Mono exciter in, stereo resonant output. All control inputs are signals.
  */
-export function resonatorBankReference(
+export function resonatorBank(
     props: ResonatorBankProps,
     f0: NodeRepr_t,
     inharmonicity: NodeRepr_t,
     strikePos: NodeRepr_t,
     brightness: NodeRepr_t,
+    spread: NodeRepr_t,
     decay: NodeRepr_t,
     exciter: NodeRepr_t
-): NodeRepr_t {
+): [NodeRepr_t, NodeRepr_t] {
     const modes = Math.max(
         MODES_MIN,
         Math.min(MODES_MAX, Math.floor(props.modes ?? 24))
     );
     const key = props.key ?? "rbank";
 
-    // Clamp decay to (0, 1) softly to keep fb < 1. Map macro decay to a
-    // feedback factor with a strongly front-loaded curve so musical ring
-    // opens up early in the slider:
-    //
-    //   fb_macro = FB_HEAD_ROOM * decay ^ DECAY_CURVE
-    //
-    // DECAY_CURVE ≈ 0.1956 was chosen so that decay=0.40 yields roughly
-    // the same fb as the previous sqrt-based curve did at 0.70
-    // (fb_macro ≈ 0.836 * FB_HEAD_ROOM). At decay=1.0 the mapping still
-    // reaches FB_HEAD_ROOM. The curve is monotonic and keeps the top end
-    // musical while giving the first half of the slider more audible
-    // reach — the ear follows ring-time geometrically in fb, so a
-    // sub-linear curve matches perception better than sqrt.
     const DECAY_CURVE = 0.1956;
     const decayClamped = el.max(0, el.min(1, decay));
+    const spreadClamped = el.max(0, el.min(1, spread));
     const fbMacro = el.mul(FB_HEAD_ROOM, el.pow(decayClamped, DECAY_CURVE));
 
-    const modeOutputs: NodeRepr_t[] = [];
+    const modeOutputsL: NodeRepr_t[] = [];
+    const modeOutputsR: NodeRepr_t[] = [];
 
     for (let i = 0; i < modes; i++) {
         const n = i + 1;
@@ -109,7 +99,7 @@ export function resonatorBankReference(
 
         // Clamp to audible range. Above Nyquist/0.4 the SVF-backed
         // bandpass becomes unstable anyway.
-        const fnClamped = el.max(20, el.min(18000, fn));
+        const fnClamped = el.max(20, el.min(12000, fn));
 
         // Delay length in samples = sr / f_n.
         const period = el.div(el.sr(), fnClamped);
@@ -136,7 +126,7 @@ export function resonatorBankReference(
         const fbPartial = el.pow(fbMacro, fbExponent);
 
         // --- Pre-shape the exciter at f_n ------------------------------
-        const shaped = el.bandpass(fnClamped, el.const({value: 160}), exciter);
+        const shaped = el.bandpass(fnClamped, el.const({value: 160  }), exciter);
 
         const drive = el.mul(weight, shaped);
 
@@ -150,12 +140,37 @@ export function resonatorBankReference(
 
         // Per-mode output compensation — keeps low modes from dominating.
         const compGain = 1 / Math.sqrt(n);
-        modeOutputs.push(el.mul(compGain, rung));
+
+        // Pairwise widening around center. The first pair sits close to
+        // center and later pairs fan outward:
+        //   mode 0 -> center + spread * 1/modes
+        //   mode 1 -> center - spread * 1/modes
+        //   mode 2 -> center + spread * 2/modes
+        //   mode 3 -> center - spread * 2/modes
+        const pairIndex = Math.floor(i / 2) + 1;
+        const offset = pairIndex / modes;
+        const panSign = i % 2 === 0 ? 1 : -1;
+        const panPos = el.max(
+            0,
+            el.min(
+                1,
+                el.add(0.5, el.mul(0.5 * panSign * offset, spreadClamped))
+            )
+        );
+        const gainL = el.sub(1, panPos);
+        const gainR = panPos;
+        const voice = el.mul(compGain, rung);
+        modeOutputsL.push(el.mul(gainL, voice));
+        modeOutputsR.push(el.mul(gainR, voice));
     }
 
     // Sum all modes. Start from a zero const so the reduce is stable
     // even for modes=1.
-    const sum = modeOutputs.reduce<NodeRepr_t>(
+    const sumL = modeOutputsL.reduce<NodeRepr_t>(
+        (acc, v) => el.add(acc, v),
+        el.const({value: 0})
+    );
+    const sumR = modeOutputsR.reduce<NodeRepr_t>(
         (acc, v) => el.add(acc, v),
         el.const({value: 0})
     );
@@ -163,7 +178,7 @@ export function resonatorBankReference(
     // Loose normalization by sqrt(modes) so sweeping modes doesn't
     // cause big loudness jumps.
     const normGain = 1 / Math.sqrt(modes);
-    return el.mul(normGain, sum);
+    return [el.mul(normGain, sumL), el.mul(normGain, sumR)];
 }
 
 // -----------------------------------------------------------------------
@@ -245,6 +260,8 @@ export interface ResonatorBankParams {
     strikePosJitter: number;
     /** Upper-mode tilt 0..1. 0 = flat, 1 = brighter high partials. */
     brightness: number;
+    /** Stereo widening 0..1. */
+    stereoSpread: number;
     /** Macro decay 0..1. Longer when higher. */
     decay: number;
     /** Number of modes in the bank. 1..64. */
@@ -277,11 +294,6 @@ export interface ResonatorBankParams {
 
 /**
  * Build the full demo graph: exciter → resonator bank → clip → stereo.
- *
- * The bank is mono; stereo is derived by mild odd-partial L / even-partial R
- * phase offset via a pair of slightly detuned bank renders. For phase 1 the
- * simpler approach is: mono bank duplicated to both channels. Detail will
- * come when the native node lands and per-mode outputs are cheap.
  */
 export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
     if (p.isStopped) {
@@ -327,22 +339,24 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
             0
         )));
     // --- Build bank ---------------------------------------------------
-    const bank = resonatorBankReference(
+    const [bankL, bankR] = resonatorBank(
         {modes: p.modes, key: "rb"},
         el.sm(el.const({key: "rb:f0", value: p.f0})),
         el.const({key: "rb:inharm", value: p.inharmonicity}),
         strikePosWithJitter,
         el.const({key: "rb:brightness", value: p.brightness}),
+        el.const({key: "rb:spread", value: p.stereoSpread}),
         el.const({key: "rb:decay", value: p.decay}),
         exciter
     );
 
-    const pre = el.mul(el.const({key: "rb:gain", value: p.gain}), bank);
+    const preL = el.mul(el.const({key: "rb:gain:l", value: p.gain}), bankL);
+    const preR = el.mul(el.const({key: "rb:gain:r", value: p.gain}), bankR);
 
     // --- Output clipping ---------------------------------------------
-    const out =
+    const [outL, outR] =
         p.clipMode === "limiter"
-            ? el.extra.limiter(
+            ? el.extra.stereoLimiter(
                 {
                     key: "rb:limiter",
                     outputLimit: 0.95,
@@ -350,9 +364,10 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
                     holdMs: 0,
                     releaseMs: 20
                 },
-                pre
+                preL,
+                preR
             )
-            : el.tanh(pre);
+            : [el.tanh(preL), el.tanh(preR)];
 
     // Scope the hammer exciter before the bank.
     const scopeHammer = el.scope(
@@ -363,12 +378,12 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
     // Scope the mono output without altering the audible signal.
     const scopeOutput = el.scope(
         {name: SCOPE_OUTPUT, size: TIME_SCALE, channels: 1},
-        out
+        el.mul(0.5, el.add(outL, outR))
     );
 
     // Duplicate to stereo and absorb both scope inserts (multiplied by 0)
     // so they stay in the graph without affecting the audible signal.
-    const l = el.add(out, el.mul(0, scopeHammer, scopeOutput));
-    const r = out;
+    const l = el.add(outL, el.mul(0, scopeHammer, scopeOutput));
+    const r = outR;
     return [l, r];
 }

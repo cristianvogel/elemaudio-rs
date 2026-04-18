@@ -100,6 +100,14 @@ const layout = `
         </div>
 
         <div class="dial">
+          <label for="spread">
+            <span>Stereo Spread</span>
+            <span id="spread-value">35 %</span>
+          </label>
+          <input id="spread" type="range" min="0" max="100" value="35" step="1" />
+        </div>
+
+        <div class="dial">
           <label for="decay">
             <span>Decay</span>
             <span id="decay-value">70 %</span>
@@ -212,6 +220,8 @@ let strikePosJitterSlider: HTMLInputElement;
 let strikePosJitterValue: HTMLSpanElement;
 let brightSlider: HTMLInputElement;
 let brightValue: HTMLSpanElement;
+let spreadSlider: HTMLInputElement;
+let spreadValue: HTMLSpanElement;
 let decaySlider: HTMLInputElement;
 let decayValue: HTMLSpanElement;
 let strikeRateSlider: HTMLInputElement;
@@ -270,6 +280,7 @@ function currentParams(): ResonatorBankParams {
         strikePos: strikePosFromSlider(Number(strikePosSlider.value)),
         strikePosJitter: Number(strikePosJitterSlider.value) / 100,
         brightness: Number(brightSlider.value) / 100,
+        stereoSpread: Number(spreadSlider.value) / 100,
         decay: Number(decaySlider.value) / 100,
         modes: Number(modesSlider.value),
         strikeRate: strikeRateFromSlider(Number(strikeRateSlider.value)),
@@ -321,6 +332,8 @@ strikePosJitterSlider = q<HTMLInputElement>("#position-jitter");
 strikePosJitterValue = q<HTMLSpanElement>("#position-jitter-value");
 brightSlider = q<HTMLInputElement>("#brightness");
 brightValue = q<HTMLSpanElement>("#brightness-value");
+spreadSlider = q<HTMLInputElement>("#spread");
+spreadValue = q<HTMLSpanElement>("#spread-value");
 decaySlider = q<HTMLInputElement>("#decay");
 decayValue = q<HTMLSpanElement>("#decay-value");
 strikeRateSlider = q<HTMLInputElement>("#strikeRate");
@@ -358,6 +371,7 @@ wireControls([
     strikePosSlider,
     strikePosJitterSlider,
     brightSlider,
+    spreadSlider,
     decaySlider,
     strikeRateSlider,
     velocitySlider,
@@ -408,6 +422,7 @@ function updateReadouts() {
     strikePosValue.textContent = strikePosFromSlider(Number(strikePosSlider.value)).toFixed(2);
     strikePosJitterValue.textContent = `${Number(strikePosJitterSlider.value)} %`;
     brightValue.textContent = `${Number(brightSlider.value)} %`;
+    spreadValue.textContent = `${Number(spreadSlider.value)} %`;
     decayValue.textContent = `${Number(decaySlider.value)} %`;
     const rate = strikeRateFromSlider(Number(strikeRateSlider.value));
     strikeRateValue.textContent =
