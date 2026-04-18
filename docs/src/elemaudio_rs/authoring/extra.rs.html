@@ -1162,52 +1162,71 @@
 <a href=#1162 id=1162 data-nosnippet>1162</a>/// `0.5 Hz`. Useful as a `phasor` rate to clock the asset exactly once per
 <a href=#1163 id=1163 data-nosnippet>1163</a>/// cycle.
 <a href=#1164 id=1164 data-nosnippet>1164</a>///
-<a href=#1165 id=1165 data-nosnippet>1165</a>/// # Missing resource
+<a href=#1165 id=1165 data-nosnippet>1165</a>/// # Example
 <a href=#1166 id=1166 data-nosnippet>1166</a>///
-<a href=#1167 id=1167 data-nosnippet>1167</a>/// If the `path` prop names a resource that has **not** been added to the
-<a href=#1168 id=1168 data-nosnippet>1168</a>/// runtime's shared-resource map at the time this node's graph is applied,
-<a href=#1169 id=1169 data-nosnippet>1169</a>/// the underlying `setProperty` returns `InvalidPropertyValue` and the
-<a href=#1170 id=1170 data-nosnippet>1170</a>/// error surfaces through `Runtime::apply_instructions`. Same contract as
-<a href=#1171 id=1171 data-nosnippet>1171</a>/// `el::sample` / `el::table` — add the resource first (e.g. via
-<a href=#1172 id=1172 data-nosnippet>1172</a>/// `Runtime::add_shared_resource_f32`) before rendering.
-<a href=#1173 id=1173 data-nosnippet>1173</a>///
-<a href=#1174 id=1174 data-nosnippet>1174</a>/// # Unknown unit string
-<a href=#1175 id=1175 data-nosnippet>1175</a>///
-<a href=#1176 id=1176 data-nosnippet>1176</a>/// `"samp"`, `"ms"`, and `"hz"` are the only accepted tokens (case-sensitive).
-<a href=#1177 id=1177 data-nosnippet>1177</a>/// Anything else causes the runtime to return `InvalidPropertyValue`.
-<a href=#1178 id=1178 data-nosnippet>1178</a>///
-<a href=#1179 id=1179 data-nosnippet>1179</a>/// # Runtime changes
-<a href=#1180 id=1180 data-nosnippet>1180</a>///
-<a href=#1181 id=1181 data-nosnippet>1181</a>/// Changing `path` or `unit` at runtime via the fast-path setter
-<a href=#1182 id=1182 data-nosnippet>1182</a>/// (`mounted.set_property("unit", "hz")`) updates the emitted value on the
-<a href=#1183 id=1183 data-nosnippet>1183</a>/// next audio block. Transitions are instantaneous — the signal jumps to
-<a href=#1184 id=1184 data-nosnippet>1184</a>/// the new scaled length.
-<a href=#1185 id=1185 data-nosnippet>1185</a>///
-<a href=#1186 id=1186 data-nosnippet>1186</a>/// # Example
-<a href=#1187 id=1187 data-nosnippet>1187</a>///
-<a href=#1188 id=1188 data-nosnippet>1188</a>/// ```ignore
-<a href=#1189 id=1189 data-nosnippet>1189</a>/// use elemaudio_rs::{extra, Graph, Runtime};
-<a href=#1190 id=1190 data-nosnippet>1190</a>/// use serde_json::json;
-<a href=#1191 id=1191 data-nosnippet>1191</a>///
-<a href=#1192 id=1192 data-nosnippet>1192</a>/// let runtime = Runtime::new()
-<a href=#1193 id=1193 data-nosnippet>1193</a>///     .sample_rate(48_000.0)
-<a href=#1194 id=1194 data-nosnippet>1194</a>///     .buffer_size(64)
-<a href=#1195 id=1195 data-nosnippet>1195</a>///     .call()
-<a href=#1196 id=1196 data-nosnippet>1196</a>///     .unwrap();
-<a href=#1197 id=1197 data-nosnippet>1197</a>///
-<a href=#1198 id=1198 data-nosnippet>1198</a>/// let samples: Vec&lt;f32&gt; = vec![0.0; 48_000]; // exactly 1 second
-<a href=#1199 id=1199 data-nosnippet>1199</a>/// runtime.add_shared_resource_f32("my-asset", &amp;samples).unwrap();
-<a href=#1200 id=1200 data-nosnippet>1200</a>///
-<a href=#1201 id=1201 data-nosnippet>1201</a>/// // 48000.0 on every output sample.
-<a href=#1202 id=1202 data-nosnippet>1202</a>/// let len_samp = extra::sample_count(json!({ "path": "my-asset" }));
+<a href=#1167 id=1167 data-nosnippet>1167</a>/// ```ignore
+<a href=#1168 id=1168 data-nosnippet>1168</a>/// use elemaudio_rs::{extra, Graph, Runtime};
+<a href=#1169 id=1169 data-nosnippet>1169</a>/// use serde_json::json;
+<a href=#1170 id=1170 data-nosnippet>1170</a>///
+<a href=#1171 id=1171 data-nosnippet>1171</a>/// let runtime = Runtime::new()
+<a href=#1172 id=1172 data-nosnippet>1172</a>///     .sample_rate(48_000.0)
+<a href=#1173 id=1173 data-nosnippet>1173</a>///     .buffer_size(64)
+<a href=#1174 id=1174 data-nosnippet>1174</a>///     .call()
+<a href=#1175 id=1175 data-nosnippet>1175</a>///     .unwrap();
+<a href=#1176 id=1176 data-nosnippet>1176</a>///
+<a href=#1177 id=1177 data-nosnippet>1177</a>/// let samples: Vec&lt;f32&gt; = vec![0.0; 48_000];
+<a href=#1178 id=1178 data-nosnippet>1178</a>/// runtime.add_shared_resource_f32("my-asset", &amp;samples).unwrap();
+<a href=#1179 id=1179 data-nosnippet>1179</a>/// let len_hz = extra::sample_count(json!({ "path": "my-asset", "unit": "hz" }));
+<a href=#1180 id=1180 data-nosnippet>1180</a>/// ```
+<a href=#1181 id=1181 data-nosnippet>1181</a></span><span class="kw">pub fn </span>sample_count(props: serde_json::Value) -&gt; Node {
+<a href=#1182 id=1182 data-nosnippet>1182</a>    Node::new(<span class="string">"sampleCount"</span>, props, <span class="macro">vec!</span>[])
+<a href=#1183 id=1183 data-nosnippet>1183</a>}
+<a href=#1184 id=1184 data-nosnippet>1184</a>
+<a href=#1185 id=1185 data-nosnippet>1185</a><span class="doccomment">/// Sparse random impulses with optional decaying trails.
+<a href=#1186 id=1186 data-nosnippet>1186</a>///
+<a href=#1187 id=1187 data-nosnippet>1187</a>/// Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+<a href=#1188 id=1188 data-nosnippet>1188</a>/// can have a trailing exponential decay instead of being a single-sample
+<a href=#1189 id=1189 data-nosnippet>1189</a>/// spike. Trails overlap and sum (polyphonic voice pool of 64).
+<a href=#1190 id=1190 data-nosnippet>1190</a>///
+<a href=#1191 id=1191 data-nosnippet>1191</a>/// # Arguments (AGENTS.md order: props first, inputs last)
+<a href=#1192 id=1192 data-nosnippet>1192</a>/// - `props` — optional `seed`, `bipolar`, `jitter`, and/or `key`
+<a href=#1193 id=1193 data-nosnippet>1193</a>/// - `density` — impulses per second (Poisson rate, signal)
+<a href=#1194 id=1194 data-nosnippet>1194</a>/// - `trails` — T60 decay time in seconds per impulse (signal, audio-rate)
+<a href=#1195 id=1195 data-nosnippet>1195</a>///
+<a href=#1196 id=1196 data-nosnippet>1196</a>/// # Props
+<a href=#1197 id=1197 data-nosnippet>1197</a>/// | Key       | Type | Default | Notes                                         |
+<a href=#1198 id=1198 data-nosnippet>1198</a>/// |-----------|------|---------|-----------------------------------------------|
+<a href=#1199 id=1199 data-nosnippet>1199</a>/// | `seed`    | num  | random  | Deterministic RNG seed (0 treated as 1)       |
+<a href=#1200 id=1200 data-nosnippet>1200</a>/// | `bipolar` | bool | `true`  | `true` = Dust2 (-1/+1), `false` = Dust (0..1) |
+<a href=#1201 id=1201 data-nosnippet>1201</a>/// | `jitter`  | num  | `0.0`   | Per-impulse amplitude randomness 0..1         |
+<a href=#1202 id=1202 data-nosnippet>1202</a>/// | `key`     | str  | —       | Optional authoring key                        |
 <a href=#1203 id=1203 data-nosnippet>1203</a>///
-<a href=#1204 id=1204 data-nosnippet>1204</a>/// // 1000.0 — asset duration in milliseconds.
-<a href=#1205 id=1205 data-nosnippet>1205</a>/// let len_ms = extra::sample_count(json!({ "path": "my-asset", "unit": "ms" }));
-<a href=#1206 id=1206 data-nosnippet>1206</a>///
-<a href=#1207 id=1207 data-nosnippet>1207</a>/// // 1.0 Hz — the asset's fundamental period.
-<a href=#1208 id=1208 data-nosnippet>1208</a>/// let len_hz = extra::sample_count(json!({ "path": "my-asset", "unit": "hz" }));
-<a href=#1209 id=1209 data-nosnippet>1209</a>/// ```
-<a href=#1210 id=1210 data-nosnippet>1210</a></span><span class="kw">pub fn </span>sample_count(props: serde_json::Value) -&gt; Node {
-<a href=#1211 id=1211 data-nosnippet>1211</a>    Node::new(<span class="string">"sampleCount"</span>, props, <span class="macro">vec!</span>[])
-<a href=#1212 id=1212 data-nosnippet>1212</a>}
+<a href=#1204 id=1204 data-nosnippet>1204</a>/// # Behaviour
+<a href=#1205 id=1205 data-nosnippet>1205</a>/// - Each sample runs a Bernoulli trial with probability `density / sr`.
+<a href=#1206 id=1206 data-nosnippet>1206</a>/// - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+<a href=#1207 id=1207 data-nosnippet>1207</a>/// - `jitter` scales the impulse amplitude randomly per trigger.
+<a href=#1208 id=1208 data-nosnippet>1208</a>/// - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+<a href=#1209 id=1209 data-nosnippet>1209</a>/// - If all 64 voice slots are busy, new triggers are dropped.
+<a href=#1210 id=1210 data-nosnippet>1210</a>/// - `trails &lt;= 0` → single-sample impulse (voice expires immediately after firing).
+<a href=#1211 id=1211 data-nosnippet>1211</a>/// - `density &lt;= 0` → no new triggers, existing trails keep decaying.
+<a href=#1212 id=1212 data-nosnippet>1212</a>///
+<a href=#1213 id=1213 data-nosnippet>1213</a>/// # Example
+<a href=#1214 id=1214 data-nosnippet>1214</a>///
+<a href=#1215 id=1215 data-nosnippet>1215</a>/// ```ignore
+<a href=#1216 id=1216 data-nosnippet>1216</a>/// use elemaudio_rs::{el, extra};
+<a href=#1217 id=1217 data-nosnippet>1217</a>/// use serde_json::json;
+<a href=#1218 id=1218 data-nosnippet>1218</a>///
+<a href=#1219 id=1219 data-nosnippet>1219</a>/// let noise = extra::dust(
+<a href=#1220 id=1220 data-nosnippet>1220</a>///     json!({ "seed": 1, "bipolar": true, "jitter": 0.25 }),
+<a href=#1221 id=1221 data-nosnippet>1221</a>///     el::const_(200.0),
+<a href=#1222 id=1222 data-nosnippet>1222</a>///     el::const_(0.05),
+<a href=#1223 id=1223 data-nosnippet>1223</a>/// );
+<a href=#1224 id=1224 data-nosnippet>1224</a>/// ```
+<a href=#1225 id=1225 data-nosnippet>1225</a></span><span class="kw">pub fn </span>dust(
+<a href=#1226 id=1226 data-nosnippet>1226</a>    props: serde_json::Value,
+<a href=#1227 id=1227 data-nosnippet>1227</a>    density: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#1228 id=1228 data-nosnippet>1228</a>    trails: <span class="kw">impl </span>Into&lt;ElemNode&gt;,
+<a href=#1229 id=1229 data-nosnippet>1229</a>) -&gt; Node {
+<a href=#1230 id=1230 data-nosnippet>1230</a>    Node::new(<span class="string">"dust"</span>, props, <span class="macro">vec!</span>[resolve(density), resolve(trails)])
+<a href=#1231 id=1231 data-nosnippet>1231</a>}
 </code></pre></div></section></main></body></html>
