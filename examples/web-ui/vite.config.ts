@@ -48,6 +48,7 @@ export default defineConfig({
         waveshaper: resolve(__dirname, "waveshaper.html"),
         vocoder: resolve(__dirname, "vocoder.html"),
         resource: resolve(__dirname, "resource-manager.html"),
+        resonatorBank: resolve(__dirname, "resonator-bank.html"),
       },
     },
   },
