@@ -47,7 +47,7 @@ fn dust_is_silent_when_density_is_zero() {
 }
 
 #[test]
-fn dust_decay_has_vactrol_like_tail() {
+fn dust_trails_overlap_and_shorter_trails_decay_faster() {
     let sample_rate = 48_000.0;
     let buffer_size = 64;
 
@@ -57,13 +57,12 @@ fn dust_decay_has_vactrol_like_tail() {
         .call()
         .expect("runtime");
 
-    // Density is high enough that the node will attempt to trigger every
-    // sample while it is idle. Retriggering is blocked while the tail is
-    // active, so we get one ping and then a decaying response.
+    // High density + long trails should create overlapping voices with
+    // substantial output energy.
     let density = elemaudio_rs::el::const_with_key("density", sample_rate);
     let trails = elemaudio_rs::el::const_with_key("trails", 0.05);
     let graph = Graph::new().render(extra::dust(
-        json!({ "seed": 1234 }),
+        json!({ "seed": 1234, "bipolar": false, "jitter": 0.0 }),
         density,
         trails,
     ));
@@ -78,19 +77,8 @@ fn dust_decay_has_vactrol_like_tail() {
         runtime.process(buffer_size, &[], &mut outputs).expect("process");
     }
 
-    assert!(out[0].abs() > 0.9, "first ping should be near full scale: {}", out[0]);
-
-    // The vactrol-like tail should decay smoothly for the first chunk of
-    // samples, not jump back to full scale.
-    for i in 0..16 {
-        let a = out[i].abs();
-        let b = out[i + 1].abs();
-        assert!(
-            b <= a + 1e-9,
-            "tail should decay monotonically early on: sample {i}={a}, sample {}={b}",
-            i + 1,
-        );
-    }
+    let energy_long: f64 = out.iter().map(|s| s.abs()).sum();
+    assert!(energy_long > 10.0, "long overlapping trails should produce substantial energy: {energy_long}");
 
     // Shorten the trail at runtime and verify the same node now decays faster.
     let len_node = mounted.node_with_key("trails").expect("keyed trails");
@@ -103,8 +91,6 @@ fn dust_decay_has_vactrol_like_tail() {
         runtime.process(buffer_size, &[], &mut outputs).expect("process 2");
     }
 
-    assert!(
-        out[buffer_size - 1].abs() < out[buffer_size / 2].abs(),
-        "shorter trails should decay more quickly"
-    );
+    let energy_short: f64 = out.iter().map(|s| s.abs()).sum();
+    assert!(energy_short < energy_long, "shorter trails should reduce total energy: short={energy_short}, long={energy_long}");
 }
