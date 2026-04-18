@@ -51,7 +51,10 @@ const layout = `
     <h3>${DEMO_TITLE}</h3>
     <p>${DEMO_DESCRIPTION}</p>
     <div class="controls">
-      <button id="start" class="start-button">Start audio</button>
+      <div class="button-row">
+        <button id="start" class="state-button">Start audio</button>
+        <button id="stop" class="state-button">Stop audio</button>
+      </div>
 
       <div class="row toggle-row">
         <label class="toggle-label" for="mod-source">
@@ -167,8 +170,10 @@ let scopeMod: any;
 let scopeOutput: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
+let stopButton: HTMLButtonElement;
+let isStopped = false;
 
-const { mustQuery: q, wireControls } = initDemo({
+const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph: () =>
     dspBuildGraph({
@@ -183,6 +188,7 @@ const { mustQuery: q, wireControls } = initDemo({
       mix: Number(mixSlider.value),
       carrierPath: carrierLoaded ? CARRIER_VFS : undefined,
       modPath: beatLoaded ? MOD_VFS : undefined,
+      isStopped,
     }),
   updateReadouts,
   onScopeEvent: (event: any) => {
@@ -250,6 +256,12 @@ scopeMod          = q<any>("#scope-mod");
 scopeOutput       = q<any>("#scope-output");
 freezeButton      = q<HTMLButtonElement>("#freeze-scope");
 zoomButton        = q<HTMLButtonElement>("#zoomButton");
+stopButton        = q<HTMLButtonElement>("#stop");
+
+const startButton = q<HTMLButtonElement>("#start");
+startButton.addEventListener("click", () => {
+  isStopped = false;
+});
 
 wireControls([
   modSourceSelect,
@@ -262,6 +274,11 @@ wireControls([
   delayMixSlider,
   mixSlider,
 ]);
+
+stopButton.addEventListener("click", async () => {
+  isStopped = true;
+  await renderCurrentGraph();
+});
 
 // ---- freeze / zoom ----------------------------------------------------
 

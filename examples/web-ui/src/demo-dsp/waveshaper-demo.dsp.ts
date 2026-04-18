@@ -24,9 +24,13 @@ export interface WaveshaperParams {
   mix: number;
   /** Required when a source is "sample". VFS path registered by the demo. */
   samplePath?: string;
+  isStopped?: boolean;
 }
 
 export function buildGraph(p: WaveshaperParams): NodeRepr_t[] {
+  if (p.isStopped) {
+    return [el.const({ value: 0 }), el.const({ value: 0 })];
+  }
   let raw: NodeRepr_t;
 
   if (p.source === "sample" && p.samplePath) {

@@ -38,7 +38,7 @@ app.innerHTML = `
     then processes the audio through 
     <code>el.extra.freqShift(...)</code> into <code>el.convolve(...)</code>. 
     The four-channel IR has been pre-prepared, so that channel 3 and 4 are reversed versions of the IR. 
-    This makes it trivial to swap the IR flavour, as demonstrated by the UI button there are the bottom.</p>
+    This makes it trivial to swap the IR flavour, as demonstrated by the UI button.</p>
 
     <div class="controls">
       <div class="row">
@@ -63,6 +63,7 @@ app.innerHTML = `
         <input id="sample-file" type="file" accept="audio/*" />
       </div>
       <button id="start">Start audio</button>
+      <button id="stop">Stop audio</button>
       <button id="reload" class="secondary">Reload sample</button>
       <button id="toggle-ir" class="secondary">Use IR pair 1/2</button>
       <div class="status" id="status">Idle</div>
@@ -72,6 +73,7 @@ app.innerHTML = `
 `;
 
 const startButton = mustQuery<HTMLButtonElement>("#start");
+const stopButton = mustQuery<HTMLButtonElement>("#stop");
 const reloadButton = mustQuery<HTMLButtonElement>("#reload");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
@@ -88,6 +90,7 @@ updateIrToggleLabel();
 let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 let sampleLoaded = false;
+let isStopped = false;
 
 function formatError(error: unknown): string {
   if (error instanceof Error) {
@@ -212,6 +215,7 @@ function buildGraph(rate: number): NodeRepr_t[] {
     blend: Number(blendSlider.value) / 100,
     leftIrPath,
     rightIrPath,
+    isStopped,
   });
 }
 
@@ -236,12 +240,13 @@ async function renderCurrentGraph() {
 
   const rate = Number(rateSlider.value);
   rateValue.textContent = `${rate.toFixed(2)}x`;
-  status.textContent = sampleLoaded ? "Playing sample" : "Loading sample";
+  status.textContent = isStopped ? "Audio stopped" : (sampleLoaded ? "Playing sample" : "Loading sample");
 
   await renderer.render(...buildGraph(rate));
 }
 
 startButton.addEventListener("click", async () => {
+  isStopped = false;
   startButton.disabled = true;
   status.textContent = "Starting audio...";
 
@@ -249,10 +254,32 @@ startButton.addEventListener("click", async () => {
     await ensureAudio();
     await audioContext?.resume();
     await renderCurrentGraph();
+    stopButton.disabled = false;
   } catch (error) {
     status.textContent = `Failed to start audio: ${formatError(error)}`;
     startButton.disabled = false;
   }
+});
+
+stopButton.addEventListener("click", async () => {
+  if (!renderer || !audioContext) return;
+
+  isStopped = true;
+  status.textContent = "Stopping audio...";
+  stopButton.disabled = true;
+
+  // Render silence with a short fade-out
+  await renderer.renderWithOptions(
+    { rootFadeInMs: 0, rootFadeOutMs: 100 },
+    ...[el.const({ value: 0 }), el.const({ value: 0 })]
+  );
+
+  // Give it a moment to fade out before suspending
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  await audioContext.suspend();
+
+  status.textContent = "Audio stopped";
+  startButton.disabled = false;
 });
 
 reloadButton.addEventListener("click", async () => {

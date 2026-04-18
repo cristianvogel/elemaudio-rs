@@ -15,7 +15,10 @@ const layout = `
     <h1>Synth + Extras</h1>
     <p>Demos a complex graph, mixing <code>el.＊</code> with <code>el.extra.＊</code> nodes. </p>
     <div class="controls">
-      <button id="start" class="start-button">Start audio</button>
+      <div class="button-row">
+        <button id="start" class="state-button">Start audio</button>
+        <button id="stop" class="state-button">Stop audio</button>
+      </div>
       <div class="row">
         <label for="frequency">
           <span>Synth Fc</span>
@@ -44,28 +47,28 @@ const layout = `
             <span>Delay</span>
             <span id="delay-time-value">250 ms</span>
           </label>
-          <input id="delay-time" type="range" min="10" max="1200" value="500" step="1" />
+          <input id="delay-time" type="range" min="10" max="1200" value="1200" step="1" />
         </div>
         <div class="dial">
           <label for="delay-feedback">
             <span>Feedback</span>
             <span id="delay-feedback-value">0%</span>
           </label>
-          <input id="delay-feedback" type="range" min="0" max="95" value="55" step="1" />
+          <input id="delay-feedback" type="range" min="0" max="95" value="80" step="1" />
         </div>
         <div class="dial">
           <label for="delay-transition">
             <span>Transition</span>
             <span id="delay-transition-value">20 ms</span>
           </label>
-          <input id="delay-transition" type="range" min="1" max="250" value="20" step="1" />
+          <input id="delay-transition" type="range" min="1" max="250" value="100" step="1" />
         </div>
         <div class="dial">
           <label for="delay-insert-cutoff">
             <span>FB Filter</span>
             <span id="delay-insert-cutoff-value">4000 Hz</span>
           </label>
-          <input id="delay-insert-cutoff" type="range" min="200" max="12000" value="650" step="1" />
+          <input id="delay-insert-cutoff" type="range" min="200" max="12000" value="1618" step="1" />
         </div>
         <div class="dial">
           <label for="delay-method">
@@ -151,8 +154,10 @@ let crunchCutValue: HTMLSpanElement;
 let crunchOutSlider: HTMLInputElement;
 let crunchOutValue: HTMLSpanElement;
 let crunchEnable: HTMLInputElement;
+let stopButton: HTMLButtonElement;
+let isStopped = false;
 
-const { mustQuery: q, wireControls } = initDemo({
+const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph: () => dspBuildGraph({
     frequency: Number(frequencySlider.value),
@@ -169,6 +174,7 @@ const { mustQuery: q, wireControls } = initDemo({
     delayTransitionMs: Number(delayTransitionSlider.value),
     delayInsertCutoff: Number(delayInsertCutoffSlider.value),
     bigLeapMode: (["linear", "step"] as const)[Number(delayMethodSlider.value)] as StrideDelayBigLeapMode,
+    isStopped,
   }),
   updateReadouts,
   renderOptions: { rootFadeInMs: 250, rootFadeOutMs: 250 },
@@ -200,12 +206,23 @@ crunchCutValue = q<HTMLSpanElement>("#crunch-cut-value");
 crunchOutSlider = q<HTMLInputElement>("#crunch-out");
 crunchOutValue = q<HTMLSpanElement>("#crunch-out-value");
 crunchEnable = q<HTMLInputElement>("#crunch-enable");
+stopButton = q<HTMLButtonElement>("#stop");
+
+const startButton = q<HTMLButtonElement>("#start");
+startButton.addEventListener("click", () => {
+  isStopped = false;
+});
 
 wireControls([
   frequencySlider, driveLimiterSlider, limiterEnable,
   delayTimeSlider, delayFeedbackSlider, delayTransitionSlider, delayInsertCutoffSlider, delayMethodSlider,
   crunchDriveSlider, crunchFuzzSlider, crunchToneSlider, crunchCutSlider, crunchOutSlider, crunchEnable,
 ]);
+
+stopButton.addEventListener("click", async () => {
+  isStopped = true;
+  await renderCurrentGraph();
+});
 
 function updateReadouts() {
   frequencyValue.textContent = `${Number(frequencySlider.value)} Hz`;

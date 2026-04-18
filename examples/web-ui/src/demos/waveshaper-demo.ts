@@ -28,7 +28,10 @@ const layout = `
     <h3>${DEMO_TITLE}</h3>
     <p>${DEMO_DESCRIPTION}</p>
     <div class="controls">
-      <button id="start" class="start-button">Start audio</button>
+      <div class="button-row">
+        <button id="start" class="state-button">Start audio</button>
+        <button id="stop" class="state-button">Stop audio</button>
+      </div>
 
       <div class="row toggle-row">
         <label class="toggle-label" for="source-select">
@@ -154,8 +157,10 @@ let sourceValue: HTMLSpanElement;
 let oscilloscope: any;
 let freezeButton: HTMLButtonElement;
 let zoomButton: HTMLButtonElement;
+let stopButton: HTMLButtonElement;
+let isStopped = false;
 
-const {mustQuery: q, wireControls} = initDemo({
+const {mustQuery: q, wireControls, renderCurrentGraph} = initDemo({
     layout,
     buildGraph: () => dspBuildGraph({
         source: sourceSelect.value as SourceMode,
@@ -167,7 +172,8 @@ const {mustQuery: q, wireControls} = initDemo({
         thresh: Number(threshSlider.value),
         amp: Number(ampSlider.value),
         mix: Number(mixSlider.value),
-        samplePath: sampleLoaded ? SAMPLE_VFS_PATH : undefined
+        samplePath: sampleLoaded ? SAMPLE_VFS_PATH : undefined,
+        isStopped,
     }),
     updateReadouts,
     onScopeEvent: (event: any) => {
@@ -215,8 +221,19 @@ sourceValue = q<HTMLSpanElement>("#source-value");
 oscilloscope = q<HTMLElement>("elemaudio-oscilloscope");
 freezeButton = q<HTMLButtonElement>("#freeze-scope");
 zoomButton = q<HTMLButtonElement>("#zoomButton");
+stopButton = q<HTMLButtonElement>("#stop");
+
+const startButton = q<HTMLButtonElement>("#start");
+startButton.addEventListener("click", () => {
+    isStopped = false;
+});
 
 wireControls([sourceSelect, freqSlider, cutOffSlider, slopeSlider, filterTypeSelect, driveSlider, threshSlider, ampSlider, mixSlider]);
+
+stopButton.addEventListener("click", async () => {
+    isStopped = true;
+    await renderCurrentGraph();
+});
 
 // Toggle freeze state on the oscilloscope
 freezeButton.addEventListener("click", () => {
