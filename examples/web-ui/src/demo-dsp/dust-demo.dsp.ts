@@ -78,22 +78,25 @@ function resonator(
 
     // Shape the exciter with a narrow bandpass at fc so energy lands near
     // the resonator's natural frequency.
-    const shaped = el.bandpass(
-        el.const({key: `bank:fc2:${tag}`, value: fc}),
-        el.const({value: 160}),
+    const rez = el.bandpass(
+        el.const({key: `bank:fc2:${tag}`, value: fc }),
+        el.const({value: 20}),
         exciter
     );
 
+
     // Max delay buffer sized for low fundamentals — 8192 samples handles
     // fc down to ~6 Hz at 48 kHz.
-    const rung = el.delay(
+    const buzz = el.delay(
         {key: `bank:dly:${tag}`, size: 8192},
         period,
         el.const({key: `bank:fb:${tag}`, value: fb}),
-        shaped
+        rez
     );
 
-    return el.mul(el.const({key: `bank:g:${tag}`, value: outGain}), rung);
+
+
+    return el.mul(el.const({key: `bank:g:${tag}`, value: outGain}), buzz );
 }
 
 /**
@@ -155,27 +158,33 @@ export function buildGraph(p: DustBankParams): NodeRepr_t[] {
         return [el.const({value: 0}), el.const({value: 0})];
     }
 
-    const exciter = el.extra.dust(
-        {key: "bank:exciter", seed: 7, bipolar: false, jitter: p.jitter},
+    const dust = el.extra.dust(
+        {key: "bank:dust", seed: 7, bipolar: true, jitter: p.jitter},
         el.const({key: "bank:density", value: p.density}),
         el.const({key: "bank:trails", value: p.trailsMs / 1000})
     );
 
-    const shapedNoise = el.select(exciter, el.noise({seed: 7}), el.mul(2, exciter));
+
+    const shapedNoise = el.mul( dust, el.pink( el.noise({seed: 7})));
 
     const [bankL, bankR] = buildBank(shapedNoise, p);
 
-    const preL = el.mul(el.const({key: "bank:gain:l", value: p.gain}), bankL);
-    const preR = el.mul(el.const({key: "bank:gain:r", value: p.gain}), bankR);
+    const preL = el.mul(el.const({key: "bank:gain:l", value: p.gain }), bankL);
+    const preR = el.mul(el.const({key: "bank:gain:r", value: p.gain }), bankR);
 
     // Output clipping flavour.
-    const [outL, outR] = p.clipMode === "limiter"
+    let [outL, outR] = p.clipMode === "limiter"
         ? el.extra.stereoLimiter(
-            {key: "bank:limiter", outputLimit: 0.95, attackMs: 1, holdMs: 0, releaseMs: 20},
+            {key: "bank:limiter", outputLimit: 0.95, attackMs: 0.1, holdMs: 0, releaseMs: 20},
             preL,
             preR
         )
         : [el.tanh(preL), el.tanh(preR)];
+
+    // final pinkify, makes for more natural sound
+
+    outL =  el.pink(outL);
+    outR =   el.pink(outR);
 
     // Scope the summed output without affecting the audio path.
     const scopeInsert = el.scope(

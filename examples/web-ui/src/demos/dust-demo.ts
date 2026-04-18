@@ -145,7 +145,7 @@ let isStopped = false;
 // Exponential density taper — slider 0..1000 maps to 0.25 Hz .. 500 Hz
 // log-linearly, so low-density values get much more resolution.
 const DENSITY_MIN_HZ = 0.25;
-const DENSITY_MAX_HZ = 500;
+const DENSITY_MAX_HZ = 1000;
 function densityFromSlider(v: number): number {
   const t = v / 1000;
   return DENSITY_MIN_HZ * Math.pow(DENSITY_MAX_HZ / DENSITY_MIN_HZ, t);
