@@ -1089,6 +1089,25 @@ export interface DustProps extends Record<string, unknown> {
  * - `release <= 0` → single-sample impulse (voice expires immediately).
  * - `density <= 0` → no new triggers, existing releases keep decaying.
  *
+ * ### Overlap handling (mode-specific)
+ *
+ * - **bipolar** — each new voice spawns at random ±1 amplitude. Signs
+ *   cancel on average, so the zero-mean sum stays small. A per-sample
+ *   gain `1 / sqrt(1 + density * release / ln(1000))` keeps RMS flat
+ *   across density/release sweeps, with a soft `tanh` safety net for
+ *   transient concurrent-spawn spikes. Output bounded in ±1.
+ *
+ * - **unipolar** — gap-filling spawn. When a new event fires while the
+ *   summed envelope is at level `d`, the new voice is born at amplitude
+ *   `(1 - d)` so the envelope jumps back to exactly 1.0 rather than
+ *   stacking on top. Output is naturally bounded in `[0, 1]` — no RMS
+ *   compensation, no tanh, full dynamic range preserved. Sonically this
+ *   is a probabilistically-retriggered exponential envelope whose decay
+ *   tail shortens as density rises.
+ *
+ * For the `release <= 0` impulse mode, voices expire on the next sample
+ * so there is no overlap to manage in either mode.
+ *
  * @param props   - see {@link DustProps}
  * @param density - impulses per second (Poisson rate, signal)
  * @param release - T60 decay time in seconds per impulse (signal, audio-rate)

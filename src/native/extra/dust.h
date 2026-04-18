@@ -32,13 +32,34 @@ namespace elem
     //
     // Behaviour:
     //   - Each sample: Bernoulli trial with probability density/sr
-    //   - On trigger: spawn a new voice in the pool with amplitude 1
-    //     (and random sign if bipolar)
     //   - Each voice decays exponentially: value *= coeff per sample,
     //     where coeff = exp(ln(0.001) / (release * sr))
     //   - Voices sum into the output
     //   - If all voices in the pool are busy, the new trigger is dropped
     //   - release <= 0 → single-sample impulse (voice expires next sample)
+    //
+    // Overlap handling (differs by mode):
+    //
+    //   bipolar mode — spawn-at-full-amplitude with random sign:
+    //     Each new voice is born at amplitude ±1 (random sign). Signs
+    //     cancel on average so the zero-mean sum stays small. A per-sample
+    //     compensation `amp_scale = 1 / sqrt(1 + density * release / ln(1000))`
+    //     keeps RMS flat as density/release sweep, with a soft `tanh`
+    //     safety net for concurrent-spawn transients.
+    //
+    //   unipolar mode — gap-filling spawn:
+    //     The instantaneous summed envelope is always in [0, 1]. When a
+    //     new event fires while the existing sum is at level `d`, the new
+    //     voice is born at amplitude `(1 - d)`, so the summed envelope
+    //     jumps back to exactly 1.0 (or stays at `d` if `d >= 1`, which
+    //     never happens by construction). No RMS compensation, no tanh —
+    //     the output is naturally bounded in [0, 1].
+    //
+    //     This is the right model for a Poisson event train with overlap:
+    //     a fresh trigger "refreshes" the envelope peak, it does not stack
+    //     on top of it. Sonically: dense unipolar dust reads as a
+    //     probabilistically-retriggered exponential envelope whose decay
+    //     tail shortens as density rises (classic gap statistics).
 
     template <typename FloatType>
     struct DustNode : public GraphNode<FloatType> {
@@ -127,33 +148,48 @@ namespace elem
                 activeCount = 0;
             }
 
-            // Cache decay coefficient per sample only when release changes
-            // meaningfully. Since release is a signal, recompute per sample;
-            // the cost is one exp() but only when an active voice exists.
+            // Compensation constant: only used in bipolar mode.
+            // 1 / ln(1000) — turns raw density*release into the expected
+            // sum level of a Poisson process with exp-decay envelopes.
+            static constexpr Sample LN_1000_INV = Sample(0.14476482730108395);
+
             for (size_t i = 0; i < numSamples; ++i) {
                 Sample density = densitySignal[i];
                 Sample release = releaseSignal[i];
 
-                // Trigger trial
+                // Trigger trial.
                 Sample triggerProb = density <= Sample(0)
                     ? Sample(0)
                     : std::min(Sample(1), density / sampleRate);
+                bool fire = triggerProb > Sample(0) && random01() < triggerProb;
 
-                if (triggerProb > Sample(0) && random01() < triggerProb) {
-                    spawnVoice(bipolar, jitter);
+                if (fire) {
+                    if (bipolar) {
+                        // Classic Dust2: spawn at full ±1 amplitude.
+                        spawnVoiceBipolar(jitter);
+                    } else {
+                        // Gap-filling: examine the current envelope level
+                        // (pre-decay, this sample), compute headroom, and
+                        // spawn a new voice filling just that gap to 1.0.
+                        Sample currentSum = Sample(0);
+                        for (size_t v = 0; v < MAX_VOICES; ++v) {
+                            currentSum += voices[v];
+                        }
+                        spawnVoiceGapFill(jitter, currentSum);
+                    }
                 }
 
-                // Accumulate all active voices, decay them
+                // Accumulate and decay all active voices.
                 Sample sum = Sample(0);
-                if (activeCount > 0) {
-                    Sample coeff = decayCoeff(release, sampleRate);
+                Sample coeff = decayCoeff(release, sampleRate);
 
+                if (activeCount > 0) {
                     for (size_t v = 0; v < MAX_VOICES; ++v) {
                         if (voices[v] != Sample(0)) {
                             sum += voices[v];
                             voices[v] *= coeff;
 
-                            // Expire very small voices
+                            // Expire very small voices (free the slot).
                             if (std::fabs(voices[v]) < Sample(1e-6)) {
                                 voices[v] = Sample(0);
                                 activeCount -= 1;
@@ -162,7 +198,22 @@ namespace elem
                     }
                 }
 
-                out[i] = sum;
+                // Output:
+                //   bipolar  — apply sqrt-RMS normalization + soft tanh
+                //              safety net (see class header).
+                //   unipolar — pass the sum straight through. By
+                //              construction the gap-filling spawn keeps
+                //              the sum in [0, 1], so no compression
+                //              needed and dynamic range is preserved.
+                if (bipolar) {
+                    Sample dr = density > Sample(0) && release > Sample(0)
+                        ? density * release * LN_1000_INV
+                        : Sample(0);
+                    Sample ampScale = Sample(1) / std::sqrt(Sample(1) + dr);
+                    out[i] = std::tanh(sum * ampScale);
+                } else {
+                    out[i] = sum;
+                }
             }
 
             for (size_t c = 1; c < numOuts; ++c) {
@@ -171,24 +222,63 @@ namespace elem
         }
 
     private:
-        void spawnVoice(bool bipolar, Sample jitter)
+        // Jitter map: (1 - jitter) + jitter * rand01
+        //   jitter=0 → amp=1 (all impulses at full amplitude)
+        //   jitter=1 → amp ∈ [0, 1] uniform
+        // Floor 1e-4 guards against exact-zero amplitudes which would
+        // otherwise look like free voice slots and break slot accounting.
+        inline Sample jitteredUnitAmp(Sample jitter)
         {
-            // Find a free voice slot. If none free, drop the trigger.
+            Sample amp = Sample(1) - jitter + jitter * random01();
+            if (amp < Sample(1e-4)) amp = Sample(1e-4);
+            return amp;
+        }
+
+        // Spawn a new voice in bipolar mode at full ±1 amplitude.
+        // Random sign so signs cancel on average in the summed output.
+        void spawnVoiceBipolar(Sample jitter)
+        {
             if (activeCount >= MAX_VOICES) return;
 
             for (size_t v = 0; v < MAX_VOICES; ++v) {
                 if (voices[v] == Sample(0)) {
-                    // Amplitude scale: (1 - jitter) + jitter * rand01
-                    // At jitter=0 → amp=1. At jitter=1 → amp ∈ [0,1] uniform.
-                    Sample amp = Sample(1) - jitter + jitter * random01();
-                    // Guard against exact zero — voices[v] == 0 marks a
-                    // free slot. A floor of 1e-4 is inaudible but keeps
-                    // slot accounting correct.
-                    if (amp < Sample(1e-4)) amp = Sample(1e-4);
+                    Sample amp = jitteredUnitAmp(jitter);
+                    amp *= (fastRand() & 1) ? Sample(1) : Sample(-1);
+                    voices[v] = amp;
+                    activeCount += 1;
+                    return;
+                }
+            }
+        }
 
-                    if (bipolar) {
-                        amp *= (fastRand() & 1) ? Sample(1) : Sample(-1);
-                    }
+        // Spawn a new voice in unipolar mode using the "gap fill" rule.
+        //
+        // If the summed envelope is currently at level `currentSum`, the
+        // new voice starts at amplitude `(1 - currentSum)` — just enough
+        // to lift the total to exactly 1.0. The result:
+        //   * Total envelope is bounded in [0, 1] by construction.
+        //   * Each event refreshes the peak instead of stacking.
+        //   * No RMS compensation or tanh squash needed.
+        //
+        // The jitter prop applies to the gap fill, so jitter=1 maps to
+        // "fire anywhere in [0, gap]" and jitter=0 maps to "always close
+        // the gap to 1.0".
+        void spawnVoiceGapFill(Sample jitter, Sample currentSum)
+        {
+            if (activeCount >= MAX_VOICES) return;
+
+            Sample gap = Sample(1) - currentSum;
+            if (gap <= Sample(1e-4)) {
+                // Envelope already at (or past) peak; drop the trigger.
+                return;
+            }
+
+            // Amplitude in [0, gap], with jitter controlling variance.
+            Sample amp = jitteredUnitAmp(jitter) * gap;
+            if (amp < Sample(1e-4)) amp = Sample(1e-4);
+
+            for (size_t v = 0; v < MAX_VOICES; ++v) {
+                if (voices[v] == Sample(0)) {
                     voices[v] = amp;
                     activeCount += 1;
                     return;

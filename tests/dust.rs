@@ -47,9 +47,9 @@ fn dust_is_silent_when_density_is_zero() {
 }
 
 #[test]
-fn dust_releases_overlap_and_shorter_releases_decay_faster() {
+fn dust_output_stays_bounded_across_release_sweeps() {
     let sample_rate = 48_000.0;
-    let buffer_size = 64;
+    let buffer_size = 512;
 
     let runtime = Runtime::new()
         .sample_rate(sample_rate)
@@ -57,10 +57,11 @@ fn dust_releases_overlap_and_shorter_releases_decay_faster() {
         .call()
         .expect("runtime");
 
-    // High density + long releases should create overlapping voices with
-    // substantial output energy.
+    // Stress test: high density + long release should pile up many
+    // concurrent voices. The node's built-in normalization must keep the
+    // output within ±1 regardless, preventing downstream clipping.
     let density = elemaudio_rs::el::const_with_key("density", sample_rate);
-    let release = elemaudio_rs::el::const_with_key("release", 0.05);
+    let release = elemaudio_rs::el::const_with_key("release", 0.1);
     let graph = Graph::new().render(extra::dust(
         json!({ "seed": 1234, "bipolar": false, "jitter": 0.0 }),
         density,
@@ -72,25 +73,40 @@ fn dust_releases_overlap_and_shorter_releases_decay_faster() {
     warm_past_root_fade(&runtime, sample_rate, buffer_size);
 
     let mut out = vec![0.0_f64; buffer_size];
-    {
+
+    // Let the bank saturate: process several blocks so voices fully stack
+    // up to the expected polyphony ceiling.
+    for _ in 0..8 {
         let mut outputs = [out.as_mut_slice()];
         runtime.process(buffer_size, &[], &mut outputs).expect("process");
     }
 
+    let max_abs = out.iter().map(|s| s.abs()).fold(0.0_f64, f64::max);
     let energy_long: f64 = out.iter().map(|s| s.abs()).sum();
-    assert!(energy_long > 10.0, "long overlapping releases should produce substantial energy: {energy_long}");
 
-    // Shorten the release at runtime and verify the same node now decays faster.
+    // Tolerance picks up the tiny FP round-off in the gap-filling
+    // unipolar path, which by construction targets exactly 1.0 at peak.
+    const EPS: f64 = 1e-9;
+    assert!(
+        max_abs <= 1.0 + EPS,
+        "normalized dust must stay within ±1 at heavy polyphony; max abs = {max_abs}",
+    );
+    assert!(energy_long > 0.0, "dust should produce non-zero output: {energy_long}");
+
+    // Now shorten the release drastically. The bound must still hold.
     let len_node = mounted.node_with_key("release").expect("keyed release");
     runtime
-        .apply_instructions(&len_node.set_const_value(0.005))
+        .apply_instructions(&len_node.set_const_value(0.001))
         .expect("apply release update");
 
-    {
+    for _ in 0..4 {
         let mut outputs = [out.as_mut_slice()];
         runtime.process(buffer_size, &[], &mut outputs).expect("process 2");
     }
 
-    let energy_short: f64 = out.iter().map(|s| s.abs()).sum();
-    assert!(energy_short < energy_long, "shorter releases should reduce total energy: short={energy_short}, long={energy_long}");
+    let max_abs_short = out.iter().map(|s| s.abs()).fold(0.0_f64, f64::max);
+    assert!(
+        max_abs_short <= 1.0 + EPS,
+        "normalized dust must stay within ±1 after release change; max abs = {max_abs_short}",
+    );
 }

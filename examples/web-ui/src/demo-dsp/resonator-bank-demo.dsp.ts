@@ -300,7 +300,7 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
   } else {
     // Dust path for A/B comparison against the hammer.
     exciter = el.extra.dust(
-      { key: "rb:dust", seed: 7, bipolar: true, jitter: p.dustJitter },
+      { key: "rb:dust", seed: 7, bipolar: false, jitter: p.dustJitter },
       el.const({ key: "rb:dustDensity", value: p.dustDensity }),
       el.const({ key: "rb:dustRelease", value: p.dustReleaseMs / 1000 }),
     );
@@ -309,7 +309,7 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
   // --- Build bank ---------------------------------------------------
   const bank = resonatorBankReference(
     { modes: p.modes, key: "rb" },
-    el.const({ key: "rb:f0", value: p.f0 }),
+    el.sm(el.const({ key: "rb:f0", value: p.f0 })),
     el.const({ key: "rb:inharm", value: p.inharmonicity }),
     el.const({ key: "rb:strikePos", value: p.strikePos }),
     el.const({ key: "rb:brightness", value: p.brightness }),
