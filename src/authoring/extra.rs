@@ -1337,6 +1337,30 @@ pub fn frame_smooth(
     )
 }
 
+/// WireFrames-style bidirectional frame-domain smoother with separate attack
+/// and release times plus per-track frame shapers for both directions.
+pub fn frame_bidi_smooth(
+    props: serde_json::Value,
+    attack_time: impl Into<ElemNode>,
+    release_time: impl Into<ElemNode>,
+    attack_frame_shaper: impl Into<ElemNode>,
+    release_frame_shaper: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_bidi_smooth");
+    Node::new(
+        "frameBiDiSmooth",
+        props,
+        vec![
+            resolve(attack_time),
+            resolve(release_time),
+            resolve(attack_frame_shaper),
+            resolve(release_frame_shaper),
+            resolve(x),
+        ],
+    )
+}
+
 /// WireFrames-style RAM writer for a live mono frame stream.
 ///
 /// Captures one full frame from `x` and writes the completed frame into a

@@ -1040,6 +1040,14 @@ export interface FrameSmoothProps extends Record<string, unknown> {
   framelength: number;
 }
 
+/** Props for `el.extra.frameBiDiSmooth(...)`. */
+export interface FrameBiDiSmoothProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
 /** Props for `el.extra.frameWriteRAM(...)`. */
 export interface FrameWriteRAMProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
@@ -1166,6 +1174,28 @@ export function frameSmooth(
   return createNode("frameSmooth", props, [
     resolve(timeConstant),
     resolve(timeConstantFrameShaper),
+    resolve(x),
+  ]);
+}
+
+/**
+ * WireFrames-style bidirectional frame-domain smoother with separate attack
+ * and release times plus independent per-track shapers for both directions.
+ */
+export function frameBiDiSmooth(
+  props: FrameBiDiSmoothProps,
+  attackTime: ElemNode,
+  releaseTime: ElemNode,
+  attackFrameShaper: ElemNode,
+  releaseFrameShaper: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameBiDiSmooth", props.framelength);
+  return createNode("frameBiDiSmooth", props, [
+    resolve(attackTime),
+    resolve(releaseTime),
+    resolve(attackFrameShaper),
+    resolve(releaseFrameShaper),
     resolve(x),
   ]);
 }

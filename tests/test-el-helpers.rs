@@ -965,6 +965,21 @@ fn covers_extra_helpers() {
         3,
     );
 
+    let frame_bidi_smooth_node = extra::frame_bidi_smooth(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.1)),
+        ElemNode::from(node(0.2)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &frame_bidi_smooth_node,
+        "frameBiDiSmooth",
+        serde_json::json!({"framelength": 128}),
+        5,
+    );
+
     let frame_write_ram_node = extra::frame_write_ram(
         serde_json::json!({"framelength": 128, "path": "wf/ram/demo"}),
         ElemNode::from(node(0.0)),

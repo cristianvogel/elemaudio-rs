@@ -11,6 +11,7 @@
 //   "frameDelay"   — FrameDelayNode
 //   "framePhasor"  — FramePhasorNode
 //   "frameShaper"  — FrameShaperNode
+//   "frameBiDiSmooth" — FrameBiDiSmoothNode
 //   "frameSmooth"  — FrameSmoothNode
 //   "frameWriteRAM" — FrameWriteRAMNode
 //   "frameRandomWalks" — FrameRandomWalksNode
@@ -40,6 +41,7 @@
 #include "../../../../native/extra/frame_delay.h"
 #include "../../../../native/extra/frame_phasor.h"
 #include "../../../../native/extra/frame_shaper.h"
+#include "../../../../native/extra/frame_bidi_smooth.h"
 #include "../../../../native/extra/frame_smooth.h"
 #include "../../../../native/extra/frame_write_ram.h"
 #include "../../../../native/extra/frame_random_walks.h"
@@ -132,6 +134,10 @@ public:
 
         runtime->registerNodeType("frameShaper", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameShaperNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameBiDiSmooth", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameBiDiSmoothNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("frameSmooth", [](elem::NodeId const id, double fs, int const bs) {

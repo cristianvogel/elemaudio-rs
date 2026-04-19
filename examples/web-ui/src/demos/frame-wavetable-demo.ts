@@ -37,18 +37,38 @@ const layout = `
       The <code>modulate</code> control fades in a bounded <code>frameRandomWalks</code> layer that gets added
       into the wavetable before RAM write.
     </p>
+    <p>
+      <code>Smooth</code> sets the global frame lag, while <code>Smooth Shape</code> distributes that lag across
+      the wavetable tracks.
+    </p>
+    <p>
+      Use the A/B switch to compare the symmetric <code>frameSmooth</code> path against a more musical
+      <code>frameBiDiSmooth</code> path with faster attack and slower release.
+    </p>
+    <div class="status" style="color: hotpink; margin-bottom: 12px; background: linear-gradient(135deg, rgba(176, 10, 234, 0.06), rgba(250, 155, 72, 0.18)); border-color: rgba(250, 155, 72, 0.22);">
+      Move the <strong>Wave</strong> fader first to bring the wavetable shape into view and sound.
+    </div>
     <div class="controls">
       <div class="button-row">
         <button id="start" class="state-button">Start</button>
         <button id="stop" class="state-button">Stop</button>
       </div>
       <div class="dial-strip">
+        <div class="toggle-row">
+          <label class="toggle-label" for="bidi-smooth">
+            <input id="bidi-smooth" class="toggle-input" type="checkbox" />
+            <span>A/B: BiDiSmooth</span>
+          </label>
+        </div>
+      </div>
+      <div class="dial-strip">
         <div class="dial"><label for="frequency"><span>Frequency</span><span id="frequency-value">110.0 Hz</span></label><input id="frequency" type="range" min="20" max="880" value="110" step="1" /></div>
         <div class="dial"><label for="level"><span>Level</span><span id="level-value">0.15</span></label><input id="level" type="range" min="0" max="0.5" value="0.15" step="0.01" /></div>
         <div class="dial"><label for="smooth"><span>Smooth</span><span id="smooth-value">0.00 s</span></label><input id="smooth" type="range" min="0" max="30" value="0" step="0.1" /></div>
-        <div class="dial"><label for="wave"><span>Wave</span><span id="wave-value">1.00</span></label><input id="wave" type="range" min="-1" max="1" value="0" step="0.01" /></div>
+        <div class="dial"><label for="smooth-shape"><span>Smooth Shape</span><span id="smooth-shape-value">0.35</span></label><input id="smooth-shape" type="range" min="-1" max="1" value="0.35" step="0.01" /></div>
       </div>
       <div class="dial-strip">
+        <div class="dial"><label for="wave"><span>Wave</span><span id="wave-value">1.00</span></label><input id="wave" type="range" min="-1" max="1" value="0" step="0.01" /></div>
         <div class="dial"><label for="scale"><span>Scale</span><span id="scale-value">1.00</span></label><input id="scale" type="range" min="-1" max="1" value="1" step="0.01" /></div>
         <div class="dial"><label for="tilt"><span>Tilt</span><span id="tilt-value">0.00</span></label><input id="tilt" type="range" min="-1" max="1" value="0" step="0.01" /></div>
         <div class="dial"><label for="zoom"><span>Zoom</span><span id="zoom-value">x1.00</span></label><input id="zoom" type="range" min="0.10" max="8" value="1" step="0.01" /></div>
@@ -68,6 +88,9 @@ let levelSlider: HTMLInputElement;
 let levelValue: HTMLSpanElement;
 let smoothSlider: HTMLInputElement;
 let smoothValue: HTMLSpanElement;
+let smoothShapeSlider: HTMLInputElement;
+let smoothShapeValue: HTMLSpanElement;
+let bidiSmoothToggle: HTMLInputElement;
 let waveSlider: HTMLInputElement;
 let waveValue: HTMLSpanElement;
 let scaleSlider: HTMLInputElement;
@@ -93,6 +116,8 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
     frequency: Number(frequencySlider.value),
     level: Number(levelSlider.value),
     smooth: Number(smoothSlider.value),
+    smoothShape: Number(smoothShapeSlider.value),
+    bidiSmooth: bidiSmoothToggle.checked,
     wave: Number(waveSlider.value),
     scale: Number(scaleSlider.value),
     tilt: Number(tiltSlider.value),
@@ -113,6 +138,9 @@ levelSlider = q<HTMLInputElement>("#level");
 levelValue = q<HTMLSpanElement>("#level-value");
 smoothSlider = q<HTMLInputElement>("#smooth");
 smoothValue = q<HTMLSpanElement>("#smooth-value");
+smoothShapeSlider = q<HTMLInputElement>("#smooth-shape");
+smoothShapeValue = q<HTMLSpanElement>("#smooth-shape-value");
+bidiSmoothToggle = q<HTMLInputElement>("#bidi-smooth");
 waveSlider = q<HTMLInputElement>("#wave");
 waveValue = q<HTMLSpanElement>("#wave-value");
 scaleSlider = q<HTMLInputElement>("#scale");
@@ -144,6 +172,8 @@ wireControls([
   frequencySlider,
   levelSlider,
   smoothSlider,
+  smoothShapeSlider,
+  bidiSmoothToggle,
   waveSlider,
   scaleSlider,
   tiltSlider,
@@ -178,7 +208,8 @@ function onScopeEvent(event: unknown) {
 function updateReadouts() {
   frequencyValue.textContent = `${Number(frequencySlider.value).toFixed(1)} Hz`;
   levelValue.textContent = Number(levelSlider.value).toFixed(2);
-  smoothValue.textContent = `${Number(smoothSlider.value).toFixed(3)} s`;
+  smoothValue.textContent = `${Number(smoothSlider.value).toFixed(2)} s`;
+  smoothShapeValue.textContent = Number(smoothShapeSlider.value).toFixed(2);
   waveValue.textContent = Number(waveSlider.value).toFixed(2);
   scaleValue.textContent = Number(scaleSlider.value).toFixed(2);
   tiltValue.textContent = Number(tiltSlider.value).toFixed(2);
