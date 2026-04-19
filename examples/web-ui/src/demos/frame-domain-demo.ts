@@ -1,7 +1,9 @@
 import WebRenderer from "../WebRenderer";
+import "../components/Oscilloscope";
 import "../style.css";
 import {
   buildGraph as dspBuildGraph,
+  FRAME_SCOPE_EVENT,
   FRAME_LENGTH,
   PULSE_EVENT,
   X_EVENT,
@@ -11,12 +13,20 @@ import { initDemo } from "./demo-harness";
 
 const layout = `
   <div class="frame-stage-wrap">
-    <div class="frame-stage-label">Frame Domain Programming · frameLength ${FRAME_LENGTH}</div>
-    <div id="frame-stage" class="frame-stage">
-      <div id="frame-grid" class="frame-grid"></div>
-      <div id="frame-ring" class="frame-ring"></div>
-      <div id="frame-orb" class="frame-orb"></div>
-      <div id="frame-diamond" class="frame-diamond"></div>
+    <div class="frame-stage-label">Frame Domain Programming</div>
+    <div class="frame-visual-row">
+      <div class="frame-visual-card">
+        <div id="frame-stage" class="frame-stage">
+          <div id="frame-grid" class="frame-grid"></div>
+          <div id="frame-ring" class="frame-ring"></div>
+          <div id="frame-orb" class="frame-orb"></div>
+          <div id="frame-diamond" class="frame-diamond"></div>
+        </div>
+      </div>
+      <div class="frame-visual-card frame-scope-card">
+        <div class="scope-title">Frame Scope · frameLength ${FRAME_LENGTH}</div>
+        <elemaudio-oscilloscope id="frame-scope" mode="replace" zoom="1" color="#7dd3fc"></elemaudio-oscilloscope>
+      </div>
     </div>
   </div>
   <div class="panel">
@@ -39,8 +49,12 @@ const layout = `
 
       <div class="dial-strip">
         <div class="dial">
-          <label for="shift"><span>Shift</span><span id="shift-value">0.00</span></label>
-          <input id="shift" type="range" min="-1" max="1" value="0" step="0.01" />
+          <label for="offset"><span>Offset</span><span id="offset-value">0.00</span></label>
+          <input id="offset" type="range" min="-1" max="1" value="0" step="0.01" />
+        </div>
+        <div class="dial">
+          <label for="shift"><span>Shift</span><span id="shift-value">0</span></label>
+          <input id="shift" type="range" min="0" max="255" value="0" step="1" />
         </div>
         <div class="dial">
           <label for="tilt"><span>Tilt</span><span id="tilt-value">0.00</span></label>
@@ -48,7 +62,7 @@ const layout = `
         </div>
         <div class="dial">
           <label for="scale"><span>Scale</span><span id="scale-value">1.00</span></label>
-          <input id="scale" type="range" min="0" max="1" value="1" step="0.01" />
+          <input id="scale" type="range" min="-1" max="1" value="1" step="0.01" />
         </div>
       </div>
 
@@ -86,6 +100,8 @@ type FrameState = {
 
 const frameState: FrameState = { x: 0, y: 0, pulse: 0 };
 
+let offsetSlider: HTMLInputElement;
+let offsetValue: HTMLSpanElement;
 let shiftSlider: HTMLInputElement;
 let shiftValue: HTMLSpanElement;
 let tiltSlider: HTMLInputElement;
@@ -102,6 +118,7 @@ let xEventValue: HTMLSpanElement;
 let yEventValue: HTMLSpanElement;
 let pulseEventValue: HTMLSpanElement;
 let frameStage: HTMLDivElement;
+let frameScope: HTMLElement;
 let stopButton: HTMLButtonElement;
 let isStopped = false;
 
@@ -109,6 +126,7 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
   buildGraph: () =>
     dspBuildGraph({
+      offset: Number(offsetSlider.value) ,
       shift: Number(shiftSlider.value),
       tilt: Number(tiltSlider.value),
       scale: Number(scaleSlider.value),
@@ -120,9 +138,12 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   updateReadouts,
   onAudioReady: (renderer: WebRenderer) => {
     renderer.on("frameValue", onFrameValueEvent);
+    renderer.on("scope", onScopeEvent);
   },
 });
 
+offsetSlider = q<HTMLInputElement>("#offset");
+offsetValue = q<HTMLSpanElement>("#offset-value");
 shiftSlider = q<HTMLInputElement>("#shift");
 shiftValue = q<HTMLSpanElement>("#shift-value");
 tiltSlider = q<HTMLInputElement>("#tilt");
@@ -141,6 +162,7 @@ xEventValue = q<HTMLSpanElement>("#x-event-value");
 yEventValue = q<HTMLSpanElement>("#y-event-value");
 pulseEventValue = q<HTMLSpanElement>("#pulse-event-value");
 frameStage = q<HTMLDivElement>("#frame-stage");
+frameScope = q<HTMLElement>("#frame-scope");
 stopButton = q<HTMLButtonElement>("#stop");
 
 const startButton = q<HTMLButtonElement>("#start");
@@ -155,6 +177,7 @@ stopButton.addEventListener("click", async () => {
 });
 
 wireControls([
+  offsetSlider,
   shiftSlider,
   tiltSlider,
   scaleSlider,
@@ -171,6 +194,11 @@ type FrameValuePayload = {
   data?: number;
 };
 
+type ScopePayload = {
+  source?: string;
+  data?: number[][];
+};
+
 function onFrameValueEvent(event: unknown) {
   const payload = event as FrameValuePayload;
   if (!payload?.source || typeof payload.data !== "number") {
@@ -178,17 +206,35 @@ function onFrameValueEvent(event: unknown) {
   }
 
   if (payload.source === X_EVENT) {
-    setFrameState({ ...frameState, x: clamp01(payload.data) });
+    setFrameState({ ...frameState, x: (payload.data) });
     return;
   }
 
   if (payload.source === Y_EVENT) {
-    setFrameState({ ...frameState, y: clamp01(payload.data) });
+    setFrameState({ ...frameState, y: (payload.data) });
     return;
   }
 
   if (payload.source === PULSE_EVENT) {
-    setFrameState({ ...frameState, pulse: clamp01(payload.data) });
+    setFrameState({ ...frameState, pulse: (payload.data) });
+  }
+}
+
+function onScopeEvent(event: unknown) {
+  const payload = event as ScopePayload;
+  if (payload?.source !== FRAME_SCOPE_EVENT || !Array.isArray(payload.data)) {
+    return;
+  }
+
+  const channel = payload.data[0];
+  if (!Array.isArray(channel) || channel.length === 0) {
+    return;
+  }
+
+  try {
+    (frameScope as { data?: number[] }).data = channel.slice();
+  } catch {
+    // Swallow transient failures while the custom element is still connecting.
   }
 }
 
@@ -207,7 +253,8 @@ function setFrameState(next: FrameState) {
 }
 
 function updateReadouts() {
-  shiftValue.textContent = Number(shiftSlider.value).toFixed(2);
+  offsetValue.textContent = Number(offsetSlider.value).toFixed(2);
+  shiftValue.textContent = shiftSlider.value;
   tiltValue.textContent = Number(tiltSlider.value).toFixed(2);
   scaleValue.textContent = Number(scaleSlider.value).toFixed(2);
   xIndexValue.textContent = xIndexSlider.value;

@@ -34,8 +34,11 @@ fn assert_close(actual: f64, expected: f64, context: &str) {
 }
 
 fn mount_frame_phasor(runtime: &Runtime, frame_length: usize) {
+    // offset=0 (no vertical DC), shift=0 (no horizontal rotation),
+    // tilt=0 (linear), scale=1 (unit amplitude).
     let graph = Graph::new().render(extra::frame_phasor(
         json!({ "framelength": frame_length }),
+        0.0,
         0.0,
         0.0,
         1.0,
@@ -132,16 +135,168 @@ fn frame_phasor_restarts_from_zero_after_reset_and_time_reset() {
 }
 
 #[test]
-fn frame_phasor_latches_shift_only_at_frame_boundaries() {
+fn frame_phasor_offset_shifts_vertically_and_hard_clips_bipolar() {
+    // `offset` is a vertical DC offset applied AFTER the tilted/scaled phase,
+    // then hard-clipped to [-1, 1]. Negative offsets push the ramp into the
+    // negative half before clipping; they must not collapse to 0.
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let frame_length = 4_usize;
+    let runtime = build_runtime(sample_rate, buffer_size);
+
+    // offset = -0.5, shift = 0, tilt = 0 (linear), scale = 1
+    let graph = Graph::new().render(extra::frame_phasor(
+        json!({ "framelength": frame_length }),
+        -0.5,
+        0.0,
+        0.0,
+        1.0,
+    ));
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+    runtime.reset();
+    runtime.set_current_time_samples(0);
+
+    let mut block = vec![0.0_f64; frame_length];
+    let mut outputs = [block.as_mut_slice()];
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
+
+    // basePhase = {0, 0.25, 0.5, 0.75}; offset = -0.5 => {-0.5, -0.25, 0, 0.25}.
+    // Stays fully inside [-1, 1], no clipping expected here.
+    let expected = [-0.5, -0.25, 0.0, 0.25];
+    for (i, &sample) in block.iter().enumerate() {
+        assert_close(sample, expected[i], &format!("offset=-0.5 sample {i}"));
+    }
+}
+
+#[test]
+fn frame_phasor_offset_hard_clips_at_negative_one_and_positive_one() {
+    // Out-of-range DC offsets must be hard-clipped, not wrapped.
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let frame_length = 4_usize;
+    let runtime = build_runtime(sample_rate, buffer_size);
+
+    // offset = -2 => entire frame clipped to -1.
+    let graph = Graph::new().render(extra::frame_phasor(
+        json!({ "framelength": frame_length }),
+        -2.0,
+        0.0,
+        0.0,
+        1.0,
+    ));
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+    runtime.reset();
+    runtime.set_current_time_samples(0);
+
+    let mut block = vec![0.0_f64; frame_length];
+    let mut outputs = [block.as_mut_slice()];
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
+
+    for (i, &sample) in block.iter().enumerate() {
+        assert_close(sample, -1.0, &format!("offset=-2 clip sample {i}"));
+    }
+}
+
+#[test]
+fn frame_phasor_scale_is_bipolar_and_inverts_phasor_vertically() {
+    // Negative `scale` must mirror the phasor vertically (not collapse to 0).
+    // With offset=0, scale=-1, tilt=0: basePhase {0, 0.25, 0.5, 0.75} ->
+    // scaled = -1 * basePhase = {0, -0.25, -0.5, -0.75}.
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let frame_length = 4_usize;
+    let runtime = build_runtime(sample_rate, buffer_size);
+
+    let graph = Graph::new().render(extra::frame_phasor(
+        json!({ "framelength": frame_length }),
+        0.0,  // offset
+        0.0,  // shift
+        0.0,  // tilt
+        -1.0, // scale (bipolar, inverts)
+    ));
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+    runtime.reset();
+    runtime.set_current_time_samples(0);
+
+    let mut block = vec![0.0_f64; frame_length];
+    let mut outputs = [block.as_mut_slice()];
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
+
+    let expected = [0.0, -0.25, -0.5, -0.75];
+    for (i, &sample) in block.iter().enumerate() {
+        assert_close(sample, expected[i], &format!("scale=-1 sample {i}"));
+    }
+}
+
+#[test]
+fn frame_phasor_scale_hard_clips_at_bipolar_extremes() {
+    // Out-of-range scale pushes the ramp past [-1, 1]; output must hard clip,
+    // not collapse or wrap.
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let frame_length = 4_usize;
+    let runtime = build_runtime(sample_rate, buffer_size);
+
+    // scale = -4 with basePhase {0, 0.25, 0.5, 0.75} => raw = {0, -1, -2, -3}.
+    // After clamp to [-1, 1]: {0, -1, -1, -1}.
+    let graph = Graph::new().render(extra::frame_phasor(
+        json!({ "framelength": frame_length }),
+        0.0,
+        0.0,
+        0.0,
+        -4.0,
+    ));
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+    runtime.reset();
+    runtime.set_current_time_samples(0);
+
+    let mut block = vec![0.0_f64; frame_length];
+    let mut outputs = [block.as_mut_slice()];
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
+
+    let expected = [0.0, -1.0, -1.0, -1.0];
+    for (i, &sample) in block.iter().enumerate() {
+        assert_close(sample, expected[i], &format!("scale=-4 clip sample {i}"));
+    }
+}
+
+#[test]
+fn frame_phasor_shift_rotates_horizontally_and_latches_per_frame() {
+    // `shift` is an integer sample rotation inside the frame, latched on
+    // frame boundaries. A mid-frame change must only take effect at the next
+    // frame start.
     let sample_rate = 48_000.0;
     let buffer_size = 64;
     let frame_length = 8_usize;
     let runtime = build_runtime(sample_rate, buffer_size);
 
+    // Set shift = 4 from sample 2 onwards. First frame was latched at t=0 with
+    // shift=0, so it must remain an unshifted ramp. Second frame latches shift=4.
     let absolute_samples = el::time();
-    let shift = el::select(el::ge(absolute_samples, 2.0), 0.5, 0.0);
+    let shift = el::select(el::ge(absolute_samples, 2.0), 4.0, 0.0);
     let graph = Graph::new().render(extra::frame_phasor(
         json!({ "framelength": frame_length }),
+        0.0,
         shift,
         0.0,
         1.0,
@@ -157,14 +312,16 @@ fn frame_phasor_latches_shift_only_at_frame_boundaries() {
     let mut outputs = [block.as_mut_slice()];
     runtime.process(16, &[], &mut outputs).expect("process");
 
+    // First frame: no horizontal shift.
     for (i, &sample) in block.iter().enumerate().take(frame_length) {
         let expected = i as f64 / frame_length as f64;
         assert_close(sample, expected, &format!("first frame sample {i}"));
     }
 
+    // Second frame: shift=4 rotates the ramp so sample 0 reads basePhase 4/8.
     for (i, &sample) in block.iter().enumerate().skip(frame_length) {
         let frame_pos = i - frame_length;
-        let expected = ((frame_pos as f64 / frame_length as f64) + 0.5).fract();
+        let expected = ((frame_pos + 4) % frame_length) as f64 / frame_length as f64;
         assert_close(sample, expected, &format!("second frame sample {i}"));
     }
 }

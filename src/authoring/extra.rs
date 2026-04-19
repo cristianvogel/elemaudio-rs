@@ -1200,18 +1200,59 @@ pub fn frameclock(period: usize) -> Node {
     )
 }
 
+/// Frame-synchronised integer delay line whose delay unit is whole frames.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `maxframes`: maximum supported delay in frames
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `delay_frames`: integer delay time in frames, sampled only at frame boundaries
+/// - `x`: input signal to delay
+pub fn frame_delay(
+    props: serde_json::Value,
+    delay_frames: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    Node::new("frameDelay", props, vec![resolve(delay_frames), resolve(x)])
+}
+
+/// Frame-synchronised scope that emits one exact frame of samples per event.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `name`: event source identifier
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - one or more signals to capture in lockstep across each frame
+pub fn frame_scope<T>(props: serde_json::Value, args: impl IntoIterator<Item = T>) -> Node
+where
+    T: Into<ElemNode>,
+{
+    Node::new(
+        "frameScope",
+        props,
+        args.into_iter().map(resolve).collect(),
+    )
+}
+
 /// Absolute-sample-aligned frame phasor with frame-latched shaping controls.
 ///
 /// Props:
 /// - `framelength`: positive integer frame size in samples
 /// - `key`: optional authoring key
 ///
-/// Inputs:
-/// - `shift`: wrapped phase offset, sampled only at frame boundaries
-/// - `tilt`: bipolar phase warp amount, sampled only at frame boundaries
-/// - `scale`: post-warp phase scale, sampled only at frame boundaries
+/// Inputs (all latched on frame boundaries):
+/// - `offset`: vertical DC offset added after tilt/scale; hard-clipped bipolar result
+/// - `shift`: horizontal phase rotation in integer samples, wrapped into the frame
+/// - `tilt`: bipolar phase warp amount
+/// - `scale`: bipolar vertical amplitude scale applied to the tilted phase;
+///   negative values mirror the phasor vertically; final output hard-clipped to [-1, 1]
 pub fn frame_phasor(
     props: serde_json::Value,
+    offset: impl Into<ElemNode>,
     shift: impl Into<ElemNode>,
     tilt: impl Into<ElemNode>,
     scale: impl Into<ElemNode>,
@@ -1219,7 +1260,7 @@ pub fn frame_phasor(
     Node::new(
         "framePhasor",
         props,
-        vec![resolve(shift), resolve(tilt), resolve(scale)],
+        vec![resolve(offset), resolve(shift), resolve(tilt), resolve(scale)],
     )
 }
 

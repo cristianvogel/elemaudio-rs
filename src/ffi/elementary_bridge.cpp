@@ -12,7 +12,9 @@
 #include <extra/crunch.h>
 #include <extra/boxsum.h>
 #include <extra/frame_clock.h>
+#include <extra/frame_delay.h>
 #include <extra/frame_phasor.h>
+#include <extra/frame_scope.h>
 #include <extra/frame_value.h>
 #include <extra/freqshift.h>
 #include <extra/limiter.h>
@@ -74,6 +76,14 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("frameclock", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDelayNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameScope", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameScopeNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {

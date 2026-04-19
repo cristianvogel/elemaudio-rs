@@ -15,10 +15,11 @@ namespace elem
         using GraphNode<FloatType>::GraphNode;
         using Sample = FloatType;
 
-        static constexpr size_t CHILD_SHIFT = 0;
-        static constexpr size_t CHILD_TILT = 1;
-        static constexpr size_t CHILD_SCALE = 2;
-        static constexpr size_t NUM_CHILDREN = 3;
+        static constexpr size_t CHILD_OFFSET = 0;
+        static constexpr size_t CHILD_SHIFT = 1;
+        static constexpr size_t CHILD_TILT = 2;
+        static constexpr size_t CHILD_SCALE = 3;
+        static constexpr size_t NUM_CHILDREN = 4;
 
         FramePhasorNode(NodeId id, double sr, int blockSize)
             : GraphNode<FloatType>(id, sr, blockSize)
@@ -46,7 +47,8 @@ namespace elem
         {
             frameLength = std::max<int64_t>(1, frameLengthTarget.load(std::memory_order_relaxed));
             frameLengthInitialized = true;
-            shiftLatched = Sample(0);
+            offsetLatched = Sample(0);
+            shiftLatched = 0;
             tiltLatched = Sample(0);
             scaleLatched = Sample(1);
             hasLatchedFrameControls = false;
@@ -70,6 +72,7 @@ namespace elem
                 frameLengthInitialized = true;
             }
 
+            auto const* offsetSignal = ctx.inputData[CHILD_OFFSET];
             auto const* shiftSignal = ctx.inputData[CHILD_SHIFT];
             auto const* tiltSignal = ctx.inputData[CHILD_TILT];
             auto const* scaleSignal = ctx.inputData[CHILD_SCALE];
@@ -83,14 +86,18 @@ namespace elem
                 auto const frameStart = !hasLatchedFrameControls || frameOffset == 0;
 
                 if (frameStart) {
-                    shiftLatched = shiftSignal[i];
+                    offsetLatched = offsetSignal[i];
+                    shiftLatched = clampShift(shiftSignal[i]);
                     tiltLatched = tiltSignal[i];
                     scaleLatched = scaleSignal[i];
                     hasLatchedFrameControls = true;
                 }
 
-                auto const basePhase = static_cast<Sample>(frameOffset) / static_cast<Sample>(frameLength);
-                out[i] = shapePhase(basePhase, shiftLatched, tiltLatched, scaleLatched);
+                // Horizontal shift rotates the phasor position within the frame.
+                // Latched on frame boundaries, clamped to [0, frameLength - 1].
+                auto const shiftedOffset = positiveMod(frameOffset + shiftLatched, frameLength);
+                auto const basePhase = static_cast<Sample>(shiftedOffset) / static_cast<Sample>(frameLength);
+                out[i] = shapePhase(basePhase, offsetLatched, tiltLatched, scaleLatched);
             }
 
             for (size_t c = 1; c < numOuts; ++c) {
@@ -105,9 +112,9 @@ namespace elem
             return rem < 0 ? rem + modulus : rem;
         }
 
-        static Sample clamp01(Sample x)
+        static Sample clampBipolar(Sample x)
         {
-            return std::max(Sample(0), std::min(Sample(1), x));
+            return std::max(Sample(-1), std::min(Sample(1), x));
         }
 
         static Sample wrap01(Sample x)
@@ -136,19 +143,37 @@ namespace elem
             return phase;
         }
 
-        static Sample shapePhase(Sample basePhase, Sample shift, Sample tilt, Sample scale)
+        // Shape the base phase into the final frame value:
+        //   1. apply `tilt` curve warp on the normalized phase
+        //   2. apply `scale` as a bipolar vertical amplitude multiplier
+        //      (negative `scale` inverts the phasor vertically)
+        //   3. apply `offset` as a vertical DC offset
+        //   4. hard clip to bipolar range [-1, 1]
+        static Sample shapePhase(Sample basePhase, Sample offset, Sample tilt, Sample scale)
         {
-            auto const shifted = wrap01(basePhase + shift);
-            auto const tilted = applyTilt(shifted, tilt);
-            auto const scaled = std::max(Sample(0), scale) * tilted;
-            return clamp01(scaled);
+            auto const tilted = applyTilt(basePhase, tilt);
+            auto const scaled = scale * tilted;
+            auto const shifted = scaled + offset;
+            return clampBipolar(shifted);
+        }
+
+        int64_t clampShift(Sample raw) const
+        {
+            if (!std::isfinite(raw)) {
+                return 0;
+            }
+
+            auto const floored = static_cast<int64_t>(std::floor(raw));
+            auto const modded = positiveMod(floored, frameLength);
+            return modded;
         }
 
         std::atomic<int64_t> frameLengthTarget{1};
 
         int64_t frameLength = 1;
         bool frameLengthInitialized = false;
-        Sample shiftLatched = Sample(0);
+        Sample offsetLatched = Sample(0);
+        int64_t shiftLatched = 0;
         Sample tiltLatched = Sample(0);
         Sample scaleLatched = Sample(1);
         bool hasLatchedFrameControls = false;

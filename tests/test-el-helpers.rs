@@ -924,15 +924,39 @@ fn covers_extra_helpers() {
 
     let frame_phasor_node = extra::frame_phasor(
         serde_json::json!({"framelength": 128}),
-        ElemNode::from(node(0.0)),
-        ElemNode::from(node(0.0)),
-        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.0)), // offset
+        ElemNode::from(node(0.0)), // shift
+        ElemNode::from(node(0.0)), // tilt
+        ElemNode::from(node(1.0)), // scale
     );
     assert_node(
         &frame_phasor_node,
         "framePhasor",
         serde_json::json!({"framelength": 128}),
-        3,
+        4,
+    );
+
+    let frame_delay_node = extra::frame_delay(
+        serde_json::json!({"framelength": 128, "maxframes": 4}),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.25)),
+    );
+    assert_node(
+        &frame_delay_node,
+        "frameDelay",
+        serde_json::json!({"framelength": 128, "maxframes": 4}),
+        2,
+    );
+
+    let frame_scope_node = extra::frame_scope(
+        serde_json::json!({"framelength": 128, "name": "frame-scope"}),
+        [ElemNode::from(node(0.25))],
+    );
+    assert_node(
+        &frame_scope_node,
+        "frameScope",
+        serde_json::json!({"framelength": 128, "name": "frame-scope"}),
+        1,
     );
 
     let frame_value_node = extra::frame_value(

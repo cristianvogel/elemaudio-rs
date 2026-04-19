@@ -997,6 +997,26 @@ export function frameclock(period: number): NodeRepr_t {
 }
 
 /** Props for `el.extra.framePhasor(...)`. */
+export interface FrameDelayProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive integer. */
+  framelength: number;
+  /** Maximum supported delay in whole frames. Must be a non-negative integer. */
+  maxframes: number;
+}
+
+/** Props for `el.extra.frameScope(...)`. */
+export interface FrameScopeProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Event source name forwarded through scope events. */
+  name?: string;
+  /** Fixed frame length in samples. Must be a positive integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.framePhasor(...)`. */
 export interface FramePhasorProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
@@ -1017,11 +1037,17 @@ export interface FrameValueProps extends Record<string, unknown> {
 /**
  * Absolute-sample-aligned frame phasor with frame-latched shaping controls.
  *
- * `shift`, `tilt`, and `scale` are sampled only on frame boundaries and held
- * for the full frame.
+ * All four controls are latched only on frame boundaries. The final output
+ * is hard-clipped to the bipolar range [-1, 1]:
+ *   - `offset`: vertical DC offset added after tilt/scale
+ *   - `shift`:  horizontal phase rotation in integer samples, wrapped into the frame
+ *   - `tilt`:   bipolar phase curve warp
+ *   - `scale`:  bipolar vertical amplitude scale applied to the tilted phase;
+ *               negative values mirror the phasor vertically
  */
 export function framePhasor(
   props: FramePhasorProps,
+  offset: ElemNode,
   shift: ElemNode,
   tilt: ElemNode,
   scale: ElemNode,
@@ -1031,10 +1057,46 @@ export function framePhasor(
   }
 
   return createNode("framePhasor", props, [
+    resolve(offset),
     resolve(shift),
     resolve(tilt),
     resolve(scale),
   ]);
+}
+
+/**
+ * Frame-synchronised integer delay line whose delay unit is whole frames.
+ *
+ * The `delayFrames` signal is sampled only on frame boundaries and held for
+ * the full frame.
+ */
+export function frameDelay(
+  props: FrameDelayProps,
+  delayFrames: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
+    throw new Error("frameDelay requires a positive integer framelength prop");
+  }
+  if (!Number.isInteger(props.maxframes) || props.maxframes < 0) {
+    throw new Error("frameDelay requires a non-negative integer maxframes prop");
+  }
+
+  return createNode("frameDelay", props, [resolve(delayFrames), resolve(x)]);
+}
+
+/**
+ * Frame-synchronised scope that emits one exact frame of samples per event.
+ */
+export function frameScope(
+  props: FrameScopeProps,
+  ...args: ElemNode[]
+): NodeRepr_t {
+  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
+    throw new Error("frameScope requires a positive integer framelength prop");
+  }
+
+  return createNode("frameScope", props, args.map(resolve));
 }
 
 /**

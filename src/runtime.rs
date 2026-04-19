@@ -224,18 +224,21 @@ impl Runtime {
         let parsed: JsonValue = serde_json::from_str(&json)?;
         let events = parsed
             .as_array()
-            .ok_or(Error::InvalidArgument("queued event payload must be a JSON array"))?
+            .ok_or(Error::InvalidArgument(
+                "queued event payload must be a JSON array",
+            ))?
             .iter()
             .map(|entry| {
                 let kind = entry
                     .get("type")
                     .and_then(JsonValue::as_str)
-                    .ok_or(Error::InvalidArgument("queued event is missing string field 'type'"))?
+                    .ok_or(Error::InvalidArgument(
+                        "queued event is missing string field 'type'",
+                    ))?
                     .to_string();
-                let event = entry
-                    .get("event")
-                    .cloned()
-                    .ok_or(Error::InvalidArgument("queued event is missing field 'event'"))?;
+                let event = entry.get("event").cloned().ok_or(Error::InvalidArgument(
+                    "queued event is missing field 'event'",
+                ))?;
                 Ok(RuntimeEvent { kind, event })
             })
             .collect::<Result<Vec<_>>>()?;

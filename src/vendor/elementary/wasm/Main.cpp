@@ -8,7 +8,9 @@
 //   "boxsum"       — BoxSumNode
 //   "boxaverage"   — BoxAverageNode
 //   "frameclock"   — FrameClockNode
+//   "frameDelay"   — FrameDelayNode
 //   "framePhasor"  — FramePhasorNode
+//   "frameScope"   — FrameScopeNode
 //   "frameValue"   — FrameValueNode
 //   "limiter"      — LimiterNode
 //   "variSlopeSvf" — VariSlopeSVFNode  (Butterworth, 12–72 dB/oct, no Q)
@@ -31,7 +33,9 @@
 #include "FFT.h"
 #include "../../../../native/extra/boxsum.h"
 #include "../../../../native/extra/frame_clock.h"
+#include "../../../../native/extra/frame_delay.h"
 #include "../../../../native/extra/frame_phasor.h"
+#include "../../../../native/extra/frame_scope.h"
 #include "../../../../native/extra/frame_value.h"
 #include "../../../../native/extra/freqshift.h"
 #include "../../../../native/extra/crunch.h"
@@ -104,6 +108,14 @@ public:
 
         runtime->registerNodeType("frameclock", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDelayNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameScope", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameScopeNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {
