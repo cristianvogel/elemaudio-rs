@@ -7,7 +7,7 @@ export const FRAME_SCOPE_EVENT = "frame-domain:scope";
 export interface FrameDomainDemoParams {
   offset: number;
   shift: number;
-  tilt: number;
+  curvature: number;
   scale: number;
   isStopped?: boolean;
 }
@@ -18,7 +18,7 @@ export function buildGraph(p: FrameDomainDemoParams): NodeRepr_t[] {
   }
 
   const offset = el.const({ key: "fdp:offset", value: p.offset });
-  const tilt = el.const({ key: "fdp:tilt", value: p.tilt });
+  const curvature = el.const({ key: "fdp:curvature", value: p.curvature });
   const scale = el.const({ key: "fdp:scale", value: p.scale });
   const shift = el.const({ key: "fdp:shift", value: p.shift });
 
@@ -26,7 +26,7 @@ export function buildGraph(p: FrameDomainDemoParams): NodeRepr_t[] {
     { key: "fdp:phasor", framelength: FRAME_LENGTH },
     offset,
     shift,
-    tilt,
+    curvature,
     scale,
   );
 

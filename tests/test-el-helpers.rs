@@ -926,7 +926,7 @@ fn covers_extra_helpers() {
         serde_json::json!({"framelength": 128}),
         ElemNode::from(node(0.0)), // offset
         ElemNode::from(node(0.0)), // shift
-        ElemNode::from(node(0.0)), // tilt
+        ElemNode::from(node(0.0)), // curvature
         ElemNode::from(node(1.0)), // scale
     );
     assert_node(
@@ -935,6 +935,35 @@ fn covers_extra_helpers() {
         serde_json::json!({"framelength": 128}),
         4,
     );
+
+    let frame_shaper_node = extra::frame_shaper(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.5)),
+    );
+    assert_node(
+        &frame_shaper_node,
+        "frameShaper",
+        serde_json::json!({"framelength": 128}),
+        6,
+    );
+
+    let odd_frame_shaper = std::panic::catch_unwind(|| {
+        extra::frame_shaper(
+            serde_json::json!({"framelength": 127}),
+            ElemNode::from(node(0.0)),
+            ElemNode::from(node(0.0)),
+            ElemNode::from(node(0.0)),
+            ElemNode::from(node(1.0)),
+            ElemNode::from(node(1.0)),
+            ElemNode::from(node(0.5)),
+        )
+    });
+    assert!(odd_frame_shaper.is_err());
 
     let frame_random_walks_node = extra::frame_random_walks(
         serde_json::json!({

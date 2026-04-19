@@ -35,7 +35,7 @@ fn assert_close(actual: f64, expected: f64, context: &str) {
 
 fn mount_frame_phasor(runtime: &Runtime, frame_length: usize) {
     // offset=0 (no vertical DC), shift=0 (no horizontal rotation),
-    // tilt=0 (linear), scale=1 (unit amplitude).
+    // curvature=0 (linear), scale=1 (unit amplitude).
     let graph = Graph::new().render(extra::frame_phasor(
         json!({ "framelength": frame_length }),
         0.0,
@@ -136,7 +136,7 @@ fn frame_phasor_restarts_from_zero_after_reset_and_time_reset() {
 
 #[test]
 fn frame_phasor_offset_shifts_vertically_and_hard_clips_bipolar() {
-    // `offset` is a vertical DC offset applied AFTER the tilted/scaled phase,
+    // `offset` is a vertical DC offset applied AFTER the curved/scaled phase,
     // then hard-clipped to [-1, 1]. Negative offsets push the ramp into the
     // negative half before clipping; they must not collapse to 0.
     let sample_rate = 48_000.0;
@@ -144,7 +144,7 @@ fn frame_phasor_offset_shifts_vertically_and_hard_clips_bipolar() {
     let frame_length = 4_usize;
     let runtime = build_runtime(sample_rate, buffer_size);
 
-    // offset = -0.5, shift = 0, tilt = 0 (linear), scale = 1
+    // offset = -0.5, shift = 0, curvature = 0 (linear), scale = 1
     let graph = Graph::new().render(extra::frame_phasor(
         json!({ "framelength": frame_length }),
         -0.5,
@@ -210,7 +210,7 @@ fn frame_phasor_offset_hard_clips_at_negative_one_and_positive_one() {
 #[test]
 fn frame_phasor_scale_is_bipolar_and_inverts_phasor_vertically() {
     // Negative `scale` must mirror the phasor vertically (not collapse to 0).
-    // With offset=0, scale=-1, tilt=0: basePhase {0, 0.25, 0.5, 0.75} ->
+    // With offset=0, scale=-1, curvature=0: basePhase {0, 0.25, 0.5, 0.75} ->
     // scaled = -1 * basePhase = {0, -0.25, -0.5, -0.75}.
     let sample_rate = 48_000.0;
     let buffer_size = 64;
@@ -221,7 +221,7 @@ fn frame_phasor_scale_is_bipolar_and_inverts_phasor_vertically() {
         json!({ "framelength": frame_length }),
         0.0,  // offset
         0.0,  // shift
-        0.0,  // tilt
+        0.0,  // curvature
         -1.0, // scale (bipolar, inverts)
     ));
     let mounted = graph.mount().expect("mount");

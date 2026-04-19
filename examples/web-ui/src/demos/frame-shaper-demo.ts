@@ -4,7 +4,7 @@ import {
   buildGraph as dspBuildGraph,
   FRAME_SCOPE_EVENT,
   FRAME_LENGTH,
-} from "../demo-dsp/frame-domain-demo.dsp";
+} from "../demo-dsp/frame-shaper-demo.dsp";
 import { initDemo } from "./demo-harness";
 
 const layout = `
@@ -15,8 +15,8 @@ const layout = `
         <div class="frame-stage frame-bars-stage">
           <div class="frame-bars-head">
             <div>
-              <div class="scope-title">Area Under The Signal</div>
-              <div class="frame-bars-subtitle">A framePhasor drawn as one bar per sample track.</div>
+              <div class="scope-title">Frame Shaper</div>
+              <div class="frame-bars-subtitle">A frameShaper drawn as one bar per sample track.</div>
             </div>
             <div class="frame-bars-badge">frameLength ${FRAME_LENGTH}</div>
           </div>
@@ -27,15 +27,16 @@ const layout = `
   </div>
   <div class="panel">
     <h1>elemaudio-rs</h1>
-    <h3>Frame Shaper Demo 01</h3>
+    <h3>Frame Shaper</h3>
     <p>
-      This demo uses <code>el.extra.framePhasor(...)</code> under
+      This demo uses <code>el.extra.frameShaper(...)</code> under
       <code>el.extra.frameScope(...)</code>. Each completed frame is drawn directly to canvas as
       a fixed bar field with one vertical bar per sample.
     </p>
     <p>
-      The frame period is fixed at <strong>${FRAME_LENGTH} samples</strong>. The chart baseline is centered,
-      so positive values rise upward and negative values fall below zero with no tweening between frames.
+      The <code>wave</code> control exposes the actual shape morph: flat at <code>0</code>, triangle around
+      <code>0.5</code>, and sine at <code>1.0</code>. Negative values invert the wave vertically. The <code>tilt</code>
+      control skews around the center of the frame.
     </p>
     <div class="controls">
       <div class="button-row">
@@ -53,12 +54,20 @@ const layout = `
           <input id="shift" type="range" min="0" max="255" value="0" step="1" />
         </div>
         <div class="dial">
-          <label for="curvature"><span>Curvature</span><span id="curvature-value">0.00</span></label>
-          <input id="curvature" type="range" min="-1" max="1" value="0" step="0.01" />
+          <label for="tilt"><span>Tilt</span><span id="tilt-value">0.00</span></label>
+          <input id="tilt" type="range" min="-1" max="1" value="0" step="0.01" />
+        </div>
+        <div class="dial">
+          <label for="zoom"><span>Zoom</span><span id="zoom-value">x1.00</span></label>
+          <input id="zoom" type="range" min="0.10" max="8" value="1" step="0.01" />
         </div>
         <div class="dial">
           <label for="scale"><span>Scale</span><span id="scale-value">1.00</span></label>
           <input id="scale" type="range" min="-1" max="1" value="1" step="0.01" />
+        </div>
+        <div class="dial">
+          <label for="wave"><span>Wave</span><span id="wave-value">1.00</span></label>
+          <input id="wave" type="range" min="-1" max="1" value="1" step="0.01" />
         </div>
       </div>
 
@@ -78,10 +87,14 @@ let offsetSlider: HTMLInputElement;
 let offsetValue: HTMLSpanElement;
 let shiftSlider: HTMLInputElement;
 let shiftValue: HTMLSpanElement;
-let curvatureSlider: HTMLInputElement;
-let curvatureValue: HTMLSpanElement;
+let tiltSlider: HTMLInputElement;
+let tiltValue: HTMLSpanElement;
+let zoomSlider: HTMLInputElement;
+let zoomValue: HTMLSpanElement;
 let scaleSlider: HTMLInputElement;
 let scaleValue: HTMLSpanElement;
+let waveSlider: HTMLInputElement;
+let waveValue: HTMLSpanElement;
 let frameStartValue: HTMLSpanElement;
 let framePeakPosValue: HTMLSpanElement;
 let framePeakNegValue: HTMLSpanElement;
@@ -99,8 +112,10 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
     dspBuildGraph({
       offset: Number(offsetSlider.value),
       shift: Number(shiftSlider.value),
-      curvature: Number(curvatureSlider.value),
+      tilt: Number(tiltSlider.value),
+      zoom: Number(zoomSlider.value),
       scale: Number(scaleSlider.value),
+      wave: Number(waveSlider.value),
       isStopped,
     }),
   updateReadouts,
@@ -113,10 +128,14 @@ offsetSlider = q<HTMLInputElement>("#offset");
 offsetValue = q<HTMLSpanElement>("#offset-value");
 shiftSlider = q<HTMLInputElement>("#shift");
 shiftValue = q<HTMLSpanElement>("#shift-value");
-curvatureSlider = q<HTMLInputElement>("#curvature");
-curvatureValue = q<HTMLSpanElement>("#curvature-value");
+tiltSlider = q<HTMLInputElement>("#tilt");
+tiltValue = q<HTMLSpanElement>("#tilt-value");
+zoomSlider = q<HTMLInputElement>("#zoom");
+zoomValue = q<HTMLSpanElement>("#zoom-value");
 scaleSlider = q<HTMLInputElement>("#scale");
 scaleValue = q<HTMLSpanElement>("#scale-value");
+waveSlider = q<HTMLInputElement>("#wave");
+waveValue = q<HTMLSpanElement>("#wave-value");
 frameStartValue = q<HTMLSpanElement>("#frame-start-value");
 framePeakPosValue = q<HTMLSpanElement>("#frame-peak-pos-value");
 framePeakNegValue = q<HTMLSpanElement>("#frame-peak-neg-value");
@@ -138,7 +157,7 @@ stopButton.addEventListener("click", async () => {
   await renderCurrentGraph();
 });
 
-wireControls([offsetSlider, shiftSlider, curvatureSlider, scaleSlider]);
+wireControls([offsetSlider, shiftSlider, tiltSlider, zoomSlider, scaleSlider, waveSlider]);
 
 updateReadouts();
 drawFrame([]);
@@ -169,8 +188,10 @@ function onScopeEvent(event: unknown) {
 function updateReadouts() {
   offsetValue.textContent = Number(offsetSlider.value).toFixed(2);
   shiftValue.textContent = shiftSlider.value;
-  curvatureValue.textContent = Number(curvatureSlider.value).toFixed(2);
+  tiltValue.textContent = Number(tiltSlider.value).toFixed(2);
+  zoomValue.textContent = `x${Number(zoomSlider.value).toFixed(2)}`;
   scaleValue.textContent = Number(scaleSlider.value).toFixed(2);
+  waveValue.textContent = Number(waveSlider.value).toFixed(2);
 }
 
 function updateFrameStats(frameStart: number, frame: number[]) {

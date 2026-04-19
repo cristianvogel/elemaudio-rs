@@ -1000,7 +1000,7 @@ export function frameclock(period: number): NodeRepr_t {
 export interface FrameDelayProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
-  /** Fixed frame length in samples. Must be a positive integer. */
+  /** Fixed frame length in samples. Must be a positive even integer. */
   framelength: number;
   /** Maximum supported delay in whole frames. Must be a non-negative integer. */
   maxframes: number;
@@ -1012,7 +1012,7 @@ export interface FrameScopeProps extends Record<string, unknown> {
   key?: string;
   /** Event source name forwarded through scope events. */
   name?: string;
-  /** Fixed frame length in samples. Must be a positive integer. */
+  /** Fixed frame length in samples. Must be a positive even integer. */
   framelength: number;
 }
 
@@ -1020,7 +1020,15 @@ export interface FrameScopeProps extends Record<string, unknown> {
 export interface FramePhasorProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
-  /** Fixed frame length in samples. Must be a positive integer. */
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.frameShaper(...)`. */
+export interface FrameShaperProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
   framelength: number;
 }
 
@@ -1028,7 +1036,7 @@ export interface FramePhasorProps extends Record<string, unknown> {
 export interface FrameRandomWalksProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
-  /** Fixed frame length in samples. Must be a positive integer. */
+  /** Fixed frame length in samples. Must be a positive even integer. */
   framelength: number;
   /** Optional deterministic RNG seed. Zero is treated as one. */
   seed?: number;
@@ -1048,8 +1056,14 @@ export interface FrameValueProps extends Record<string, unknown> {
   key?: string;
   /** Event source name forwarded through queued runtime events. */
   name?: string;
-  /** Fixed frame length in samples. Must be a positive integer. */
+  /** Fixed frame length in samples. Must be a positive even integer. */
   framelength: number;
+}
+
+function assertEvenFrameLength(name: string, frameLength: number) {
+  if (!Number.isInteger(frameLength) || frameLength <= 0 || frameLength % 2 !== 0) {
+    throw new Error(`${name} requires a positive even framelength prop`);
+  }
 }
 
 /**
@@ -1057,28 +1071,64 @@ export interface FrameValueProps extends Record<string, unknown> {
  *
  * All four controls are latched only on frame boundaries. The final output
  * is hard-clipped to the bipolar range [-1, 1]:
- *   - `offset`: vertical DC offset added after tilt/scale
+ *   - `offset`: vertical DC offset added after curvature/scale
  *   - `shift`:  horizontal phase rotation in integer samples, wrapped into the frame
- *   - `tilt`:   bipolar phase curve warp
- *   - `scale`:  bipolar vertical amplitude scale applied to the tilted phase;
+ *   - `curvature`: bipolar phase curve warp
+ *   - `scale`:  bipolar vertical amplitude scale applied to the curved phase;
  *               negative values mirror the phasor vertically
  */
 export function framePhasor(
   props: FramePhasorProps,
   offset: ElemNode,
   shift: ElemNode,
-  tilt: ElemNode,
+  curvature: ElemNode,
   scale: ElemNode,
 ): NodeRepr_t {
-  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
-    throw new Error("framePhasor requires a positive integer framelength prop");
-  }
+  assertEvenFrameLength("framePhasor", props.framelength);
 
   return createNode("framePhasor", props, [
     resolve(offset),
     resolve(shift),
-    resolve(tilt),
+    resolve(curvature),
     resolve(scale),
+  ]);
+}
+
+/**
+ * Absolute-sample-aligned frame shaper oscillator with frame-latched controls.
+ *
+ * `wave` morphs the oscillator core by magnitude:
+ * - `0.0`   -> flat DC zero
+ * - `0.5`   -> full bipolar triangle
+ * - `1.0`   -> full bipolar sine
+ *
+ * Negative `wave` values invert the oscillator core vertically.
+ *
+ * `tilt` skews the waveform around the center of the frame by remapping the
+ * phase asymmetrically while preserving the endpoints.
+ *
+ * `zoom` narrows or widens the active rendering width around the frame center:
+ * - `< 1` zooms inward and expands the wave around the center track
+ * - `> 1` contracts the wave inward toward a narrow central selector
+ */
+export function frameShaper(
+  props: FrameShaperProps,
+  offset: ElemNode,
+  shift: ElemNode,
+  tilt: ElemNode,
+  zoom: ElemNode,
+  scale: ElemNode,
+  wave: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameShaper", props.framelength);
+
+  return createNode("frameShaper", props, [
+    resolve(offset),
+    resolve(shift),
+    resolve(tilt),
+    resolve(zoom),
+    resolve(scale),
+    resolve(wave),
   ]);
 }
 
@@ -1098,9 +1148,7 @@ export function frameRandomWalks(
   stepSizeFrameShaper: ElemNode,
   timeConstantFrameShaper: ElemNode,
 ): NodeRepr_t {
-  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
-    throw new Error("frameRandomWalks requires a positive integer framelength prop");
-  }
+  assertEvenFrameLength("frameRandomWalks", props.framelength);
 
   return createNode("frameRandomWalks", props, [
     resolve(stepSize),
@@ -1121,9 +1169,7 @@ export function frameDelay(
   delayFrames: ElemNode,
   x: ElemNode,
 ): NodeRepr_t {
-  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
-    throw new Error("frameDelay requires a positive integer framelength prop");
-  }
+  assertEvenFrameLength("frameDelay", props.framelength);
   if (!Number.isInteger(props.maxframes) || props.maxframes < 0) {
     throw new Error("frameDelay requires a non-negative integer maxframes prop");
   }
@@ -1138,9 +1184,7 @@ export function frameScope(
   props: FrameScopeProps,
   ...args: ElemNode[]
 ): NodeRepr_t {
-  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
-    throw new Error("frameScope requires a positive integer framelength prop");
-  }
+  assertEvenFrameLength("frameScope", props.framelength);
 
   return createNode("frameScope", props, args.map(resolve));
 }
@@ -1157,9 +1201,7 @@ export function frameValue(
   index: ElemNode,
   x: ElemNode,
 ): NodeRepr_t {
-  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
-    throw new Error("frameValue requires a positive integer framelength prop");
-  }
+  assertEvenFrameLength("frameValue", props.framelength);
 
   return createNode("frameValue", props, [resolve(index), resolve(x)]);
 }

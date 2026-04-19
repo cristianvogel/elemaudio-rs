@@ -10,6 +10,7 @@
 //   "frameclock"   — FrameClockNode
 //   "frameDelay"   — FrameDelayNode
 //   "framePhasor"  — FramePhasorNode
+//   "frameShaper"  — FrameShaperNode
 //   "frameRandomWalks" — FrameRandomWalksNode
 //   "frameScope"   — FrameScopeNode
 //   "frameValue"   — FrameValueNode
@@ -36,6 +37,7 @@
 #include "../../../../native/extra/frame_clock.h"
 #include "../../../../native/extra/frame_delay.h"
 #include "../../../../native/extra/frame_phasor.h"
+#include "../../../../native/extra/frame_shaper.h"
 #include "../../../../native/extra/frame_random_walks.h"
 #include "../../../../native/extra/frame_scope.h"
 #include "../../../../native/extra/frame_value.h"
@@ -122,6 +124,10 @@ public:
 
         runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FramePhasorNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameShaper", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameShaperNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("frameRandomWalks", [](elem::NodeId const id, double fs, int const bs) {

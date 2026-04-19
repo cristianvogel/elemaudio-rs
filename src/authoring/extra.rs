@@ -1215,6 +1215,7 @@ pub fn frame_delay(
     delay_frames: impl Into<ElemNode>,
     x: impl Into<ElemNode>,
 ) -> Node {
+    assert_even_framelength(&props, "frame_delay");
     Node::new("frameDelay", props, vec![resolve(delay_frames), resolve(x)])
 }
 
@@ -1231,6 +1232,7 @@ pub fn frame_scope<T>(props: serde_json::Value, args: impl IntoIterator<Item = T
 where
     T: Into<ElemNode>,
 {
+    assert_even_framelength(&props, "frame_scope");
     Node::new("frameScope", props, args.into_iter().map(resolve).collect())
 }
 
@@ -1241,28 +1243,80 @@ where
 /// - `key`: optional authoring key
 ///
 /// Inputs (all latched on frame boundaries):
-/// - `offset`: vertical DC offset added after tilt/scale; hard-clipped bipolar result
+/// - `offset`: vertical DC offset added after curvature/scale; hard-clipped bipolar result
 /// - `shift`: horizontal phase rotation in integer samples, wrapped into the frame
-/// - `tilt`: bipolar phase warp amount
-/// - `scale`: bipolar vertical amplitude scale applied to the tilted phase;
+/// - `curvature`: bipolar phase warp amount
+/// - `scale`: bipolar vertical amplitude scale applied to the curved phase;
 ///   negative values mirror the phasor vertically; final output hard-clipped to [-1, 1]
 pub fn frame_phasor(
     props: serde_json::Value,
     offset: impl Into<ElemNode>,
     shift: impl Into<ElemNode>,
-    tilt: impl Into<ElemNode>,
+    curvature: impl Into<ElemNode>,
     scale: impl Into<ElemNode>,
 ) -> Node {
+    assert_even_framelength(&props, "frame_phasor");
     Node::new(
         "framePhasor",
         props,
         vec![
             resolve(offset),
             resolve(shift),
-            resolve(tilt),
+            resolve(curvature),
             resolve(scale),
         ],
     )
+}
+
+/// Absolute-sample-aligned frame shaper oscillator with frame-latched controls.
+///
+/// Starts flat at `wave = 0`, morphs to a full bipolar triangle at
+/// `|wave| = 0.5`, then morphs onward to a full bipolar sine at
+/// `|wave| = 1`. Negative `wave` values invert the oscillator core vertically.
+///
+/// Props:
+/// - `framelength`: positive even integer frame size in samples
+/// - `key`: optional authoring key
+///
+/// Inputs (all latched on frame boundaries):
+/// - `offset`: vertical DC offset added after shaping
+/// - `shift`: horizontal phase rotation in integer samples, wrapped into the frame
+/// - `tilt`: center-skew amount that asymmetrically remaps the frame phase
+/// - `zoom`: horizontal zoom around the center track; `< 1` zooms inward, `> 1` contracts inward
+/// - `scale`: bipolar vertical amplitude scale applied after the waveform is chosen
+/// - `wave`: shape morph and vertical polarity control for the oscillator core
+pub fn frame_shaper(
+    props: serde_json::Value,
+    offset: impl Into<ElemNode>,
+    shift: impl Into<ElemNode>,
+    tilt: impl Into<ElemNode>,
+    zoom: impl Into<ElemNode>,
+    scale: impl Into<ElemNode>,
+    wave: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_shaper");
+
+    Node::new(
+        "frameShaper",
+        props,
+        vec![
+            resolve(offset),
+            resolve(shift),
+            resolve(tilt),
+            resolve(zoom),
+            resolve(scale),
+            resolve(wave),
+        ],
+    )
+}
+
+fn assert_even_framelength(props: &serde_json::Value, helper: &str) {
+    if let Some(frame_length) = props.get("framelength").and_then(serde_json::Value::as_i64) {
+        assert!(
+            frame_length > 0 && frame_length % 2 == 0,
+            "{helper} requires an even positive framelength"
+        );
+    }
 }
 
 /// Frame-synchronised packed random walks with per-track step/time shaping.
@@ -1288,6 +1342,7 @@ pub fn frame_random_walks(
     step_size_frame_shaper: impl Into<ElemNode>,
     time_constant_frame_shaper: impl Into<ElemNode>,
 ) -> Node {
+    assert_even_framelength(&props, "frame_random_walks");
     Node::new(
         "frameRandomWalks",
         props,
@@ -1315,6 +1370,7 @@ pub fn frame_value(
     index: impl Into<ElemNode>,
     x: impl Into<ElemNode>,
 ) -> Node {
+    assert_even_framelength(&props, "frame_value");
     Node::new("frameValue", props, vec![resolve(index), resolve(x)])
 }
 

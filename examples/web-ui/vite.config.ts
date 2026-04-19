@@ -45,6 +45,7 @@ export default defineConfig({
         dust: resolve(__dirname, "dust.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
         frameDomain: resolve(__dirname, "frame-domain.html"),
+        frameShaper: resolve(__dirname, "frame-shaper.html"),
         frameRandomWalks: resolve(__dirname, "frame-random-walks.html"),
         ramp00: resolve(__dirname, "ramp00.html"),
         waveshaper: resolve(__dirname, "waveshaper.html"),
