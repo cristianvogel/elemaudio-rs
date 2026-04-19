@@ -986,6 +986,16 @@ export function sampleCount(props: SampleCountProps): NodeRepr_t {
   return createNode("sampleCount", props, []);
 }
 
+/**
+ * Fixed-period frame clock anchored to absolute sample time.
+ *
+ * Emits a one-sample pulse at absolute sample indices
+ * `0, period, 2*period, ...` regardless of backend block size.
+ */
+export function frameclock(period: number): NodeRepr_t {
+  return createNode("frameclock", { period }, []);
+}
+
 
 // ---------------------------------------------------------------------------
 // ramp00

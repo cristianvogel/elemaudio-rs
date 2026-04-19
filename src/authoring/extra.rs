@@ -1,6 +1,6 @@
 use super::el;
 use crate::graph::Node;
-use crate::{resolve, unpack, ElemNode};
+use crate::{ElemNode, resolve, unpack};
 
 /// Internal enum for box_sum window input (props or signal).
 pub enum BoxSumWindowInput {
@@ -784,7 +784,9 @@ pub fn stride_delay_with_insert(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
     else {
-        log::error!("stride_delay_with_insert: missing 'fbtap' prop, falling back to stride_delay without insert");
+        log::error!(
+            "stride_delay_with_insert: missing 'fbtap' prop, falling back to stride_delay without insert"
+        );
         return stride_delay(props, delay_ms, fb, x);
     };
 
@@ -866,7 +868,9 @@ pub fn stereo_stride_delay_with_insert(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
     else {
-        log::error!("stereo_stride_delay_with_insert: missing 'fbtap' prop, falling back to stereo stride_delay without insert");
+        log::error!(
+            "stereo_stride_delay_with_insert: missing 'fbtap' prop, falling back to stereo stride_delay without insert"
+        );
         let props_val = serde_json::Value::Object(props_obj);
         let resolved = stride_delay_resolve_defaults(props_val);
         let dl = resolve(delay_ms);
@@ -1180,6 +1184,20 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 /// ```
 pub fn sample_count(props: serde_json::Value) -> Node {
     Node::new("sampleCount", props, vec![])
+}
+
+/// Fixed-period frame clock anchored to absolute sample time.
+///
+/// Emits a one-sample pulse at absolute sample indices
+/// `0, period, 2*period, ...` regardless of backend block size.
+///
+/// `period` is measured in samples and must be positive.
+pub fn frameclock(period: usize) -> Node {
+    Node::new(
+        "frameclock",
+        serde_json::json!({ "period": period }),
+        vec![],
+    )
 }
 
 /// Sparse random impulses with optional decaying release.

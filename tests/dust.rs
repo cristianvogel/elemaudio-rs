@@ -4,7 +4,7 @@
 //! The node is intentionally sparse and stateful, so the tests focus on
 //! deterministic shape properties rather than exact random-event timing.
 
-use elemaudio_rs::{extra, Graph, Runtime};
+use elemaudio_rs::{Graph, Runtime, extra};
 use serde_json::json;
 
 fn warm_past_root_fade(runtime: &Runtime, sample_rate: f64, buffer_size: usize) {
@@ -78,7 +78,9 @@ fn dust_output_stays_bounded_across_release_sweeps() {
     // up to the expected polyphony ceiling.
     for _ in 0..8 {
         let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[], &mut outputs).expect("process");
+        runtime
+            .process(buffer_size, &[], &mut outputs)
+            .expect("process");
     }
 
     let max_abs = out.iter().map(|s| s.abs()).fold(0.0_f64, f64::max);
@@ -91,7 +93,10 @@ fn dust_output_stays_bounded_across_release_sweeps() {
         max_abs <= 1.0 + EPS,
         "normalized dust must stay within ±1 at heavy polyphony; max abs = {max_abs}",
     );
-    assert!(energy_long > 0.0, "dust should produce non-zero output: {energy_long}");
+    assert!(
+        energy_long > 0.0,
+        "dust should produce non-zero output: {energy_long}"
+    );
 
     // Now shorten the release drastically. The bound must still hold.
     let len_node = mounted.node_with_key("release").expect("keyed release");
@@ -101,7 +106,9 @@ fn dust_output_stays_bounded_across_release_sweeps() {
 
     for _ in 0..4 {
         let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[], &mut outputs).expect("process 2");
+        runtime
+            .process(buffer_size, &[], &mut outputs)
+            .expect("process 2");
     }
 
     let max_abs_short = out.iter().map(|s| s.abs()).fold(0.0_f64, f64::max);

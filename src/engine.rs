@@ -427,12 +427,16 @@ mod tests {
         let engine = Engine::<TestDelayGraph>::new(44100.0, 64, &params).expect("engine creation");
 
         // stridedelay has props: maxDelayMs, transitionMs, bigLeapMode
-        assert!(engine
-            .native_props
-            .contains_key(&("stridedelay".to_string(), "transitionMs".to_string())));
-        assert!(engine
-            .native_props
-            .contains_key(&("stridedelay".to_string(), "maxDelayMs".to_string())));
+        assert!(
+            engine
+                .native_props
+                .contains_key(&("stridedelay".to_string(), "transitionMs".to_string()))
+        );
+        assert!(
+            engine
+                .native_props
+                .contains_key(&("stridedelay".to_string(), "maxDelayMs".to_string()))
+        );
     }
 
     #[test]

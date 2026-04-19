@@ -80,7 +80,9 @@ impl From<NulError> for Error {
 pub fn describe_return_code(code: i32) -> &'static str {
     match code {
         0 => "Ok",
-        1 => "Node type not recognized: the requested node kind was not registered in the runtime bridge",
+        1 => {
+            "Node type not recognized: the requested node kind was not registered in the runtime bridge"
+        }
         2 => "Node not found",
         3 => "Attempting to create a node that already exists",
         4 => "Attempting to create a node type that already exists",

@@ -1,4 +1,4 @@
-use elemaudio_rs::{el, Graph, Node};
+use elemaudio_rs::{Graph, Node, el};
 use serde_json::json;
 
 pub fn freq_sequence(prefix: &str, tempo_hz: f64) -> Node {

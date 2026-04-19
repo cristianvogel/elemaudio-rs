@@ -1,4 +1,4 @@
-use elemaudio_rs::{el, extra, mc, ElemNode, Graph, Node};
+use elemaudio_rs::{ElemNode, Graph, Node, el, extra, mc};
 
 fn assert_node(node: &Node, kind: &str, props: serde_json::Value, child_count: usize) {
     assert_eq!(node.kind(), kind);
@@ -911,6 +911,14 @@ fn covers_extra_helpers() {
         &sample_count_keyed,
         "sampleCount",
         serde_json::json!({"path": "drums/snare.wav", "key": "snare-len"}),
+        0,
+    );
+
+    let frameclock_node = extra::frameclock(128);
+    assert_node(
+        &frameclock_node,
+        "frameclock",
+        serde_json::json!({"period": 128}),
         0,
     );
 

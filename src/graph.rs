@@ -1032,11 +1032,7 @@ mod tests {
 
         let density = el::const_(100.0);
         let release = el::const_(0.0);
-        let dust = extra::dust(
-            serde_json::json!({ "seed": 42 }),
-            density,
-            release,
-        );
+        let dust = extra::dust(serde_json::json!({ "seed": 42 }), density, release);
 
         let graph = Graph::new().render(vec![dust]);
         let mounted = graph.mount().expect("mount");
@@ -1049,7 +1045,9 @@ mod tests {
         for _ in 0..10 {
             let mut out = vec![0.0_f64; block];
             let mut outputs = [out.as_mut_slice()];
-            runtime.process(block, &inputs, &mut outputs).expect("process");
+            runtime
+                .process(block, &inputs, &mut outputs)
+                .expect("process");
             all_samples.extend_from_slice(outputs[0]);
         }
 

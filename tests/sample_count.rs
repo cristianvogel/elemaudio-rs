@@ -8,7 +8,7 @@
 //! signal rises from 0 to its true value. Assertions that read the exact
 //! length value sample-for-sample warm past the fade first.
 
-use elemaudio_rs::{extra, Graph, Runtime};
+use elemaudio_rs::{Graph, Runtime, extra};
 use serde_json::json;
 
 fn warm_past_root_fade(runtime: &Runtime, sample_rate: f64, buffer_size: usize) {

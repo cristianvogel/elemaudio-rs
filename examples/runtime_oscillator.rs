@@ -1,4 +1,4 @@
-use elemaudio_rs::{el, Graph, Result, Runtime};
+use elemaudio_rs::{Graph, Result, Runtime, el};
 
 fn main() -> Result<()> {
     let runtime = Runtime::new()
