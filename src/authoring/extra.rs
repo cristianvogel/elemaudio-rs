@@ -1231,11 +1231,7 @@ pub fn frame_scope<T>(props: serde_json::Value, args: impl IntoIterator<Item = T
 where
     T: Into<ElemNode>,
 {
-    Node::new(
-        "frameScope",
-        props,
-        args.into_iter().map(resolve).collect(),
-    )
+    Node::new("frameScope", props, args.into_iter().map(resolve).collect())
 }
 
 /// Absolute-sample-aligned frame phasor with frame-latched shaping controls.
@@ -1260,7 +1256,47 @@ pub fn frame_phasor(
     Node::new(
         "framePhasor",
         props,
-        vec![resolve(offset), resolve(shift), resolve(tilt), resolve(scale)],
+        vec![
+            resolve(offset),
+            resolve(shift),
+            resolve(tilt),
+            resolve(scale),
+        ],
+    )
+}
+
+/// Frame-synchronised packed random walks with per-track step/time shaping.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `seed`: optional deterministic seed, with `0` treated as `1`
+/// - `absolute`: optional positive-only output mode
+/// - `interpolation`: optional cosine interpolation mode, defaults to `true`
+/// - `startingfrom`: optional reset value for all tracks before initial deviation
+/// - `initialdeviation`: optional maximum reset deviation from `startingfrom`
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `step_size`: maximum random deviation per step
+/// - `time_constant`: nominal step duration in seconds
+/// - `step_size_frame_shaper`: per-track order-4 scaler for `step_size`
+/// - `time_constant_frame_shaper`: per-track inverse order-4 scaler for `time_constant`
+pub fn frame_random_walks(
+    props: serde_json::Value,
+    step_size: impl Into<ElemNode>,
+    time_constant: impl Into<ElemNode>,
+    step_size_frame_shaper: impl Into<ElemNode>,
+    time_constant_frame_shaper: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "frameRandomWalks",
+        props,
+        vec![
+            resolve(step_size),
+            resolve(time_constant),
+            resolve(step_size_frame_shaper),
+            resolve(time_constant_frame_shaper),
+        ],
     )
 }
 

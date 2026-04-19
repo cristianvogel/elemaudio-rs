@@ -936,6 +936,34 @@ fn covers_extra_helpers() {
         4,
     );
 
+    let frame_random_walks_node = extra::frame_random_walks(
+        serde_json::json!({
+            "framelength": 128,
+            "seed": 7,
+            "absolute": true,
+            "interpolation": false,
+            "startingfrom": 0.25,
+            "initialdeviation": 0.5,
+        }),
+        ElemNode::from(node(0.2)),
+        ElemNode::from(node(0.5)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &frame_random_walks_node,
+        "frameRandomWalks",
+        serde_json::json!({
+            "framelength": 128,
+            "seed": 7,
+            "absolute": true,
+            "interpolation": false,
+            "startingfrom": 0.25,
+            "initialdeviation": 0.5,
+        }),
+        4,
+    );
+
     let frame_delay_node = extra::frame_delay(
         serde_json::json!({"framelength": 128, "maxframes": 4}),
         ElemNode::from(node(1.0)),

@@ -1024,6 +1024,24 @@ export interface FramePhasorProps extends Record<string, unknown> {
   framelength: number;
 }
 
+/** Props for `el.extra.frameRandomWalks(...)`. */
+export interface FrameRandomWalksProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive integer. */
+  framelength: number;
+  /** Optional deterministic RNG seed. Zero is treated as one. */
+  seed?: number;
+  /** Optional positive-only output mode. */
+  absolute?: boolean;
+  /** Optional cosine interpolation toggle. Defaults to true. */
+  interpolation?: boolean;
+  /** Optional reset starting value before initial deviation is applied. */
+  startingfrom?: number;
+  /** Optional reset deviation range around `startingfrom`. */
+  initialdeviation?: number;
+}
+
 /** Props for `el.extra.frameValue(...)`. */
 export interface FrameValueProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
@@ -1061,6 +1079,34 @@ export function framePhasor(
     resolve(shift),
     resolve(tilt),
     resolve(scale),
+  ]);
+}
+
+/**
+ * Frame-synchronised packed random walks with per-track step/time shaping.
+ *
+ * `stepSizeFrameShaper` scales `stepSize` by an order-4 frame shaper law:
+ * `-1 -> 1/16`, `0 -> 1`, `1 -> 16`.
+ *
+ * `timeConstantFrameShaper` applies the inverse order-4 law to `timeConstant`:
+ * `-1 -> 16x slower`, `0 -> default`, `1 -> 16x faster`.
+ */
+export function frameRandomWalks(
+  props: FrameRandomWalksProps,
+  stepSize: ElemNode,
+  timeConstant: ElemNode,
+  stepSizeFrameShaper: ElemNode,
+  timeConstantFrameShaper: ElemNode,
+): NodeRepr_t {
+  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
+    throw new Error("frameRandomWalks requires a positive integer framelength prop");
+  }
+
+  return createNode("frameRandomWalks", props, [
+    resolve(stepSize),
+    resolve(timeConstant),
+    resolve(stepSizeFrameShaper),
+    resolve(timeConstantFrameShaper),
   ]);
 }
 

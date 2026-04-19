@@ -102,7 +102,9 @@ fn frame_scope_emits_exact_frame_length_across_uneven_blocks() {
     for block_size in [3_usize, 2, 5] {
         let mut block = vec![0.0_f64; block_size];
         let mut outputs = [block.as_mut_slice()];
-        runtime.process(block_size, &[], &mut outputs).expect("process");
+        runtime
+            .process(block_size, &[], &mut outputs)
+            .expect("process");
     }
 
     let events = runtime.process_queued_events().expect("events");

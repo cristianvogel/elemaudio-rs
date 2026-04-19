@@ -16,7 +16,7 @@ const layout = `
           <div class="frame-bars-head">
             <div>
               <div class="scope-title">Area Under The Signal</div>
-              <div class="frame-bars-subtitle">One bar per frame element, centered on zero.</div>
+              <div class="frame-bars-subtitle">A framePhasor drawn as one bar per sample track.</div>
             </div>
             <div class="frame-bars-badge">frameLength ${FRAME_LENGTH}</div>
           </div>
@@ -27,10 +27,10 @@ const layout = `
   </div>
   <div class="panel">
     <h1>elemaudio-rs</h1>
-    <h3>Area Under The Signal</h3>
+    <h3>Frame Shaper</h3>
     <p>
-      This demo uses <code>el.extra.frameScope(...)</code> on top of
-      <code>el.extra.framePhasor(...)</code>. Each completed frame is drawn directly to canvas as
+      This demo uses <code>el.extra.framePhasor(...)</code> under
+      <code>el.extra.frameScope(...)</code>. Each completed frame is drawn directly to canvas as
       a fixed bar field with one vertical bar per sample.
     </p>
     <p>
@@ -138,12 +138,7 @@ stopButton.addEventListener("click", async () => {
   await renderCurrentGraph();
 });
 
-wireControls([
-  offsetSlider,
-  shiftSlider,
-  tiltSlider,
-  scaleSlider,
-]);
+wireControls([offsetSlider, shiftSlider, tiltSlider, scaleSlider]);
 
 updateReadouts();
 drawFrame([]);
