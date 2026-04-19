@@ -1032,6 +1032,16 @@ export interface FrameShaperProps extends Record<string, unknown> {
   framelength: number;
 }
 
+/** Props for `el.extra.frameWriteRAM(...)`. */
+export interface FrameWriteRAMProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+  /** RAM slot identifier shared with readers like `el.table(...)`. */
+  path: string;
+}
+
 /** Props for `el.extra.frameRandomWalks(...)`. */
 export interface FrameRandomWalksProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
@@ -1130,6 +1140,20 @@ export function frameShaper(
     resolve(scale),
     resolve(wave),
   ]);
+}
+
+/**
+ * WireFrames-style RAM writer for a live mono frame stream.
+ *
+ * Captures one complete frame from `x` and writes the coherent frame into the
+ * runtime-owned RAM slot at `path` on the next frame boundary.
+ */
+export function frameWriteRAM(
+  props: FrameWriteRAMProps,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameWriteRAM", props.framelength);
+  return createNode("frameWriteRAM", props, [resolve(x)]);
 }
 
 /**

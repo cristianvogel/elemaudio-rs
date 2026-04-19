@@ -952,6 +952,17 @@ fn covers_extra_helpers() {
         6,
     );
 
+    let frame_write_ram_node = extra::frame_write_ram(
+        serde_json::json!({"framelength": 128, "path": "wf/ram/demo"}),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &frame_write_ram_node,
+        "frameWriteRAM",
+        serde_json::json!({"framelength": 128, "path": "wf/ram/demo"}),
+        1,
+    );
+
     let odd_frame_shaper = std::panic::catch_unwind(|| {
         extra::frame_shaper(
             serde_json::json!({"framelength": 127}),

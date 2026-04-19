@@ -15,6 +15,7 @@
 #include <extra/frame_delay.h>
 #include <extra/frame_phasor.h>
 #include <extra/frame_shaper.h>
+#include <extra/frame_write_ram.h>
 #include <extra/frame_random_walks.h>
 #include <extra/frame_scope.h>
 #include <extra/frame_value.h>
@@ -94,6 +95,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("frameShaper", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameShaperNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameWriteRAM", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameWriteRAMNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("frameRandomWalks", [](elem::NodeId const id, double fs, int const bs) {

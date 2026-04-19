@@ -1310,6 +1310,24 @@ pub fn frame_shaper(
     )
 }
 
+/// WireFrames-style RAM writer for a live mono frame stream.
+///
+/// Captures one full frame from `x` and writes the completed frame into a
+/// runtime-owned RAM buffer addressed by `path`. The write commits on the next
+/// frame boundary, so downstream readers observe coherent whole-frame updates.
+///
+/// Props:
+/// - `framelength`: positive even integer frame size in samples
+/// - `path`: RAM slot identifier shared with readers like `el::table`
+/// - `key`: optional authoring key
+pub fn frame_write_ram(
+    props: serde_json::Value,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_write_ram");
+    Node::new("frameWriteRAM", props, vec![resolve(x)])
+}
+
 fn assert_even_framelength(props: &serde_json::Value, helper: &str) {
     if let Some(frame_length) = props.get("framelength").and_then(serde_json::Value::as_i64) {
         assert!(

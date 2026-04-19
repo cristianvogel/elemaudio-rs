@@ -47,6 +47,7 @@ export default defineConfig({
         frameDomain: resolve(__dirname, "frame-domain.html"),
         frameShaper: resolve(__dirname, "frame-shaper.html"),
         frameRandomWalks: resolve(__dirname, "frame-random-walks.html"),
+        frameWavetable: resolve(__dirname, "frame-wavetable.html"),
         ramp00: resolve(__dirname, "ramp00.html"),
         waveshaper: resolve(__dirname, "waveshaper.html"),
         vocoder: resolve(__dirname, "vocoder.html"),
