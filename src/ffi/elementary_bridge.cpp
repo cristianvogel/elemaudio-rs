@@ -1,5 +1,7 @@
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -257,6 +259,39 @@ int elementary_runtime_process(
     } catch (...) {
         return elem::ReturnCode::InvariantViolation();
     }
+}
+
+char* elementary_runtime_process_queued_events_json(elementary_runtime_handle* handle)
+{
+    if (handle == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        elem::js::Array batch;
+        handle->runtime->processQueuedEvents([&batch](std::string const& type, elem::js::Value evt) {
+            batch.push_back(elem::js::Object({
+                {"type", type},
+                {"event", evt},
+            }));
+        });
+
+        auto const json = elem::js::serialize(elem::js::Value(batch));
+        auto* out = static_cast<char*>(std::malloc(json.size() + 1));
+        if (out == nullptr) {
+            return nullptr;
+        }
+
+        std::memcpy(out, json.c_str(), json.size() + 1);
+        return out;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void elementary_string_free(char* ptr)
+{
+    std::free(ptr);
 }
 
 void elementary_runtime_gc(elementary_runtime_handle* handle, elementary_gc_callback callback, void* user_data)

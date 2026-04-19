@@ -8,7 +8,7 @@ use serde_json::Value as JsonValue;
 use std::cell::Cell;
 use std::cell::{Ref, RefCell};
 use std::convert::TryFrom;
-use std::ffi::{CString, c_void};
+use std::ffi::{CStr, CString, c_void};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -192,6 +192,46 @@ impl Runtime {
     /// Sets the current runtime time in milliseconds.
     pub fn set_current_time_ms(&self, sample_time_ms: f64) {
         unsafe { ffi::elementary_runtime_set_current_time_ms(self.handle.as_ptr(), sample_time_ms) }
+    }
+
+    /// Drains queued runtime events collected since the previous call.
+    pub fn process_queued_events(&self) -> Result<Vec<RuntimeEvent>> {
+        let json_ptr =
+            unsafe { ffi::elementary_runtime_process_queued_events_json(self.handle.as_ptr()) };
+        if json_ptr.is_null() {
+            return Err(Error::Native {
+                operation: "process_queued_events",
+                code: 7,
+                message: describe_return_code(7).to_string(),
+            });
+        }
+
+        let json = unsafe { CStr::from_ptr(json_ptr) }
+            .to_string_lossy()
+            .into_owned();
+
+        unsafe { ffi::elementary_string_free(json_ptr) };
+
+        let parsed: JsonValue = serde_json::from_str(&json)?;
+        let events = parsed
+            .as_array()
+            .ok_or(Error::InvalidArgument("queued event payload must be a JSON array"))?
+            .iter()
+            .map(|entry| {
+                let kind = entry
+                    .get("type")
+                    .and_then(JsonValue::as_str)
+                    .ok_or(Error::InvalidArgument("queued event is missing string field 'type'"))?
+                    .to_string();
+                let event = entry
+                    .get("event")
+                    .cloned()
+                    .ok_or(Error::InvalidArgument("queued event is missing field 'event'"))?;
+                Ok(RuntimeEvent { kind, event })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(events)
     }
 
     /// Returns the current resource registry.

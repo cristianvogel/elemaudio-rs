@@ -63,6 +63,12 @@ unsafe extern "C" {
         num_output_channels: usize,
         num_samples: usize,
     ) -> c_int;
+    /// Drains queued runtime events and returns them as a JSON string.
+    pub fn elementary_runtime_process_queued_events_json(
+        handle: *mut ElementaryRuntimeHandle,
+    ) -> *mut c_char;
+    /// Frees a string allocated by the native bridge.
+    pub fn elementary_string_free(ptr: *mut c_char);
     /// Triggers runtime garbage collection and reports live node ids.
     pub fn elementary_runtime_gc(
         handle: *mut ElementaryRuntimeHandle,
