@@ -16,6 +16,15 @@ use std::sync::Arc;
 /// Runtime node identifier used by instruction batches and GC results.
 pub type NodeId = i32;
 
+/// Event drained from the runtime's queued event relay.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeEvent {
+    /// Event type emitted by the runtime node.
+    pub kind: String,
+    /// Event payload.
+    pub event: JsonValue,
+}
+
 /// Instruction supported by the current wrapper surface.
 #[derive(Debug, Clone)]
 pub enum Instruction {

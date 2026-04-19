@@ -15,6 +15,8 @@ pub enum Error {
     InvalidArgument(&'static str),
     /// A string contained an interior nul byte before crossing the FFI boundary.
     CString(NulError),
+    /// JSON serialization or parsing failed in the wrapper.
+    Json(serde_json::Error),
     /// A native operation returned a non-zero status code.
     Native {
         /// The operation that failed.
@@ -45,6 +47,7 @@ impl Display for Error {
             Self::NullHandle => write!(f, "native runtime handle was null"),
             Self::InvalidArgument(message) => write!(f, "invalid argument: {message}"),
             Self::CString(err) => write!(f, "string contains interior nul byte: {err}"),
+            Self::Json(err) => write!(f, "json error: {err}"),
             Self::Native {
                 operation,
                 code,
@@ -70,6 +73,12 @@ impl std::error::Error for Error {}
 impl From<NulError> for Error {
     fn from(value: NulError) -> Self {
         Self::CString(value)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Json(value)
     }
 }
 

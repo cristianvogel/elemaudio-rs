@@ -30,4 +30,4 @@ pub use graph::{Graph, MountError, MountedGraph, MountedNode, Node};
 /// Rust-native resource registry and resource values.
 pub use resource::{AudioBuffer, Resource, ResourceId, ResourceManager};
 /// Instruction types and the runtime wrapper.
-pub use runtime::{Instruction, InstructionBatch, NodeId, Runtime};
+pub use runtime::{Instruction, InstructionBatch, NodeId, Runtime, RuntimeEvent};
