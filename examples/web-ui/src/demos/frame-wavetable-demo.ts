@@ -45,6 +45,7 @@ const layout = `
       <div class="dial-strip">
         <div class="dial"><label for="frequency"><span>Frequency</span><span id="frequency-value">110.0 Hz</span></label><input id="frequency" type="range" min="20" max="880" value="110" step="1" /></div>
         <div class="dial"><label for="level"><span>Level</span><span id="level-value">0.15</span></label><input id="level" type="range" min="0" max="0.5" value="0.15" step="0.01" /></div>
+        <div class="dial"><label for="smooth"><span>Smooth</span><span id="smooth-value">0.00 s</span></label><input id="smooth" type="range" min="0" max="30" value="0" step="0.1" /></div>
         <div class="dial"><label for="wave"><span>Wave</span><span id="wave-value">1.00</span></label><input id="wave" type="range" min="-1" max="1" value="0" step="0.01" /></div>
       </div>
       <div class="dial-strip">
@@ -65,6 +66,8 @@ let frequencySlider: HTMLInputElement;
 let frequencyValue: HTMLSpanElement;
 let levelSlider: HTMLInputElement;
 let levelValue: HTMLSpanElement;
+let smoothSlider: HTMLInputElement;
+let smoothValue: HTMLSpanElement;
 let waveSlider: HTMLInputElement;
 let waveValue: HTMLSpanElement;
 let scaleSlider: HTMLInputElement;
@@ -89,6 +92,7 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   buildGraph: () => dspBuildGraph({
     frequency: Number(frequencySlider.value),
     level: Number(levelSlider.value),
+    smooth: Number(smoothSlider.value),
     wave: Number(waveSlider.value),
     scale: Number(scaleSlider.value),
     tilt: Number(tiltSlider.value),
@@ -107,6 +111,8 @@ frequencySlider = q<HTMLInputElement>("#frequency");
 frequencyValue = q<HTMLSpanElement>("#frequency-value");
 levelSlider = q<HTMLInputElement>("#level");
 levelValue = q<HTMLSpanElement>("#level-value");
+smoothSlider = q<HTMLInputElement>("#smooth");
+smoothValue = q<HTMLSpanElement>("#smooth-value");
 waveSlider = q<HTMLInputElement>("#wave");
 waveValue = q<HTMLSpanElement>("#wave-value");
 scaleSlider = q<HTMLInputElement>("#scale");
@@ -137,6 +143,7 @@ stopButton.addEventListener("click", async () => {
 wireControls([
   frequencySlider,
   levelSlider,
+  smoothSlider,
   waveSlider,
   scaleSlider,
   tiltSlider,
@@ -171,6 +178,7 @@ function onScopeEvent(event: unknown) {
 function updateReadouts() {
   frequencyValue.textContent = `${Number(frequencySlider.value).toFixed(1)} Hz`;
   levelValue.textContent = Number(levelSlider.value).toFixed(2);
+  smoothValue.textContent = `${Number(smoothSlider.value).toFixed(3)} s`;
   waveValue.textContent = Number(waveSlider.value).toFixed(2);
   scaleValue.textContent = Number(scaleSlider.value).toFixed(2);
   tiltValue.textContent = Number(tiltSlider.value).toFixed(2);

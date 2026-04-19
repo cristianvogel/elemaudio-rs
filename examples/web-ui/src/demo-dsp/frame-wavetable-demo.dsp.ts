@@ -7,6 +7,7 @@ export const FRAME_SCOPE_EVENT = "frame-wavetable:scope";
 
 export interface FrameWavetableDemoParams {
   modulate: number;
+  smooth: number;
   shift: number;
   tilt: number;
   zoom: number;
@@ -66,14 +67,21 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
     ),
   );
 
+  const smoothedFrame = el.extra.frameSmooth(
+    { key: "fwt:smooth", framelength: FRAME_LENGTH },
+    el.const({ key: "fwt:smoothTime", value: p.smooth }),
+    el.mul(0.35, rampShaper),
+    frame,
+  );
+
   const writer = el.extra.frameWriteRAM(
     { key: "fwt:writer", framelength: FRAME_LENGTH, path: RAM_PATH },
-    frame,
+    smoothedFrame,
   );
 
   const frameScope = el.extra.frameScope(
     { key: "fwt:scope", framelength: FRAME_LENGTH, name: FRAME_SCOPE_EVENT },
-    frame,
+    smoothedFrame,
   );
 
   const phase = el.phasor(el.const({ key: "fwt:freq", value: p.frequency }));
