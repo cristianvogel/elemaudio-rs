@@ -73,10 +73,12 @@ export function initDemo(config: DemoConfig) {
   let audioContext: AudioContext | null = null;
   let renderer: WebRenderer | null = null;
   const persistKey = config.persistKey ?? `elemaudio-rs:demo:${location.pathname}`;
+  const persistenceEnabled = persistKey !== "no-persist";
   const defaultValues = new Map<HTMLInputElement | HTMLSelectElement, string>();
   const defaultChecks = new Map<HTMLInputElement, boolean>();
 
   function loadPersistedState(): Record<string, string | boolean> {
+    if (!persistenceEnabled) return {};
     try {
       const raw = localStorage.getItem(persistKey);
       if (!raw) return {};
@@ -89,6 +91,7 @@ export function initDemo(config: DemoConfig) {
   }
 
   function savePersistedState(state: Record<string, string | boolean>) {
+    if (!persistenceEnabled) return;
     try {
       localStorage.setItem(persistKey, JSON.stringify(state));
     } catch {
@@ -118,6 +121,7 @@ export function initDemo(config: DemoConfig) {
   }
 
   function persistControl(control: HTMLInputElement | HTMLSelectElement) {
+    if (!persistenceEnabled) return;
     const key = controlStorageKey(control);
     if (!key) return;
     const state = loadPersistedState();
@@ -126,6 +130,7 @@ export function initDemo(config: DemoConfig) {
   }
 
   function restoreControls(controls: Array<HTMLInputElement | HTMLSelectElement>) {
+    if (!persistenceEnabled) return;
     const state = loadPersistedState();
     controls.forEach((control) => {
       const key = controlStorageKey(control);
