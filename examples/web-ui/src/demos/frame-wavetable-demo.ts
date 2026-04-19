@@ -45,7 +45,7 @@ const layout = `
       <div class="dial-strip">
         <div class="dial"><label for="frequency"><span>Frequency</span><span id="frequency-value">110.0 Hz</span></label><input id="frequency" type="range" min="20" max="880" value="110" step="1" /></div>
         <div class="dial"><label for="level"><span>Level</span><span id="level-value">0.15</span></label><input id="level" type="range" min="0" max="0.5" value="0.15" step="0.01" /></div>
-        <div class="dial"><label for="wave"><span>Wave</span><span id="wave-value">1.00</span></label><input id="wave" type="range" min="-1" max="1" value="1" step="0.01" /></div>
+        <div class="dial"><label for="wave"><span>Wave</span><span id="wave-value">1.00</span></label><input id="wave" type="range" min="-1" max="1" value="0" step="0.01" /></div>
       </div>
       <div class="dial-strip">
         <div class="dial"><label for="scale"><span>Scale</span><span id="scale-value">1.00</span></label><input id="scale" type="range" min="-1" max="1" value="1" step="0.01" /></div>
