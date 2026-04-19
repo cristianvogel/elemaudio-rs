@@ -922,6 +922,19 @@ fn covers_extra_helpers() {
         0,
     );
 
+    let frame_phasor_node = extra::frame_phasor(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &frame_phasor_node,
+        "framePhasor",
+        serde_json::json!({"framelength": 128}),
+        3,
+    );
+
     // dust: seed prop preserved; two signal children (density, release).
     let dust_node = extra::dust(
         serde_json::json!({"seed": 1234, "jitter": 0.25}),

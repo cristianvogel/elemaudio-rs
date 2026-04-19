@@ -996,6 +996,37 @@ export function frameclock(period: number): NodeRepr_t {
   return createNode("frameclock", { period }, []);
 }
 
+/** Props for `el.extra.framePhasor(...)`. */
+export interface FramePhasorProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive integer. */
+  framelength: number;
+}
+
+/**
+ * Absolute-sample-aligned frame phasor with frame-latched shaping controls.
+ *
+ * `shift`, `tilt`, and `scale` are sampled only on frame boundaries and held
+ * for the full frame.
+ */
+export function framePhasor(
+  props: FramePhasorProps,
+  shift: ElemNode,
+  tilt: ElemNode,
+  scale: ElemNode,
+): NodeRepr_t {
+  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
+    throw new Error("framePhasor requires a positive integer framelength prop");
+  }
+
+  return createNode("framePhasor", props, [
+    resolve(shift),
+    resolve(tilt),
+    resolve(scale),
+  ]);
+}
+
 
 // ---------------------------------------------------------------------------
 // ramp00

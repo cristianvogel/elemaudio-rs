@@ -1200,6 +1200,29 @@ pub fn frameclock(period: usize) -> Node {
     )
 }
 
+/// Absolute-sample-aligned frame phasor with frame-latched shaping controls.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `shift`: wrapped phase offset, sampled only at frame boundaries
+/// - `tilt`: bipolar phase warp amount, sampled only at frame boundaries
+/// - `scale`: post-warp phase scale, sampled only at frame boundaries
+pub fn frame_phasor(
+    props: serde_json::Value,
+    shift: impl Into<ElemNode>,
+    tilt: impl Into<ElemNode>,
+    scale: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "framePhasor",
+        props,
+        vec![resolve(shift), resolve(tilt), resolve(scale)],
+    )
+}
+
 /// Sparse random impulses with optional decaying release.
 ///
 /// Inspired by SuperCollider's `Dust` with a twist: each impulse

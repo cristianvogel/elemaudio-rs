@@ -10,12 +10,14 @@
 #include <extra/crunch.h>
 #include <extra/boxsum.h>
 #include <extra/frame_clock.h>
+#include <extra/frame_phasor.h>
 #include <extra/freqshift.h>
 #include <extra/limiter.h>
 // VariSlopeSVFNode: Rossum-style continuously morphable Butterworth slope SVF (12–72 dB/oct).
 // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0). Q fixed at Butterworth.
 #include <extra/vari_slope_svf.h>
 #include <extra/stridedelay.h>
+#include <extra/sample_time.h>
 // VocoderNode: STFT-based channel vocoder (port of Geraint Luff's JSFX).
 // Inputs: [0] carrier L, [1] carrier R, [2] modulator L, [3] modulator R.
 // Properties: windowMs, smoothingMs, maxGainDb, swapInputs.
@@ -71,6 +73,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
         });
 
+        handle->runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FramePhasorNode<double>>(id, fs, bs);
+        });
+
         handle->runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });
@@ -114,6 +120,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         // Properties: seed, jitter.
         handle->runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::DustNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("time", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::SampleTimeNode<double>>(id, fs, bs);
         });
 
         return handle.release();
