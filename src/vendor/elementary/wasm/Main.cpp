@@ -9,6 +9,7 @@
 //   "boxaverage"   — BoxAverageNode
 //   "frameclock"   — FrameClockNode
 //   "framePhasor"  — FramePhasorNode
+//   "frameValue"   — FrameValueNode
 //   "limiter"      — LimiterNode
 //   "variSlopeSvf" — VariSlopeSVFNode  (Butterworth, 12–72 dB/oct, no Q)
 //   "stridedelay"  — StrideDelayNode
@@ -31,6 +32,7 @@
 #include "../../../../native/extra/boxsum.h"
 #include "../../../../native/extra/frame_clock.h"
 #include "../../../../native/extra/frame_phasor.h"
+#include "../../../../native/extra/frame_value.h"
 #include "../../../../native/extra/freqshift.h"
 #include "../../../../native/extra/crunch.h"
 #include "../../../../native/extra/limiter.h"
@@ -106,6 +108,10 @@ public:
 
         runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FramePhasorNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameValue", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameValueNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {

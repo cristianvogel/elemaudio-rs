@@ -44,6 +44,7 @@ export default defineConfig({
         sample: resolve(__dirname, "sample.html"),
         dust: resolve(__dirname, "dust.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
+        frameDomain: resolve(__dirname, "frame-domain.html"),
         ramp00: resolve(__dirname, "ramp00.html"),
         waveshaper: resolve(__dirname, "waveshaper.html"),
         vocoder: resolve(__dirname, "vocoder.html"),

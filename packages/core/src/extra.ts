@@ -1004,6 +1004,16 @@ export interface FramePhasorProps extends Record<string, unknown> {
   framelength: number;
 }
 
+/** Props for `el.extra.frameValue(...)`. */
+export interface FrameValueProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Event source name forwarded through queued runtime events. */
+  name?: string;
+  /** Fixed frame length in samples. Must be a positive integer. */
+  framelength: number;
+}
+
 /**
  * Absolute-sample-aligned frame phasor with frame-latched shaping controls.
  *
@@ -1025,6 +1035,25 @@ export function framePhasor(
     resolve(tilt),
     resolve(scale),
   ]);
+}
+
+/**
+ * Frame-synchronous single-value getter with queued event output.
+ *
+ * The `index` signal is sampled only on frame boundaries. The node passes `x`
+ * through unchanged and emits the selected frame sample through queued runtime
+ * events as `frameValue`.
+ */
+export function frameValue(
+  props: FrameValueProps,
+  index: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  if (!Number.isInteger(props.framelength) || props.framelength <= 0) {
+    throw new Error("frameValue requires a positive integer framelength prop");
+  }
+
+  return createNode("frameValue", props, [resolve(index), resolve(x)]);
 }
 
 

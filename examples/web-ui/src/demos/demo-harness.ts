@@ -73,6 +73,8 @@ export function initDemo(config: DemoConfig) {
   let audioContext: AudioContext | null = null;
   let renderer: WebRenderer | null = null;
   const persistKey = config.persistKey ?? `elemaudio-rs:demo:${location.pathname}`;
+  const defaultValues = new Map<HTMLInputElement | HTMLSelectElement, string>();
+  const defaultChecks = new Map<HTMLInputElement, boolean>();
 
   function loadPersistedState(): Record<string, string | boolean> {
     try {
@@ -102,6 +104,7 @@ export function initDemo(config: DemoConfig) {
     if (control instanceof HTMLInputElement && control.type === "checkbox") {
       return control.checked;
     }
+
     return control.value;
   }
 
@@ -110,6 +113,7 @@ export function initDemo(config: DemoConfig) {
       if (typeof value === "boolean") control.checked = value;
       return;
     }
+
     if (typeof value === "string") control.value = value;
   }
 
@@ -169,13 +173,11 @@ export function initDemo(config: DemoConfig) {
     status.textContent = "Stopping audio...";
     if (stopButton) stopButton.disabled = true;
 
-    // Render silence with a short fade-out
     await renderer.renderWithOptions(
       { rootFadeInMs: 0, rootFadeOutMs: 100 },
       ...[el.const({ value: 0 }), el.const({ value: 0 })]
     );
 
-    // Give it a moment to fade out before suspending
     await new Promise((resolve) => setTimeout(resolve, 120));
     await audioContext.suspend();
 
@@ -184,11 +186,16 @@ export function initDemo(config: DemoConfig) {
   }
 
   function resetControl(control: HTMLInputElement) {
-    if (control.type === "checkbox" && config.resetChecks) {
-      control.checked = config.resetChecks.get(control) ?? control.checked;
-    } else if (config.resetValues) {
-      const value = config.resetValues.get(control);
-      if (value !== undefined) control.value = value;
+    if (control.type === "checkbox") {
+      const checked = config.resetChecks?.get(control) ?? defaultChecks.get(control);
+      if (checked !== undefined) {
+        control.checked = checked;
+      }
+    } else {
+      const value = config.resetValues?.get(control) ?? defaultValues.get(control);
+      if (value !== undefined) {
+        control.value = value;
+      }
     }
 
     config.updateReadouts();
@@ -199,12 +206,17 @@ export function initDemo(config: DemoConfig) {
     }
   }
 
-  /**
-   * Wires input and optional double-click-reset listeners on the given controls.
-   * Call this after querying control elements from the DOM.
-   */
   function wireControls(controls: Array<HTMLInputElement | HTMLSelectElement>) {
-    // Restore persisted values once before listeners go live.
+    controls.forEach((control) => {
+      if (control instanceof HTMLInputElement && control.type === "checkbox") {
+        defaultChecks.set(control, control.defaultChecked);
+        return;
+      }
+
+      const initialValue = control instanceof HTMLInputElement ? control.defaultValue : control.value;
+      defaultValues.set(control, initialValue);
+    });
+
     restoreControls(controls);
 
     controls.forEach((control) => {
@@ -219,10 +231,10 @@ export function initDemo(config: DemoConfig) {
       control.addEventListener("input", onChange);
       control.addEventListener("change", onChange);
 
-      if (config.resetValues || config.resetChecks) {
+      if (control instanceof HTMLInputElement) {
         control.addEventListener("dblclick", (event) => {
           event.preventDefault();
-          resetControl(control as HTMLInputElement);
+          resetControl(control);
         });
       }
     });
@@ -246,9 +258,6 @@ export function initDemo(config: DemoConfig) {
       await stopAudio();
     });
   }
-
-  // Note: updateReadouts is NOT called here. Demos call it after
-  // querying their control elements. The first render also calls it.
 
   return {
     app,

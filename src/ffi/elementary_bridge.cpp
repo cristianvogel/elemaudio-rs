@@ -13,6 +13,7 @@
 #include <extra/boxsum.h>
 #include <extra/frame_clock.h>
 #include <extra/frame_phasor.h>
+#include <extra/frame_value.h>
 #include <extra/freqshift.h>
 #include <extra/limiter.h>
 // VariSlopeSVFNode: Rossum-style continuously morphable Butterworth slope SVF (12–72 dB/oct).
@@ -77,6 +78,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FramePhasorNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameValue", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameValueNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {

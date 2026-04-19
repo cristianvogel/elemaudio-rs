@@ -935,6 +935,18 @@ fn covers_extra_helpers() {
         3,
     );
 
+    let frame_value_node = extra::frame_value(
+        serde_json::json!({"framelength": 128, "name": "frame-readout"}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &frame_value_node,
+        "frameValue",
+        serde_json::json!({"framelength": 128, "name": "frame-readout"}),
+        2,
+    );
+
     // dust: seed prop preserved; two signal children (density, release).
     let dust_node = extra::dust(
         serde_json::json!({"seed": 1234, "jitter": 0.25}),

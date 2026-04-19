@@ -1223,6 +1223,24 @@ pub fn frame_phasor(
     )
 }
 
+/// Frame-synchronous single-value getter with queued event output.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `name`: event source identifier
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `index`: frame-rate-synchronised sample index, latched on frame boundaries
+/// - `x`: source signal to read and pass through unchanged
+pub fn frame_value(
+    props: serde_json::Value,
+    index: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    Node::new("frameValue", props, vec![resolve(index), resolve(x)])
+}
+
 /// Sparse random impulses with optional decaying release.
 ///
 /// Inspired by SuperCollider's `Dust` with a twist: each impulse
