@@ -1310,6 +1310,33 @@ pub fn frame_shaper(
     )
 }
 
+/// WireFrames-style frame-domain smoothing processor with per-track SR modulation.
+///
+/// The base `time_constant` is shaped per track using the same order-4 law as
+/// `frame_random_walks`: shaper `0` keeps the default time, `1` makes it 16x
+/// faster, and `-1` makes it 16x slower.
+///
+/// Props:
+/// - `framelength`: positive even integer frame size in samples
+/// - `key`: optional authoring key
+pub fn frame_smooth(
+    props: serde_json::Value,
+    time_constant: impl Into<ElemNode>,
+    time_constant_frame_shaper: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_smooth");
+    Node::new(
+        "frameSmooth",
+        props,
+        vec![
+            resolve(time_constant),
+            resolve(time_constant_frame_shaper),
+            resolve(x),
+        ],
+    )
+}
+
 /// WireFrames-style RAM writer for a live mono frame stream.
 ///
 /// Captures one full frame from `x` and writes the completed frame into a

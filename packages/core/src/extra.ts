@@ -1032,6 +1032,14 @@ export interface FrameShaperProps extends Record<string, unknown> {
   framelength: number;
 }
 
+/** Props for `el.extra.frameSmooth(...)`. */
+export interface FrameSmoothProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
 /** Props for `el.extra.frameWriteRAM(...)`. */
 export interface FrameWriteRAMProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
@@ -1139,6 +1147,26 @@ export function frameShaper(
     resolve(zoom),
     resolve(scale),
     resolve(wave),
+  ]);
+}
+
+/**
+ * WireFrames-style frame-domain smoothing processor with per-track SR modulation.
+ *
+ * `timeConstantFrameShaper` uses the same inverse order-4 time scaling law as
+ * `frameRandomWalks`: `0 -> default`, `1 -> 16x faster`, `-1 -> 16x slower`.
+ */
+export function frameSmooth(
+  props: FrameSmoothProps,
+  timeConstant: ElemNode,
+  timeConstantFrameShaper: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameSmooth", props.framelength);
+  return createNode("frameSmooth", props, [
+    resolve(timeConstant),
+    resolve(timeConstantFrameShaper),
+    resolve(x),
   ]);
 }
 
