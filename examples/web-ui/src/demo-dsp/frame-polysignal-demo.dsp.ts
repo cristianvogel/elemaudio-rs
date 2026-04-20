@@ -8,6 +8,7 @@ export interface FramePolySignalDemoParams {
   rate: number;
   phaseSpread: number;
   rateSpread: number;
+  resetArmed: boolean;
   isStopped?: boolean;
 }
 
@@ -16,11 +17,13 @@ export function buildGraph(p: FramePolySignalDemoParams): NodeRepr_t[] {
     return [el.const({ value: 0 }), el.const({ value: 0 })];
   }
 
+  const resetPulse = el.mul(p.resetArmed ? 1 : 0, el.extra.frameClock(FRAME_LENGTH));  // frame synchronised reset
+
   const poly = el.extra.framePolySignal(
     { key: "fps:poly", framelength: FRAME_LENGTH, bpm: p.rate, path: "fps:multi_lfo" },
     el.const({ key: "fps:phaseSpread", value: p.phaseSpread }),
     el.const({ key: "fps:rateSpread", value: p.rateSpread }),
-    0,
+    resetPulse,
   );
 
   const scope = el.extra.frameScope(
@@ -28,6 +31,6 @@ export function buildGraph(p: FramePolySignalDemoParams): NodeRepr_t[] {
     poly,
   );
 
-  const kept = el.add(0, el.mul(0, scope));
-  return [kept, el.const({ value: 0 })];
+  const left = el.add(el.mul(0, scope), el.mul(el.db2gain(-40)  , poly));
+  return [left, el.const({ value: 0 })];
 }

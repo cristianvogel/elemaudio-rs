@@ -69,9 +69,12 @@ namespace elem
         {
             frameLength_ = std::max<int64_t>(2, frameLengthTarget.load(std::memory_order_relaxed));
             ensureStorage();
-            initializePhases();
+            resetDriftState();
             appliedRequest_ = reinitRequest.fetch_add(0, std::memory_order_relaxed);
             previousResetPositive_ = false;
+            bpmLatched_ = Sample(0);
+            phaseSpreadLatched_ = Sample(0);
+            rateSpreadLatched_ = Sample(0);
         }
 
         void process(BlockContext<FloatType> const& ctx) override
@@ -92,7 +95,7 @@ namespace elem
             if (request != appliedRequest_ || nextFrameLength != frameLength_) {
                 frameLength_ = nextFrameLength;
                 ensureStorage();
-                initializePhases();
+                resetDriftState();
                 appliedRequest_ = request;
             }
 
@@ -108,17 +111,27 @@ namespace elem
             for (size_t i = 0; i < numSamples; ++i) {
                 auto const resetPositive = reset[i] > Sample(0);
                 if (resetPositive && !previousResetPositive_) {
-                    initializePhases();
+                    resetDriftState();
                 }
                 previousResetPositive_ = resetPositive;
 
                 auto const track = currentTrack_;
-                auto const phaseOffset = clampBipolar(phaseSpread[i]);
-                auto const lookupPhase = wrap01(phases_[track] + phaseOffset);
+                if (track == 0) {
+                    bpmLatched_ = std::max(Sample(0), bpmTarget.load(std::memory_order_relaxed));
+                    phaseSpreadLatched_ = clampBipolar(phaseSpread[i]);
+                    rateSpreadLatched_ = clampBipolar(rateSpread[i]);
+                }
+
+                auto const trackRamp = fullRampForTrack(track);
+                auto const basePhase = static_cast<Sample>(track) / static_cast<Sample>(frameLength_);
+                auto const phaseOffset = phaseSpreadLatched_ * trackRamp;
+                auto const lookupPhase = wrap01(basePhase + driftPhases_[track] + phaseOffset);
                 out[i] = sampleAtPhase(lookupPhase);
 
-                auto const shapedRate = baseRateHz * std::exp2(Sample(4) * clampBipolar(rateSpread[i]));
-                phases_[track] = wrap01(phases_[track] + shapedRate * frameDuration);
+                auto const baseRateHz = bpmLatched_ / Sample(60);
+                auto const rateOffset = rateSpreadLatched_ * trackRamp;
+                auto const shapedRate = baseRateHz * std::exp2(Sample(4) * rateOffset);
+                driftPhases_[track] = wrap01(driftPhases_[track] + shapedRate * frameDuration);
                 currentTrack_ = (currentTrack_ + 1) % static_cast<size_t>(frameLength_);
             }
 
@@ -154,14 +167,12 @@ namespace elem
 
         void ensureStorage()
         {
-            phases_.assign(static_cast<size_t>(frameLength_), Sample(0));
+            driftPhases_.assign(static_cast<size_t>(frameLength_), Sample(0));
         }
 
-        void initializePhases()
+        void resetDriftState()
         {
-            for (size_t i = 0; i < phases_.size(); ++i) {
-                phases_[i] = static_cast<Sample>(i) / static_cast<Sample>(frameLength_);
-            }
+            std::fill(driftPhases_.begin(), driftPhases_.end(), Sample(0));
             currentTrack_ = 0;
         }
 
@@ -191,9 +202,12 @@ namespace elem
 
         int64_t frameLength_ = 2;
         uint32_t appliedRequest_ = 0;
-        std::vector<Sample> phases_;
+        std::vector<Sample> driftPhases_;
         size_t currentTrack_ = 0;
         bool previousResetPositive_ = false;
+        Sample bpmLatched_ = Sample(0);
+        Sample phaseSpreadLatched_ = Sample(0);
+        Sample rateSpreadLatched_ = Sample(0);
         bool hasExternalSource_ = false;
         SharedResourcePtr source_;
     };

@@ -13,15 +13,18 @@ const layout = `
     <div class="frame-stage-label">Frame Domain Programming</div>
     <div class="frame-visual-row">
       <div class="frame-visual-card">
-        <div class="frame-stage frame-bars-stage">
+        <div class="frame-stage frame-bars-stage frame-overlay-stage">
           <div class="frame-bars-head">
             <div>
               <div class="scope-title">Frame MultiLFO</div>
-              <div class="frame-bars-subtitle">WireFrames PolySignal with internal sine fallback.</div>
+              <div class="frame-bars-subtitle">WireFrames PolySignal output with source table overlay.</div>
             </div>
             <div class="frame-bars-badge">frameLength ${FRAME_LENGTH}</div>
           </div>
-          <canvas id="frame-bars-canvas" class="frame-bars-canvas"></canvas>
+          <div class="frame-overlay-wrap">
+            <canvas id="frame-bars-canvas" class="frame-bars-canvas"></canvas>
+            <canvas id="frame-source-canvas" class="frame-mini-scope-canvas"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -35,12 +38,13 @@ const layout = `
     </p>
     <p>
       The browser demo loads <code>demo-resources/multi-256-32f.wav</code> into the virtual file system at
-      <code>fps:multi_lfo</code> before rendering.
+      <code>fps:multi_lfo</code>. The embedded scope shows the current source table.
     </p>
     <div class="controls">
       <div class="button-row">
         <button id="start" class="state-button">Start</button>
         <button id="stop" class="state-button">Stop</button>
+        <button id="reset-phase" class="secondary">Resync Phases</button>
       </div>
       <div class="dial-strip">
         <div class="dial"><label for="rate"><span>Rate</span><span id="rate-value">12.0 BPM</span></label><input id="rate" type="range" min="0" max="120" value="12" step="0.1" /></div>
@@ -60,9 +64,91 @@ let rateSpreadSlider: HTMLInputElement;
 let rateSpreadValue: HTMLSpanElement;
 let frameCanvas: HTMLCanvasElement;
 let frameCtx: CanvasRenderingContext2D;
+let sourceCanvas: HTMLCanvasElement;
+let sourceCtx: CanvasRenderingContext2D;
 let stopButton: HTMLButtonElement;
+let resetButton: HTMLButtonElement;
 let isStopped = false;
+let resetArmed = false;
 let currentFrame: number[] = [];
+let currentSourceTable: Float32Array = new Float32Array();
+
+function setupCanvas(canvas: HTMLCanvasElement) {
+  const bounds = canvas.getBoundingClientRect();
+  const width = Math.max(1, Math.floor(bounds.width));
+  const height = Math.max(1, Math.floor(bounds.height));
+  const dpr = window.devicePixelRatio ?? 1;
+  if (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr)) {
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
+  return { width, height, dpr };
+}
+
+function drawWaveLine(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, data: ArrayLike<number>, stroke: string) {
+  const { width, height, dpr } = setupCanvas(canvas);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(6, 10, 18, 0.96)";
+  ctx.fillRect(0, 0, width, height);
+  const baseline = height * 0.5;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.beginPath();
+  ctx.moveTo(0, baseline + 0.5);
+  ctx.lineTo(width, baseline + 0.5);
+  ctx.stroke();
+  if (data.length === 0) return;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < data.length; i += 1) {
+    const x = (i / Math.max(1, data.length - 1)) * width;
+    const y = baseline - Math.max(-1, Math.min(1, data[i])) * (height * 0.42);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+function drawFrame(frame: number[]) {
+  const { width, height, dpr } = setupCanvas(frameCanvas);
+  frameCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  frameCtx.clearRect(0, 0, width, height);
+
+  const gradient = frameCtx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, "rgba(176, 10, 234, 0.52)");
+  gradient.addColorStop(1, "rgba(250, 155, 72, 0.8)");
+
+  const baseline = height * 0.5;
+  frameCtx.fillStyle = "rgba(6, 10, 18, 0.96)";
+  frameCtx.fillRect(0, 0, width, height);
+  frameCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  frameCtx.beginPath();
+  frameCtx.moveTo(0, baseline + 0.5);
+  frameCtx.lineTo(width, baseline + 0.5);
+  frameCtx.stroke();
+
+  if (frame.length === 0) return;
+
+  const barWidth = width / frame.length;
+  const gap = Math.min(1.5, barWidth * 0.12);
+  const drawWidth = Math.max(1, barWidth - gap);
+  const amplitude = baseline - 14;
+  frameCtx.fillStyle = gradient;
+  for (let i = 0; i < frame.length; i += 1) {
+    const value = Math.max(-1, Math.min(1, frame[i]));
+    const x = i * barWidth + gap * 0.5;
+    const barHeight = Math.abs(value) * amplitude;
+    const y = value >= 0 ? baseline - barHeight : baseline;
+    frameCtx.fillRect(x, y, drawWidth, barHeight);
+  }
+}
+
+function drawSourceTable(data: ArrayLike<number>) {
+  drawWaveLine(sourceCtx, sourceCanvas, data, "rgba(250, 155, 72, 0.92)");
+}
 
 async function loadBundledMultiLfo(renderer: WebRenderer) {
   const audioContext = renderer.context;
@@ -77,9 +163,9 @@ async function loadBundledMultiLfo(renderer: WebRenderer) {
 
   const bytes = await response.arrayBuffer();
   const buffer = await audioContext.decodeAudioData(bytes);
-  const mono = new Float32Array(buffer.getChannelData(0));
+  currentSourceTable = new Float32Array(buffer.getChannelData(0));
   await renderer.updateVirtualFileSystem({
-    "fps:multi_lfo": mono,
+    "fps:multi_lfo": currentSourceTable,
   });
 }
 
@@ -90,13 +176,14 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
     rate: Number(rateSlider.value),
     phaseSpread: Number(phaseSpreadSlider.value),
     rateSpread: Number(rateSpreadSlider.value),
+    resetArmed,
     isStopped,
   }),
   updateReadouts,
-  onAudioReady: (renderer: WebRenderer) => {
-    return loadBundledMultiLfo(renderer).then(() => {
-      renderer.on("scope", onScopeEvent);
-    });
+  onAudioReady: async (renderer: WebRenderer) => {
+    renderer.on("scope", onScopeEvent);
+    await loadBundledMultiLfo(renderer);
+    drawSourceTable(currentSourceTable);
   },
 });
 
@@ -108,7 +195,10 @@ rateSpreadSlider = q<HTMLInputElement>("#rate-spread");
 rateSpreadValue = q<HTMLSpanElement>("#rate-spread-value");
 frameCanvas = q<HTMLCanvasElement>("#frame-bars-canvas");
 frameCtx = frameCanvas.getContext("2d") ?? (() => { throw new Error("Missing 2D canvas context"); })();
+sourceCanvas = q<HTMLCanvasElement>("#frame-source-canvas");
+sourceCtx = sourceCanvas.getContext("2d") ?? (() => { throw new Error("Missing 2D canvas context"); })();
 stopButton = q<HTMLButtonElement>("#stop");
+resetButton = q<HTMLButtonElement>("#reset-phase");
 
 q<HTMLButtonElement>("#start").addEventListener("click", () => {
   isStopped = false;
@@ -121,10 +211,20 @@ stopButton.addEventListener("click", async () => {
   await renderCurrentGraph();
 });
 
+resetButton.addEventListener("click", async () => {
+  resetArmed = true;
+  await renderCurrentGraph();
+  resetArmed = false;
+  if (!isStopped) {
+    await renderCurrentGraph();
+  }
+});
+
 wireControls([rateSlider, phaseSpreadSlider, rateSpreadSlider]);
 
 updateReadouts();
 drawFrame([]);
+drawSourceTable(currentSourceTable);
 
 type ScopePayload = { source?: string; data?: number[][] };
 
@@ -149,55 +249,16 @@ function updateReadouts() {
   rateSpreadValue.textContent = Number(rateSpreadSlider.value).toFixed(2);
 }
 
-function drawFrame(frame: number[]) {
-  const bounds = frameCanvas.getBoundingClientRect();
-  const width = Math.max(1, Math.floor(bounds.width));
-  const height = Math.max(1, Math.floor(bounds.height));
-  const dpr = window.devicePixelRatio ?? 1;
+window.addEventListener("resize", () => {
+  drawFrame(currentFrame);
+  drawSourceTable(currentSourceTable);
+});
 
-  if (frameCanvas.width !== Math.floor(width * dpr) || frameCanvas.height !== Math.floor(height * dpr)) {
-    frameCanvas.width = Math.floor(width * dpr);
-    frameCanvas.height = Math.floor(height * dpr);
-    frameCanvas.style.width = `${width}px`;
-    frameCanvas.style.height = `${height}px`;
-  }
-
-  frameCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  frameCtx.clearRect(0, 0, width, height);
-
-  const gradient = frameCtx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "rgba(176, 10, 234, 0.52)");
-  gradient.addColorStop(1, "rgba(250, 155, 72, 0.8)");
-
-  const baseline = height * 0.5;
-  frameCtx.fillStyle = "rgba(6, 10, 18, 0.96)";
-  frameCtx.fillRect(0, 0, width, height);
-  frameCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-  frameCtx.beginPath();
-  frameCtx.moveTo(0, baseline + 0.5);
-  frameCtx.lineTo(width, baseline + 0.5);
-  frameCtx.stroke();
-
-  if (frame.length === 0) {
-    return;
-  }
-
-  const barWidth = width / frame.length;
-  const gap = Math.min(1.5, barWidth * 0.12);
-  const drawWidth = Math.max(1, barWidth - gap);
-  const amplitude = baseline - 14;
-
-  frameCtx.fillStyle = gradient;
-  for (let i = 0; i < frame.length; i += 1) {
-    const value = Math.max(-1, Math.min(1, frame[i]));
-    const x = i * barWidth + gap * 0.5;
-    const barHeight = Math.abs(value) * amplitude;
-    const y = value >= 0 ? baseline - barHeight : baseline;
-    frameCtx.fillRect(x, y, drawWidth, barHeight);
-  }
-}
-
-window.addEventListener("resize", () => drawFrame(currentFrame));
 if (typeof ResizeObserver !== "undefined") {
-  new ResizeObserver(() => drawFrame(currentFrame)).observe(frameCanvas);
+  const observer = new ResizeObserver(() => {
+    drawFrame(currentFrame);
+    drawSourceTable(currentSourceTable);
+  });
+  observer.observe(frameCanvas);
+  observer.observe(sourceCanvas);
 }
