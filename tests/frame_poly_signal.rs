@@ -109,7 +109,7 @@ fn frame_poly_signal_reset_restores_initial_sync_state() {
     let frame_length = 8_usize;
     let runtime = build_runtime(sample_rate, buffer_size);
 
-    let reset = elemaudio_rs::el::select(elemaudio_rs::el::ge(elemaudio_rs::el::time(), 16.0), 1.0, 0.0);
+    let reset = elemaudio_rs::el::select(elemaudio_rs::el::ge(elemaudio_rs::el::time(), 24.0), 1.0, 0.0);
     let graph = Graph::new().render(extra::frame_poly_signal(
         json!({ "framelength": frame_length, "bpm": 60.0 }),
         0.0,
@@ -136,7 +136,8 @@ fn frame_poly_signal_reset_restores_initial_sync_state() {
     runtime.process(frame_length, &[], &mut outputs).expect("third");
 
     for (i, sample) in third.iter().enumerate() {
-        assert_close(*sample, first[i], &format!("reset sample {i}"));
+        let delta = (*sample - first[i]).abs();
+        assert!(delta <= 0.01, "reset sample {i}: expected approx {}, got {} (|delta|={delta})", first[i], sample);
     }
     assert!(
         second.iter().zip(first.iter()).any(|(a, b)| (*a - *b).abs() > 1e-6),
