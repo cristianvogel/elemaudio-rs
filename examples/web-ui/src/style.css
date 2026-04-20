@@ -19,6 +19,20 @@ body {
     radial-gradient(circle at top, rgba(74, 144, 226, 0.18), transparent 30%),
     linear-gradient(180deg, #0b0f14 0%, #111722 100%);
 }
+h2 {
+    color: #d4d5df;
+    font-size: 1.2em;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+    line-height: 0.9;
+}
+h3 {
+    color: #bcbdc5;
+    font-size: 1.0em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
 
 a {
     padding: 3px;
@@ -36,8 +50,8 @@ code {
 }
 
 .panel {
-  width: min(92vw, 860px);
-  padding: 24px;
+  width: min(96vw, 1000px);
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
   background: rgba(15, 20, 29, 0.9);
@@ -223,6 +237,14 @@ code {
   letter-spacing: 0.06em;
 }
 
+#smooth-mode {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: #9fb0c3;
+    letter-spacing: 0.1px;
+    text-transform: uppercase;
+}
+
 .frame-readout-card strong {
   font-size: 22px;
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -287,13 +309,13 @@ p {
 .dial-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 12px;
+  gap: 4px;
 }
 
 .dial {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: 4px;
+  padding: 10px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
