@@ -12,6 +12,7 @@
 #include <extra/crunch.h>
 #include <extra/boxsum.h>
 #include <extra/frame_clock.h>
+#include <extra/mirror_add.h>
 #include <extra/frame_delay.h>
 #include <extra/frame_phasor.h>
 #include <extra/frame_shaper.h>
@@ -21,6 +22,7 @@
 #include <extra/frame_smooth.h>
 #include <extra/frame_write_ram.h>
 #include <extra/frame_random_walks.h>
+#include <extra/wrapping_add.h>
 #include <extra/frame_scope.h>
 #include <extra/frame_value.h>
 #include <extra/freqshift.h>
@@ -83,6 +85,14 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("frameclock", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("wrappingAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::WrappingAddNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("mirrorAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::MirrorAddNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {

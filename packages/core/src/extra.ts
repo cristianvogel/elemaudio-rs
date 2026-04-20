@@ -1047,6 +1047,8 @@ export interface FramePolySignalProps extends Record<string, unknown> {
   bpm: number;
   /** Optional mono wavetable resource path. If omitted, uses an internal sine. */
   path?: string;
+  /** Optional monotonic reset request counter for hard native resync between renders. */
+  resetcounter?: number;
 }
 
 /** Props for `el.extra.frameSelect(...)`. */
@@ -1187,6 +1189,10 @@ export function frameShaper(
  * Reads one source wavetable across the frame and de-correlates each track's
  * time path using built-in full-ramp shaping scaled by `shapePhases` and
  * `shapeFrequencies`. If `path` is omitted, the source defaults to an internal sine wave.
+ *
+ * Current reset behavior:
+ * - the `reset` input performs a hard native reset on rising edge
+ * - changing `props.resetcounter` between renders also performs a hard native reset
  */
 export function framePolySignal(
   props: FramePolySignalProps,
@@ -1276,6 +1282,16 @@ export function frameWriteRAM(
 ): NodeRepr_t {
   assertEvenFrameLength("frameWriteRAM", props.framelength);
   return createNode("frameWriteRAM", props, [resolve(x)]);
+}
+
+/** Wrapping addition inside a runtime range `[min, max)`. */
+export function wrappingAdd(min: ElemNode, max: ElemNode, x: ElemNode, y: ElemNode): NodeRepr_t {
+  return createNode("wrappingAdd", {}, [resolve(min), resolve(max), resolve(x), resolve(y)]);
+}
+
+/** Mirror-reflected addition inside a runtime range `[min, max]`. */
+export function mirrorAdd(min: ElemNode, max: ElemNode, x: ElemNode, y: ElemNode): NodeRepr_t {
+  return createNode("mirrorAdd", {}, [resolve(min), resolve(max), resolve(x), resolve(y)]);
 }
 
 /**

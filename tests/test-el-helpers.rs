@@ -978,6 +978,22 @@ fn covers_extra_helpers() {
         3,
     );
 
+    let wrapping_add_node = extra::wrapping_add(
+        ElemNode::from(node(-1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.75)),
+        ElemNode::from(node(0.5)),
+    );
+    assert_node(&wrapping_add_node, "wrappingAdd", serde_json::Value::Null, 4);
+
+    let mirror_add_node = extra::mirror_add(
+        ElemNode::from(node(-1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.75)),
+        ElemNode::from(node(0.5)),
+    );
+    assert_node(&mirror_add_node, "mirrorAdd", serde_json::Value::Null, 4);
+
     let frame_smooth_node = extra::frame_smooth(
         serde_json::json!({"framelength": 128}),
         ElemNode::from(node(0.1)),

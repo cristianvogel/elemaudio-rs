@@ -1319,6 +1319,11 @@ pub fn frame_shaper(
 /// - `shape_frequencies`: scales an internal full ramp [-1, 1] into per-track rate multiplier bias
 ///
 /// If `path` is omitted, the source defaults to an internal sine wave.
+///
+/// Current reset behavior:
+/// - `reset` input still accepts a rising-edge signal and performs a hard native reset
+/// - `resetcounter` prop, when changed between renders, also requests a hard native reset
+/// - the hard reset clears drift phases and the latched `bpm` / spread state
 pub fn frame_poly_signal(
     props: serde_json::Value,
     shape_phases: impl Into<ElemNode>,
@@ -1419,6 +1424,34 @@ pub fn frame_write_ram(
 ) -> Node {
     assert_even_framelength(&props, "frame_write_ram");
     Node::new("frameWriteRAM", props, vec![resolve(x)])
+}
+
+/// Wrapping addition inside a runtime range `[min, max)`.
+pub fn wrapping_add(
+    min: impl Into<ElemNode>,
+    max: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+    y: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "wrappingAdd",
+        serde_json::Value::Null,
+        vec![resolve(min), resolve(max), resolve(x), resolve(y)],
+    )
+}
+
+/// Mirror-reflected addition inside a runtime range `[min, max]`.
+pub fn mirror_add(
+    min: impl Into<ElemNode>,
+    max: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+    y: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "mirrorAdd",
+        serde_json::Value::Null,
+        vec![resolve(min), resolve(max), resolve(x), resolve(y)],
+    )
 }
 
 fn assert_even_framelength(props: &serde_json::Value, helper: &str) {

@@ -1,6 +1,6 @@
 import WebRenderer from "../WebRenderer";
 import "../style.css";
-import multiLfoUrl from "../../../demo-resources/multi-256-32f.wav?url";
+import multiLfoUrl from "../../../demo-resources/waveKitchen_256.wav?url";
 import {
   buildGraph as dspBuildGraph,
   FRAME_LENGTH,
@@ -170,7 +170,7 @@ async function loadBundledMultiLfo(renderer: WebRenderer) {
   const buffer = await audioContext.decodeAudioData(bytes);
   currentSourceTable = new Float32Array(buffer.getChannelData(0));
   await renderer.updateVirtualFileSystem({
-    "fps:multi_lfo": currentSourceTable,
+    "fps:multi_lfo": currentSourceTable
   });
 }
 

@@ -1,7 +1,7 @@
 import type { NodeRepr_t } from "@elem-rs/core";
 import { el } from "@elem-rs/core";
 
-export const FRAME_LENGTH = 256;
+export const FRAME_LENGTH = 128;
 export const FRAME_SCOPE_EVENT = "frame-domain:scope";
 
 export interface FrameDomainDemoParams {

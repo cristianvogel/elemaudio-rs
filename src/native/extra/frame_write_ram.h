@@ -46,8 +46,8 @@ namespace elem
                 });
 
                 framePath_ = path;
-                ram_ = std::dynamic_pointer_cast<FrameRAMResource>(resource);
-                if (!ram_ || ram_->numSamples() != static_cast<size_t>(frameLength_)) {
+                ram_ = std::move(resource);
+                if (!ram_ || ram_->numChannels() != 1 || ram_->numSamples() != static_cast<size_t>(frameLength_)) {
                     return ReturnCode::InvalidPropertyValue();
                 }
             }
@@ -60,7 +60,10 @@ namespace elem
             std::fill(staging_.begin(), staging_.end(), Sample(0));
             hasCompleteFrame_ = false;
             if (ram_) {
-                ram_->clear();
+                auto view = ram_->getChannelData(0);
+                if (view.data() != nullptr) {
+                    std::fill_n(view.data(), view.size(), 0.0f);
+                }
             }
         }
 
@@ -118,12 +121,19 @@ namespace elem
             for (size_t i = 0; i < staging_.size(); ++i) {
                 temp_[i] = static_cast<float>(staging_[i]);
             }
-            ram_->writeFrame(temp_.data(), temp_.size());
+            auto view = ram_->getChannelData(0);
+            auto const count = std::min(view.size(), temp_.size());
+            if (view.data() != nullptr) {
+                std::copy_n(temp_.data(), count, view.data());
+                if (count < view.size()) {
+                    std::fill(view.data() + static_cast<std::ptrdiff_t>(count), view.data() + static_cast<std::ptrdiff_t>(view.size()), 0.0f);
+                }
+            }
         }
 
         int64_t frameLength_ = 2;
         std::string framePath_;
-        std::shared_ptr<FrameRAMResource> ram_;
+        SharedResourcePtr ram_;
         std::vector<Sample> staging_ = std::vector<Sample>(2, Sample(0));
         std::vector<float> temp_;
         bool hasCompleteFrame_ = false;

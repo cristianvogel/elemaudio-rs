@@ -18,6 +18,36 @@ export default class WebRenderer extends EventEmitter {
 
   public context: AudioContext | null = null;
 
+  private _makeRenderError(
+    phase: string,
+    result: { success?: boolean; message?: string; [key: string]: unknown },
+    stats: Record<string, unknown>,
+  ) {
+    const message = typeof result?.message === "string" ? result.message : "Unknown render failure";
+    const hints: string[] = [];
+
+    if (/invalid node/i.test(message)) {
+      hints.push("A property update likely targeted a node that was not created in the same render pass.");
+      hints.push("Check keyed custom nodes inside conditional graphs and any stateful helper whose props change while its node disappears or changes shape.");
+    }
+
+    if (/property/i.test(message)) {
+      hints.push("Check prop key names for typos or casing.");
+    }
+
+    const error = new Error(
+      [
+        `${phase} failed: ${message}`,
+        `stats=${JSON.stringify(stats)}`,
+        hints.length > 0 ? `hints=${hints.join(" ")}` : null,
+      ].filter(Boolean).join(" | "),
+    ) as Error & { result?: unknown; stats?: Record<string, unknown> };
+
+    error.result = result;
+    error.stats = stats;
+    return error;
+  }
+
   async initialize(audioContext: AudioContext, workletOptions: AudioWorkletNodeOptions = {}, eventInterval: number = 16) {
     invariant(typeof audioContext === "object" && audioContext !== null, "First argument to initialize must be a valid AudioContext instance.");
     invariant(typeof workletOptions === "object" && workletOptions !== null, "The optional second argument to initialize must be an object.");
@@ -112,7 +142,7 @@ export default class WebRenderer extends EventEmitter {
     const { result, ...stats } = await this._renderer!.render(...args) as { result: { success: boolean }; [key: string]: unknown };
 
     if (!result.success) {
-      return Promise.reject(result);
+      return Promise.reject(this._makeRenderError("render", result, stats));
     }
 
     return Promise.resolve(stats);
@@ -122,7 +152,7 @@ export default class WebRenderer extends EventEmitter {
     const { result, ...stats } = await this._renderer!.renderWithOptions(options, ...args) as { result: { success: boolean }; [key: string]: unknown };
 
     if (!result.success) {
-      return Promise.reject(result);
+      return Promise.reject(this._makeRenderError("renderWithOptions", result, stats));
     }
 
     return Promise.resolve(stats);

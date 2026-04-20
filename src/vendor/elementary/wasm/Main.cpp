@@ -8,6 +8,8 @@
 //   "boxsum"       — BoxSumNode
 //   "boxaverage"   — BoxAverageNode
 //   "frameClock"   — FrameClockNode
+//   "wrappingAdd"  — WrappingAddNode
+//   "mirrorAdd"    — MirrorAddNode
 //   "frameDelay"   — FrameDelayNode
 //   "framePhasor"  — FramePhasorNode
 //   "frameShaper"  — FrameShaperNode
@@ -40,6 +42,7 @@
 #include "FFT.h"
 #include "../../../../native/extra/boxsum.h"
 #include "../../../../native/extra/frame_clock.h"
+#include "../../../../native/extra/mirror_add.h"
 #include "../../../../native/extra/frame_delay.h"
 #include "../../../../native/extra/frame_phasor.h"
 #include "../../../../native/extra/frame_shaper.h"
@@ -49,6 +52,7 @@
 #include "../../../../native/extra/frame_smooth.h"
 #include "../../../../native/extra/frame_write_ram.h"
 #include "../../../../native/extra/frame_random_walks.h"
+#include "../../../../native/extra/wrapping_add.h"
 #include "../../../../native/extra/frame_scope.h"
 #include "../../../../native/extra/frame_value.h"
 #include "../../../../native/extra/freqshift.h"
@@ -122,6 +126,14 @@ public:
 
         runtime->registerNodeType("frameClock", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("wrappingAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::WrappingAddNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("mirrorAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::MirrorAddNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {
