@@ -53,11 +53,11 @@ const layout = `
         <div class="dial"><label for="frequency"><span>Frequency</span><span id="frequency-value">110.0 Hz</span></label><input id="frequency" type="range" min="20" max="880" value="110" step="1" /></div>
      
           <div class="dial">
-          <label for="smooth-mode"><span>Smooth Mode</span></label>
+          <label for="smooth-mode"><span>Smooth Mode</span><span id="smooth-mode-value">A</span></label>
           <select id="smooth-mode">
-            <option value="0" selected>A · frameSmooth (uniform)</option>
-            <option value="0">B · frameSmooth (shaped)</option>
-            <option value="1" >C · biDi Smooth (non-linear) </option>
+            <option value="0" selected>A · frameSmooth shaped</option>
+            <option value="1">B · frameSmooth uniform</option>
+            <option value="2">C · frameBiDi AR smooth</option>
           </select>
         </div>
         <div class="dial"><label for="smooth"><span>Smooth</span><span id="smooth-value">0.00 s</span></label><input id="smooth" type="range" min="0" max="3" value="0.01" step="0.01" /></div>
@@ -66,7 +66,7 @@ const layout = `
       <div class="dial-strip">
         <div class="dial"><label for="scale"><span>Scale</span><span id="scale-value">1.00</span></label><input id="scale" type="range" min="-1" max="1" value="1" step="0.01" /></div>
         <div class="dial"><label for="tilt"><span>Tilt</span><span id="tilt-value">0.00</span></label><input id="tilt" type="range" min="-1" max="1" value="0" step="0.01" /></div>
-        <div class="dial"><label for="zoom"><span>Zoom</span><span id="zoom-value">x1.00</span></label><input id="zoom" type="range" min="0.10" max="8" value="1" step="0.01" /></div>
+        <div class="dial"><label for="zoom"><span>Zoom</span><span id="zoom-value">x1.00</span></label><input id="zoom" type="range" min="1.0" max="8" value="1" step="0.01" /></div>
         <div class="dial"><label for="shift"><span>Shift</span><span id="shift-value">0</span></label><input id="shift" type="range" min="0" max="255" value="64" step="1" /></div>
       </div>
       <div class="status" id="status">Idle</div>
@@ -134,6 +134,7 @@ smoothValue = q<HTMLSpanElement>("#smooth-value");
 smoothShapeSlider = q<HTMLInputElement>("#smooth-shape");
 smoothShapeValue = q<HTMLSpanElement>("#smooth-shape-value");
 smoothModeSelect = q<HTMLSelectElement>("#smooth-mode");
+smoothModeValue = q<HTMLSpanElement>("#smooth-mode-value");
 waveSlider = q<HTMLInputElement>("#wave");
 waveValue = q<HTMLSpanElement>("#wave-value");
 scaleSlider = q<HTMLInputElement>("#scale");
@@ -207,6 +208,7 @@ function updateReadouts() {
   levelValue.textContent = Number(levelSlider.value).toFixed(2);
   smoothValue.textContent = `${Number(smoothSlider.value).toFixed(2)} s`;
   smoothShapeValue.textContent = Number(smoothShapeSlider.value).toFixed(2);
+  smoothModeValue.textContent = ["A", "B", "C"][Number(smoothModeSelect.value)] ?? "A";
   waveValue.textContent = Number(waveSlider.value).toFixed(2);
   scaleValue.textContent = Number(scaleSlider.value).toFixed(2);
   tiltValue.textContent = Number(tiltSlider.value).toFixed(2);

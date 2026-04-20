@@ -5,15 +5,6 @@ export const FRAME_LENGTH = 256;
 export const RAM_PATH = "wf/ram/frame-wavetable";
 export const FRAME_SCOPE_EVENT = "frame-wavetable:scope";
 
-/**
- * Convert Hertz to milliseconds
- * @param hz Frequency in Hertz
- * @returns Period in milliseconds
- */
-export function hzToMs(hz: number): number {
-    return 1000 / hz;
-}
-
 export interface FrameWavetableDemoParams {
     modulate: number;
     smooth: number;
@@ -35,14 +26,17 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
     }
 
     const beat = el.train(0.5);
+    const modGain = el.const({key: "fwt:modGain", value: p.modulate});
+    const scaleNode = el.const({key: "fwt:scale", value: p.scale});
 
-    const frameShaper = el.extra.frameShaper(
+    const statelessOscillator = el.extra.frameShaper(
+        // de-synchronise frame length for creative phasing patterns!
         {key: "fwt:shaper", framelength: FRAME_LENGTH},
         el.const({key: "fwt:offset", value: 0}),
         el.const({key: "fwt:shift", value: p.shift}),
         el.const({key: "fwt:tilt", value: p.tilt}),
         el.const({key: "fwt:zoom", value: p.zoom}),
-        el.const({key: "fwt:scale", value: p.scale}),
+        scaleNode,
         el.const({key: "fwt:wave", value: p.wave})
     );
 
@@ -57,8 +51,7 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
     let randomWalks = el.extra.frameRandomWalks(
         {
             key: "fwt:randomWalks",
-            // de-synchronising frame length for creative phasing patterns
-            framelength: (FRAME_LENGTH /4) ,
+            framelength: (FRAME_LENGTH) ,
             seed: 17,
             interpolation: true,
             startingfrom: 0,
@@ -67,23 +60,34 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         0.1,
         0.5,
         0,
-        frameShaper
+        el.sub( 1, statelessOscillator)
     );
+
     // use the frames compatible box helpers to cluster the random walks , less hf buzz
     let modSource =  el.extra.boxAverage( { window: 16 } , randomWalks)
 
     const rawFrameWithMod = el.add(
-                frameShaper,
-                el.mul(el.const({key: "fwt:modulate", value: p.modulate}), modSource)
+                statelessOscillator,
+                el.mul( modGain, modSource)
             );
 
-    const smoothedFrame = el.extra.frameSmooth(
-        {key: "fwt:smooth", framelength: FRAME_LENGTH},
+    // Mode A: Uniform frameSmooth (no shaping)
+    const uniformSmoothedFrame = el.extra.frameSmooth(
+        {key: "fwt:uniformSmooth", framelength: FRAME_LENGTH},
+        el.const({key: "fwt:smoothTime", value: p.smooth}),
+        0, // No shaping - use 0 instead of rampShaper
+        rawFrameWithMod
+    );
+
+    // Mode B: frameSmooth with shaping activated
+    const shapedSmoothedFrame = el.extra.frameSmooth(
+        {key: "fwt:shapedSmooth", framelength: FRAME_LENGTH},
         el.const({key: "fwt:smoothTime", value: p.smooth}),
         el.mul(el.const({key: "fwt:smoothShape", value: p.smoothShape}), rampShaper),
         rawFrameWithMod
     );
 
+    // Mode C: frameBiDiSmooth
     const bidiSmoothedFrame = el.extra.frameBiDiSmooth(
         {key: "fwt:bidiSmooth", framelength: FRAME_LENGTH},
         el.const({key: "fwt:attackTime", value: p.smooth * 0.5}),
@@ -93,10 +97,17 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         rawFrameWithMod
     );
 
-    const finalFrame = el.select(
+    // Select based on smoothMode:
+    // 0 = A (uniform), 1 = B (shaped), 2 = C (bidi)
+    const finalFrame =
+        el.select(
         p.smoothMode,
-        bidiSmoothedFrame,
-        smoothedFrame,
+        uniformSmoothedFrame,
+        el.select(
+            el.eq(el.const({key: "fwt:smoothMode", value: p.smoothMode}), 1),
+            shapedSmoothedFrame,
+            bidiSmoothedFrame
+        )
     );
 
     // a direct JS pick will reset the frame , as js cannot be frame synchronised like audio
@@ -148,7 +159,8 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
                     envelope,
                     el.sm( el.const( {key: `fwt:level:${index}`, value: p.level})) ,
                     voiceLevels[index],
-                    el.table({path: RAM_PATH}, phase));
+                    el.table({path: RAM_PATH}, phase)
+        );
 
         const leftGain = (1 - pans[index]) * 0.5;
         const rightGain = (1 + pans[index]) * 0.5;
