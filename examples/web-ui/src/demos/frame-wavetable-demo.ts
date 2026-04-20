@@ -55,19 +55,19 @@ const layout = `
           <div class="dial">
           <label for="smooth-mode"><span>Smooth Mode</span></label>
           <select id="smooth-mode">
-            <option value="0">A · frameSmooth (uniform)</option>
+            <option value="0" selected>A · frameSmooth (uniform)</option>
             <option value="0">B · frameSmooth (shaped)</option>
-            <option value="1" selected>C · biDi Smooth (non-linear) </option>
+            <option value="1" >C · biDi Smooth (non-linear) </option>
           </select>
         </div>
-        <div class="dial"><label for="smooth"><span>Smooth</span><span id="smooth-value">0.00 s</span></label><input id="smooth" type="range" min="0" max="10" value="0.1" step="0.1" /></div>
+        <div class="dial"><label for="smooth"><span>Smooth</span><span id="smooth-value">0.00 s</span></label><input id="smooth" type="range" min="0" max="3" value="0.01" step="0.01" /></div>
         <div class="dial"><label for="smooth-shape"><span>Smooth Shape</span><span id="smooth-shape-value">0.00</span></label><input id="smooth-shape" type="range" min="-1" max="1" value="0" step="0.01" /></div>
       </div>
       <div class="dial-strip">
         <div class="dial"><label for="scale"><span>Scale</span><span id="scale-value">1.00</span></label><input id="scale" type="range" min="-1" max="1" value="1" step="0.01" /></div>
         <div class="dial"><label for="tilt"><span>Tilt</span><span id="tilt-value">0.00</span></label><input id="tilt" type="range" min="-1" max="1" value="0" step="0.01" /></div>
         <div class="dial"><label for="zoom"><span>Zoom</span><span id="zoom-value">x1.00</span></label><input id="zoom" type="range" min="0.10" max="8" value="1" step="0.01" /></div>
-        <div class="dial"><label for="shift"><span>Shift</span><span id="shift-value">0</span></label><input id="shift" type="range" min="0" max="255" value="0" step="1" /></div>
+        <div class="dial"><label for="shift"><span>Shift</span><span id="shift-value">0</span></label><input id="shift" type="range" min="0" max="255" value="64" step="1" /></div>
       </div>
       <div class="status" id="status">Idle</div>
     </div>

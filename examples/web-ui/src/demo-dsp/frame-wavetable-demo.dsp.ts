@@ -34,6 +34,8 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         return [el.const({value: 0}), el.const({value: 0})];
     }
 
+    const beat = el.train(0.5);
+
     const frameShaper = el.extra.frameShaper(
         {key: "fwt:shaper", framelength: FRAME_LENGTH},
         el.const({key: "fwt:offset", value: 0}),
@@ -52,7 +54,7 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         2
     );
 
-    let modulation = el.extra.frameRandomWalks(
+    let randomWalks = el.extra.frameRandomWalks(
         {
             key: "fwt:randomWalks",
             // de-synchronising frame length for creative phasing patterns
@@ -67,18 +69,19 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         0,
         frameShaper
     );
+    // use the frames compatible box helpers to cluster the random walks , less hf buzz
+    let modSource =  el.extra.boxAverage( { window: 16 } , randomWalks)
 
-
-    const frameWithMod = el.add(
+    const rawFrameWithMod = el.add(
                 frameShaper,
-                el.mul(el.const({key: "fwt:modulate", value: p.modulate}), modulation)
+                el.mul(el.const({key: "fwt:modulate", value: p.modulate}), modSource)
             );
 
     const smoothedFrame = el.extra.frameSmooth(
         {key: "fwt:smooth", framelength: FRAME_LENGTH},
         el.const({key: "fwt:smoothTime", value: p.smooth}),
         el.mul(el.const({key: "fwt:smoothShape", value: p.smoothShape}), rampShaper),
-        frameWithMod
+        rawFrameWithMod
     );
 
     const bidiSmoothedFrame = el.extra.frameBiDiSmooth(
@@ -87,7 +90,7 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         el.const({key: "fwt:releaseTime", value: p.smooth * 2.0}),
         0,
         0,
-        frameWithMod
+        rawFrameWithMod
     );
 
     const finalFrame = el.select(
@@ -109,8 +112,6 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         {key: "fwt:scope", framelength: FRAME_LENGTH, name: FRAME_SCOPE_EVENT},
         finalFrame
     );
-
-    const chordClock = el.train(0.5);
     
     const reset = 0;
 
@@ -132,7 +133,7 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
             key: `fwt:voice:${index}:seq`,
             seq: intervals.map((semi) => p.frequency * Math.pow(2, semi / 12)),
             hold: true
-        }, chordClock, reset);
+        }, beat, reset);
         
         // some organic slow low modulation
         const drift = el.mul(0.0035 * (index + 1), el.cycle(motionRates[index]));
@@ -141,7 +142,7 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         
         const phase = el.phasor(freq); // phasor reads the table
 
-        const envelope = el.adsr(0.1, 4, 0.001, 4 , chordClock);
+        const envelope = el.adsr(0.1, 4, 0.001, 4 , beat);
 
         const levelledTable = el.mul(
                     envelope,
