@@ -202,7 +202,7 @@ code {
   position: absolute;
   left: 18px;
   top: 18px;
-  width: min(240px, 38%);
+  width: min(140px, 18%);
   height: 120px;
   display: block;
   border-radius: 16px;

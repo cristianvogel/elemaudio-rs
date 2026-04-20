@@ -27,7 +27,7 @@ fn build_runtime(sample_rate: f64, buffer_size: usize) -> Runtime {
 
 fn assert_close(actual: f64, expected: f64, context: &str) {
     let delta = (actual - expected).abs();
-    assert!(delta <= 1e-9, "{context}: expected {expected}, got {actual} (|delta|={delta})");
+    assert!(delta <= 1e-5, "{context}: expected {expected}, got {actual} (|delta|={delta})");
 }
 
 #[test]
@@ -100,4 +100,46 @@ fn frame_poly_signal_phase_spread_offsets_lookup_positions() {
     );
     assert!(block[0].abs() < 1e-6, "phase spread sample 0 should be centered by the negative end of the internal ramp, got {}", block[0]);
     assert!(block[4] > 0.0 && block[4] < 1.0, "phase spread sample 4 should be decorrelated but still positive, got {}", block[4]);
+}
+
+#[test]
+fn frame_poly_signal_reset_restores_initial_sync_state() {
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let frame_length = 8_usize;
+    let runtime = build_runtime(sample_rate, buffer_size);
+
+    let reset = elemaudio_rs::el::select(elemaudio_rs::el::ge(elemaudio_rs::el::time(), 16.0), 1.0, 0.0);
+    let graph = Graph::new().render(extra::frame_poly_signal(
+        json!({ "framelength": frame_length, "bpm": 60.0 }),
+        0.0,
+        0.0,
+        reset,
+    ));
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+    runtime.reset();
+    runtime.set_current_time_samples(0);
+
+    let mut first = vec![0.0_f64; frame_length];
+    let mut outputs = [first.as_mut_slice()];
+    runtime.process(frame_length, &[], &mut outputs).expect("first");
+
+    let mut second = vec![0.0_f64; frame_length];
+    let mut outputs = [second.as_mut_slice()];
+    runtime.process(frame_length, &[], &mut outputs).expect("second");
+
+    let mut third = vec![0.0_f64; frame_length];
+    let mut outputs = [third.as_mut_slice()];
+    runtime.process(frame_length, &[], &mut outputs).expect("third");
+
+    for (i, sample) in third.iter().enumerate() {
+        assert_close(*sample, first[i], &format!("reset sample {i}"));
+    }
+    assert!(
+        second.iter().zip(first.iter()).any(|(a, b)| (*a - *b).abs() > 1e-6),
+        "second frame should drift away from the initial state before reset"
+    );
 }

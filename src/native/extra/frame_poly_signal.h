@@ -69,12 +69,9 @@ namespace elem
         {
             frameLength_ = std::max<int64_t>(2, frameLengthTarget.load(std::memory_order_relaxed));
             ensureStorage();
-            resetDriftState();
+            hardResetState();
             appliedRequest_ = reinitRequest.fetch_add(0, std::memory_order_relaxed);
             previousResetPositive_ = false;
-            bpmLatched_ = Sample(0);
-            phaseSpreadLatched_ = Sample(0);
-            rateSpreadLatched_ = Sample(0);
         }
 
         void process(BlockContext<FloatType> const& ctx) override
@@ -95,7 +92,7 @@ namespace elem
             if (request != appliedRequest_ || nextFrameLength != frameLength_) {
                 frameLength_ = nextFrameLength;
                 ensureStorage();
-                resetDriftState();
+                hardResetState();
                 appliedRequest_ = request;
             }
 
@@ -111,7 +108,7 @@ namespace elem
             for (size_t i = 0; i < numSamples; ++i) {
                 auto const resetPositive = reset[i] > Sample(0);
                 if (resetPositive && !previousResetPositive_) {
-                    resetDriftState();
+                    hardResetState();
                 }
                 previousResetPositive_ = resetPositive;
 
@@ -170,10 +167,13 @@ namespace elem
             driftPhases_.assign(static_cast<size_t>(frameLength_), Sample(0));
         }
 
-        void resetDriftState()
+        void hardResetState()
         {
             std::fill(driftPhases_.begin(), driftPhases_.end(), Sample(0));
             currentTrack_ = 0;
+            bpmLatched_ = Sample(0);
+            phaseSpreadLatched_ = Sample(0);
+            rateSpreadLatched_ = Sample(0);
         }
 
         Sample sampleAtPhase(Sample phase) const

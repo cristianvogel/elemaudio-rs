@@ -91,7 +91,7 @@ function drawWaveLine(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, 
   const { width, height, dpr } = setupCanvas(canvas);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "rgba(6, 10, 18, 0.96)";
+  ctx.fillStyle = "rgba(6, 10, 18, 0.16)";
   ctx.fillRect(0, 0, width, height);
   const baseline = height * 0.5;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";

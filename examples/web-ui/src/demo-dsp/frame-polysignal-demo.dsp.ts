@@ -17,13 +17,11 @@ export function buildGraph(p: FramePolySignalDemoParams): NodeRepr_t[] {
     return [el.const({ value: 0 }), el.const({ value: 0 })];
   }
 
-  const resetPulse = el.mul(p.resetArmed ? 1 : 0, el.extra.frameClock(FRAME_LENGTH));  // frame synchronised reset
-
   const poly = el.extra.framePolySignal(
     { key: "fps:poly", framelength: FRAME_LENGTH, bpm: p.rate, path: "fps:multi_lfo" },
     el.const({ key: "fps:phaseSpread", value: p.phaseSpread }),
     el.const({ key: "fps:rateSpread", value: p.rateSpread }),
-    resetPulse,
+    p.resetArmed ? 1 : 0,
   );
 
   const scope = el.extra.frameScope(
