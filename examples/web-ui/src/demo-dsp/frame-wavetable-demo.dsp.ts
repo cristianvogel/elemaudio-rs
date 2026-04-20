@@ -64,13 +64,14 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         statelessOscillator
     );
 
+    const quantisedFrameRandom = el.sm( el.latch( el.extra.frameclock( 4 ), el.mul( el.noise() , 16 ) ) );
     // Mode C: frameBiDiSmooth - applied to raw oscillator
     const bidiSmoothedFrame = el.extra.frameBiDiSmooth(
         {key: "fwt:bidiSmooth", framelength: FRAME_LENGTH},
-        el.const({key: "fwt:attackTime", value: p.smooth * 0.1}),
-        el.const({key: "fwt:releaseTime", value: p.smooth * 2.0}),
-        0,
-        0,
+        el.const({key: "fwt:attackTime", value: p.smooth * 2 }),
+        el.const({key: "fwt:releaseTime", value: p.smooth * 2 }),
+        quantisedFrameRandom,
+        quantisedFrameRandom,
         statelessOscillator
     );
 
