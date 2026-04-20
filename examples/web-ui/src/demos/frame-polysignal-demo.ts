@@ -17,7 +17,7 @@ const layout = `
           <div class="frame-bars-head">
             <div>
               <div class="scope-title">Frame MultiLFO</div>
-              <div class="frame-bars-subtitle">WireFrames PolySignal output with source table overlay.</div>
+              <div class="frame-bars-subtitle">WireFrames PolySignal : THE MEXICAN WAVE OF DSP.</div>
             </div>
             <div class="frame-bars-badge">frameLength ${FRAME_LENGTH}</div>
           </div>
@@ -33,8 +33,10 @@ const layout = `
     <h1>elemaudio-rs</h1>
     <h3>Frame MultiLFO</h3>
     <p>
-      This demo uses <code>framePolySignal</code>, a WireFrames-style PolySignal
-      primitive that de-correlates a shared source waveform across the frame.
+      This demo uses <code>framePolySignal</code>, a WireFrames PolySignal that takes one source waveform
+      and expresses it through the frame so that each track reads along its own slightly different path.
+      At first the tracks read together, then <code>Phase Spread</code> and <code>Rate Spread</code> begin to
+      de-correlate them, turning one wavetable into a packed field of related modulations.
     </p>
     <p>
       The browser demo loads <code>demo-resources/multi-256-32f.wav</code> into the virtual file system at
@@ -69,7 +71,7 @@ let sourceCtx: CanvasRenderingContext2D;
 let stopButton: HTMLButtonElement;
 let resetButton: HTMLButtonElement;
 let isStopped = false;
-let resetArmed = false;
+let resetCounter = 0;
 let currentFrame: number[] = [];
 let currentSourceTable: Float32Array = new Float32Array();
 
@@ -110,6 +112,9 @@ function drawWaveLine(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, 
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.fillStyle = "rgb(13,232,24)";
+  ctx.fillText("LFO Shape", width - 60, 10);
 }
 
 function drawFrame(frame: number[]) {
@@ -176,7 +181,7 @@ const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
     rate: Number(rateSlider.value),
     phaseSpread: Number(phaseSpreadSlider.value),
     rateSpread: Number(rateSpreadSlider.value),
-    resetArmed,
+    resetCounter,
     isStopped,
   }),
   updateReadouts,
@@ -212,10 +217,8 @@ stopButton.addEventListener("click", async () => {
 });
 
 resetButton.addEventListener("click", async () => {
-  resetArmed = true;
-  await renderCurrentGraph();
-  resetArmed = false;
   if (!isStopped) {
+    resetCounter += 1;
     await renderCurrentGraph();
   }
 });

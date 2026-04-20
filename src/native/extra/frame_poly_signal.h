@@ -60,6 +60,12 @@ namespace elem
                 auto ref = resources.get(path);
                 source_ = std::move(ref);
                 hasExternalSource_ = true;
+            } else if (key == "resetcounter") {
+                if (!val.isNumber()) {
+                    return ReturnCode::InvalidPropertyType();
+                }
+
+                resetCounterTarget_.store(static_cast<uint32_t>((js::Number) val), std::memory_order_relaxed);
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
@@ -103,16 +109,23 @@ namespace elem
 
             auto const sampleRate = Sample(GraphNode<FloatType>::getSampleRate());
             auto const frameDuration = static_cast<Sample>(frameLength_) / sampleRate;
-            auto const baseRateHz = std::max(Sample(0), bpmTarget.load(std::memory_order_relaxed)) / Sample(60);
+            auto const sampleTime = *static_cast<int64_t const*>(ctx.userData);
+            auto const requestedResetCounter = resetCounterTarget_.load(std::memory_order_relaxed);
 
             for (size_t i = 0; i < numSamples; ++i) {
+                auto const absoluteTime = sampleTime + static_cast<int64_t>(i);
+                auto const track = static_cast<size_t>(positiveMod(absoluteTime, frameLength_));
+                if (track == 0 && appliedResetCounter_ != requestedResetCounter) {
+                    hardResetState();
+                    appliedResetCounter_ = requestedResetCounter;
+                }
+
                 auto const resetPositive = reset[i] > Sample(0);
                 if (resetPositive && !previousResetPositive_) {
                     hardResetState();
                 }
                 previousResetPositive_ = resetPositive;
 
-                auto const track = currentTrack_;
                 if (track == 0) {
                     bpmLatched_ = std::max(Sample(0), bpmTarget.load(std::memory_order_relaxed));
                     phaseSpreadLatched_ = clampBipolar(phaseSpread[i]);
@@ -129,7 +142,6 @@ namespace elem
                 auto const rateOffset = rateSpreadLatched_ * trackRamp;
                 auto const shapedRate = baseRateHz * std::exp2(Sample(4) * rateOffset);
                 driftPhases_[track] = wrap01(driftPhases_[track] + shapedRate * frameDuration);
-                currentTrack_ = (currentTrack_ + 1) % static_cast<size_t>(frameLength_);
             }
 
             for (size_t c = 1; c < numOuts; ++c) {
@@ -138,6 +150,12 @@ namespace elem
         }
 
     private:
+        static int64_t positiveMod(int64_t value, int64_t modulus)
+        {
+            auto const rem = value % modulus;
+            return rem < 0 ? rem + modulus : rem;
+        }
+
         static Sample clampBipolar(Sample x)
         {
             return std::max(Sample(-1), std::min(Sample(1), x));
@@ -170,7 +188,6 @@ namespace elem
         void hardResetState()
         {
             std::fill(driftPhases_.begin(), driftPhases_.end(), Sample(0));
-            currentTrack_ = 0;
             bpmLatched_ = Sample(0);
             phaseSpreadLatched_ = Sample(0);
             rateSpreadLatched_ = Sample(0);
@@ -199,11 +216,12 @@ namespace elem
         std::atomic<int64_t> frameLengthTarget{2};
         std::atomic<Sample> bpmTarget{Sample(0)};
         std::atomic<uint32_t> reinitRequest{0};
+        std::atomic<uint32_t> resetCounterTarget_{0};
 
         int64_t frameLength_ = 2;
         uint32_t appliedRequest_ = 0;
+        uint32_t appliedResetCounter_ = 0;
         std::vector<Sample> driftPhases_;
-        size_t currentTrack_ = 0;
         bool previousResetPositive_ = false;
         Sample bpmLatched_ = Sample(0);
         Sample phaseSpreadLatched_ = Sample(0);
