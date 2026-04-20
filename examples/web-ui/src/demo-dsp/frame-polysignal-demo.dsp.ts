@@ -28,7 +28,7 @@ export function buildGraph(p: FramePolySignalDemoParams): NodeRepr_t[] {
             path: "fps:multi_lfo",
             resetcounter: p.resetCounter
         },
-        el.const({key: "fps:phaseSpread", value: p.phaseSpread}), // internally, the biasing shape is a [-1..1] ramp
+        el.sm(el.const({key: "fps:phaseSpread", value: p.phaseSpread})), // internally, the biasing shape is a [-1..1] ramp
         el.const({key: "fps:rateSpread", value: p.rateSpread}),
         0
     );
@@ -47,12 +47,12 @@ export function buildGraph(p: FramePolySignalDemoParams): NodeRepr_t[] {
 
     // here we read one table with an reverse phasor and hard pan the voices for proper binaural beats
     const oscPair = [
-        el.table({key: 'fps:ll', path: 'fps:wtOscFromPoly'}, el.phasor(80)),
-        el.table({key: 'fps:rr', path: 'fps:wtOscFromPoly'}, el.phasor(-80))
+        el.highshelf(650, 0.5, -12,  el.table({key: 'fps:ll', path: 'fps:wtOscFromPoly'}, el.phasor(80))),
+        el.highshelf(650, 0.5, -12,  el.table({key: 'fps:rr', path: 'fps:wtOscFromPoly'}, el.phasor(-80)))
     ];
 
 
-    const left =  el.dcblock( el.mul(el.db2gain(-30), oscPair[0]));
-    const right = el.dcblock( el.mul(el.db2gain(-30), oscPair[1]));
+    const left = ( el.mul(el.db2gain(-30), oscPair[0]));
+    const right = ( el.mul(el.db2gain(-30), oscPair[1]));
     return [ el.add(  el.mul(0, frameScope) ,left), right];
 }

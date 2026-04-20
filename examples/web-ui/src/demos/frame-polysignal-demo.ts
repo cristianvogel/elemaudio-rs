@@ -36,7 +36,9 @@ const layout = `
       This demo uses <code>framePolySignal</code>, a WireFrames PolySignal that takes one source waveform
       and expresses it through the frame so that each track reads along its own slightly different path.
       At first the tracks read together, then <code>Phase Spread</code> and <code>Rate Spread</code> begin to
-      de-correlate them, turning one wavetable into a packed field of phase shifted LFOs.
+      de-correlate them, turning one wavetable into a packed field of phase shifted LFOs. We write each frame to RAM
+      and look that up with a phasor, creating an oscillator that changes its cycle every frame. Some darkening shelf EQ at the end, 
+      to smooth out the harshness a bit.
     </p>
     <p>
       The browser demo loads <code>demo-resources/waveKitchen_256.wav</code> into the virtual file system at
