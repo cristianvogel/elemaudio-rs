@@ -99,15 +99,18 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
 
     // Select based on smoothMode:
     // 0 = A (uniform), 1 = B (shaped), 2 = C (bidi)
-    const finalFrame =
-        el.select(
-        p.smoothMode,
+    const mode = el.const({ key: "fwt:smoothMode", value: p.smoothMode });
+
+    const finalFrame = el.extra.frameSelect(
+        { framelength: FRAME_LENGTH },
+        el.eq(mode, 0),
         uniformSmoothedFrame,
-        el.select(
-            el.eq(el.const({key: "fwt:smoothMode", value: p.smoothMode}), 1),
+        el.extra.frameSelect(
+            { framelength: FRAME_LENGTH },
+            el.eq(mode, 1),
             shapedSmoothedFrame,
-            bidiSmoothedFrame
-        )
+            bidiSmoothedFrame,
+        ),
     );
 
     // a direct JS pick will reset the frame , as js cannot be frame synchronised like audio

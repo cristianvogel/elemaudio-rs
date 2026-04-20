@@ -96,12 +96,13 @@ namespace elem
                 auto const shaper = rising ? attackShaperSignal[i] : releaseShaperSignal[i];
                 auto const shapedTime = baseTime * inverseShapeScale(shaper);
 
-                if (input != targetValues[track] || modeIsRising[track] != rising || framesElapsed[track] >= framesTotal[track]) {
+                if (!hasTarget[track] || input != targetValues[track] || modeIsRising[track] != rising) {
                     startValues[track] = currentValues[track];
                     targetValues[track] = input;
                     modeIsRising[track] = rising;
                     framesElapsed[track] = 0;
                     framesTotal[track] = durationFrames(shapedTime, frameDuration);
+                    hasTarget[track] = true;
                     if (framesTotal[track] == 1) {
                         currentValues[track] = targetValues[track];
                     }
@@ -169,6 +170,7 @@ namespace elem
             framesElapsed.assign(size, 1);
             framesTotal.assign(size, 1);
             modeIsRising.assign(size, true);
+            hasTarget.assign(size, false);
             configuredFrameLength = frameLength;
         }
 
@@ -180,6 +182,7 @@ namespace elem
             std::fill(framesElapsed.begin(), framesElapsed.end(), 1);
             std::fill(framesTotal.begin(), framesTotal.end(), 1);
             std::fill(modeIsRising.begin(), modeIsRising.end(), true);
+            std::fill(hasTarget.begin(), hasTarget.end(), false);
         }
 
         std::atomic<int64_t> frameLengthTarget{2};
@@ -195,6 +198,7 @@ namespace elem
         std::vector<int32_t> framesElapsed;
         std::vector<int32_t> framesTotal;
         std::vector<bool> modeIsRising;
+        std::vector<bool> hasTarget;
     };
 
     static_assert(std::atomic<int64_t>::is_always_lock_free);

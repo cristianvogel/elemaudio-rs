@@ -952,6 +952,19 @@ fn covers_extra_helpers() {
         6,
     );
 
+    let frame_select_node = extra::frame_select(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(2.0)),
+        ElemNode::from(node(3.0)),
+    );
+    assert_node(
+        &frame_select_node,
+        "frameSelect",
+        serde_json::json!({"framelength": 128}),
+        3,
+    );
+
     let frame_smooth_node = extra::frame_smooth(
         serde_json::json!({"framelength": 128}),
         ElemNode::from(node(0.1)),

@@ -1032,6 +1032,12 @@ export interface FrameShaperProps extends Record<string, unknown> {
   framelength: number;
 }
 
+/** Props for `el.extra.frameSelect(...)`. */
+export interface FrameSelectProps extends Record<string, unknown> {
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
 /** Props for `el.extra.frameSmooth(...)`. */
 export interface FrameSmoothProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
@@ -1155,6 +1161,26 @@ export function frameShaper(
     resolve(zoom),
     resolve(scale),
     resolve(wave),
+  ]);
+}
+
+/**
+ * Frame-synchronised select helper.
+ *
+ * The condition is sampled only on frame boundaries and held for the whole
+ * frame. The chosen branch still runs at sample rate.
+ */
+export function frameSelect(
+  props: FrameSelectProps,
+  condition: ElemNode,
+  whenTrue: ElemNode,
+  whenFalse: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameSelect", props.framelength);
+  return createNode("frameSelect", props, [
+    resolve(condition),
+    resolve(whenTrue),
+    resolve(whenFalse),
   ]);
 }
 

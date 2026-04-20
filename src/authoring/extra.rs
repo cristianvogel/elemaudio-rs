@@ -1310,6 +1310,25 @@ pub fn frame_shaper(
     )
 }
 
+/// Frame-synchronised select helper.
+///
+/// Latches the boolean interpretation of `condition` on each absolute frame
+/// boundary and holds that branch choice for the full frame while passing the
+/// selected sample-rate branch through unchanged.
+pub fn frame_select(
+    props: serde_json::Value,
+    condition: impl Into<ElemNode>,
+    when_true: impl Into<ElemNode>,
+    when_false: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_select");
+    Node::new(
+        "frameSelect",
+        props,
+        vec![resolve(condition), resolve(when_true), resolve(when_false)],
+    )
+}
+
 /// WireFrames-style frame-domain smoothing processor with per-track SR modulation.
 ///
 /// The base `time_constant` is shaped per track using the same order-4 law as

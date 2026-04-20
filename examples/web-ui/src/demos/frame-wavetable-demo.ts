@@ -55,8 +55,8 @@ const layout = `
           <div class="dial">
           <label for="smooth-mode"><span>Smooth Mode</span><span id="smooth-mode-value">A</span></label>
           <select id="smooth-mode">
-            <option value="0" selected>A · frameSmooth shaped</option>
-            <option value="1">B · frameSmooth uniform</option>
+            <option value="0" selected>A · frameSmooth uniform</option>
+            <option value="1">B · frameSmooth shaped</option>
             <option value="2">C · frameBiDi AR smooth</option>
           </select>
         </div>

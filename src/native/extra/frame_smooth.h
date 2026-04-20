@@ -88,11 +88,12 @@ namespace elem
 
                 auto const shapedTimeConstant = std::max(Sample(0), timeConstantSignal[i]) * inverseShapeScale(timeShaperSignal[i]);
 
-                if (framesElapsed[track] >= framesTotal[track]) {
+                if (!hasTarget[track] || inputSignal[i] != targetValues[track]) {
                     startValues[track] = currentValues[track];
                     targetValues[track] = inputSignal[i];
                     framesElapsed[track] = 0;
                     framesTotal[track] = durationFrames(shapedTimeConstant, frameDuration);
+                    hasTarget[track] = true;
                     if (framesTotal[track] == 1) {
                         currentValues[track] = targetValues[track];
                     }
@@ -159,6 +160,7 @@ namespace elem
             targetValues.assign(size, Sample(0));
             framesElapsed.assign(size, 1);
             framesTotal.assign(size, 1);
+            hasTarget.assign(size, false);
             configuredFrameLength = frameLength;
         }
 
@@ -169,6 +171,7 @@ namespace elem
             std::fill(targetValues.begin(), targetValues.end(), Sample(0));
             std::fill(framesElapsed.begin(), framesElapsed.end(), 1);
             std::fill(framesTotal.begin(), framesTotal.end(), 1);
+            std::fill(hasTarget.begin(), hasTarget.end(), false);
         }
 
         std::atomic<int64_t> frameLengthTarget{2};
@@ -183,6 +186,7 @@ namespace elem
         std::vector<Sample> targetValues;
         std::vector<int32_t> framesElapsed;
         std::vector<int32_t> framesTotal;
+        std::vector<bool> hasTarget;
     };
 
     static_assert(std::atomic<int64_t>::is_always_lock_free);
