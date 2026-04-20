@@ -135,7 +135,8 @@ namespace elem
                 auto const trackRamp = fullRampForTrack(track);
                 auto const basePhase = static_cast<Sample>(track) / static_cast<Sample>(frameLength_);
                 auto const phaseOffset = phaseSpreadLatched_ * trackRamp;
-                auto const lookupPhase = wrap01(basePhase + driftPhases_[track] + phaseOffset);
+               //auto const lookupPhase = wrap01(basePhase + driftPhases_[track] + phaseOffset);
+                auto const lookupPhase = wrap01(0 + driftPhases_[track] + phaseOffset);
                 out[i] = sampleAtPhase(lookupPhase);
 
                 auto const baseRateHz = bpmLatched_ / Sample(60);

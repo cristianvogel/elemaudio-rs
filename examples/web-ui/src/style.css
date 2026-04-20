@@ -202,10 +202,10 @@ code {
   position: absolute;
   left: 18px;
   top: 18px;
-  width: min(140px, 18%);
-  height: 120px;
+  width: 80px;
+  height: 80px;
   display: block;
-  border-radius: 16px;
+  border-radius: 2px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background-color: rgba(2,2,2, 0.2);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);

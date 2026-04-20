@@ -36,11 +36,11 @@ const layout = `
       This demo uses <code>framePolySignal</code>, a WireFrames PolySignal that takes one source waveform
       and expresses it through the frame so that each track reads along its own slightly different path.
       At first the tracks read together, then <code>Phase Spread</code> and <code>Rate Spread</code> begin to
-      de-correlate them, turning one wavetable into a packed field of related modulations.
+      de-correlate them, turning one wavetable into a packed field of phase shifted LFOs.
     </p>
     <p>
-      The browser demo loads <code>demo-resources/multi-256-32f.wav</code> into the virtual file system at
-      <code>fps:multi_lfo</code>. The embedded scope shows the current source table.
+      The browser demo loads <code>demo-resources/waveKitchen_256.wav</code> into the virtual file system at
+      <code>fps:multi_lfo</code>. The embedded scope shows the current source table being read by each Track.
     </p>
     <div class="controls">
       <div class="button-row">
@@ -49,9 +49,12 @@ const layout = `
         <button id="reset-phase" class="secondary">Resync Phases</button>
       </div>
       <div class="dial-strip">
-        <div class="dial"><label for="rate"><span>Rate</span><span id="rate-value">12.0 BPM</span></label><input id="rate" type="range" min="0" max="120" value="12" step="0.1" /></div>
-        <div class="dial"><label for="phase-spread"><span>Phase Spread</span><span id="phase-spread-value">0.00</span></label><input id="phase-spread" type="range" min="-1" max="1" value="0" step="0.01" /></div>
-        <div class="dial"><label for="rate-spread"><span>Rate Spread</span><span id="rate-spread-value">0.00</span></label><input id="rate-spread" type="range" min="-1" max="1" value="0" step="0.01" /></div>
+        <div class="dial"><label for="rate"><span>Rate</span><span id="rate-value">4.0 BPM</span></label>
+        <input id="rate" type="range" min="0" max="120" value="4" step="0.1" /></div>
+        <div class="dial"><label for="phase-spread"><span>Phase Spread</span><span id="phase-spread-value">0.00</span></label>
+        <input id="phase-spread" type="range" min="-1" max="1" value="0.0" step="0.01" /></div>
+        <div class="dial"><label for="rate-spread"><span>Rate Spread</span><span id="rate-spread-value">0.00</span></label>
+        <input id="rate-spread" type="range" min="-1" max="1" value="0.0" step="0.01" /></div>
       </div>
       <div class="status" id="status">Idle</div>
     </div>
@@ -114,7 +117,8 @@ function drawWaveLine(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, 
   ctx.stroke();
   ctx.lineWidth = 1;
   ctx.fillStyle = "rgb(13,232,24)";
-  ctx.fillText("LFO Shape", width - 60, 10);
+  ctx.font = "10px sans-serif";
+  ctx.fillText("LFO Shape", 5, 10 );
 }
 
 function drawFrame(frame: number[]) {

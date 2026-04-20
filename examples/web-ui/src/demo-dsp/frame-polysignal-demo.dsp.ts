@@ -24,11 +24,11 @@ export function buildGraph(p: FramePolySignalDemoParams): NodeRepr_t[] {
             key: "fps:poly",
             framelength: FRAME_LENGTH,
             bpm: p.rate,
-            // omit the path and an internal -1,1 ramp will be use as rate and phase shaper
-            // path: "fps:multi_lfo",
+            // omit the path and an internal sine wave will be used
+            path: "fps:multi_lfo",
             resetcounter: p.resetCounter
         },
-        el.const({key: "fps:phaseSpread", value: p.phaseSpread}),
+        el.const({key: "fps:phaseSpread", value: p.phaseSpread}), // internally, the biasing shape is a [-1..1] ramp
         el.const({key: "fps:rateSpread", value: p.rateSpread}),
         0
     );
