@@ -1180,8 +1180,8 @@ export function frameShaper(
  * Frame PolySignal / Frame MultiLFO primitive.
  *
  * Reads one source wavetable across the frame and de-correlates each track's
- * time path using `shapePhases` and `shapeFrequencies`. If `path` is omitted,
- * the source defaults to an internal sine wave.
+ * time path using built-in full-ramp shaping scaled by `shapePhases` and
+ * `shapeFrequencies`. If `path` is omitted, the source defaults to an internal sine wave.
  */
 export function framePolySignal(
   props: FramePolySignalProps,

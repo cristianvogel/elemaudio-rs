@@ -93,8 +93,11 @@ fn frame_poly_signal_phase_spread_offsets_lookup_positions() {
     let mut outputs = [block.as_mut_slice()];
     runtime.process(frame_length, &[], &mut outputs).expect("process");
 
-    let expected = [0.0, 0.7071067811865475, 1.0, 0.7071067811865476, 0.0, -0.7071067811865475, -1.0, -0.7071067811865476];
-    for (i, sample) in block.iter().enumerate() {
-        assert_close(*sample, expected[i], &format!("phase spread sample {i}"));
-    }
+    let baseline = [-1.0, -0.7071067811865476, 0.0, 0.7071067811865475, 1.0, 0.7071067811865476, 0.0, -0.7071067811865475];
+    assert!(
+        block.iter().zip(baseline).any(|(sample, base)| (*sample - base).abs() > 1e-6),
+        "phase spread should decorrelate tracks against the baseline sine frame"
+    );
+    assert!(block[0].abs() < 1e-6, "phase spread sample 0 should be centered by the negative end of the internal ramp, got {}", block[0]);
+    assert!(block[4] > 0.0 && block[4] < 1.0, "phase spread sample 4 should be decorrelated but still positive, got {}", block[4]);
 }

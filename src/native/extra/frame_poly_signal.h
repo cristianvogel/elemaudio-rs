@@ -142,6 +142,16 @@ namespace elem
             return wrapped;
         }
 
+        Sample fullRampForTrack(size_t track) const
+        {
+            if (frameLength_ <= 1) {
+                return Sample(0);
+            }
+
+            auto const phase = static_cast<Sample>(track) / static_cast<Sample>(frameLength_ - 1);
+            return Sample(-1) + Sample(2) * phase;
+        }
+
         void ensureStorage()
         {
             phases_.assign(static_cast<size_t>(frameLength_), Sample(0));

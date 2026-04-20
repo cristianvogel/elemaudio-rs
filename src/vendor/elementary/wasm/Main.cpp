@@ -7,7 +7,7 @@
 //   "crunch"       — CrunchNode
 //   "boxsum"       — BoxSumNode
 //   "boxaverage"   — BoxAverageNode
-//   "frameclock"   — FrameClockNode
+//   "frameClock"   — FrameClockNode
 //   "frameDelay"   — FrameDelayNode
 //   "framePhasor"  — FramePhasorNode
 //   "frameShaper"  — FrameShaperNode
@@ -120,7 +120,7 @@ public:
             return std::make_shared<elem::BoxAverageNode<double>>(id, fs, bs);
         });
 
-        runtime->registerNodeType("frameclock", [](elem::NodeId const id, double fs, int const bs) {
+        runtime->registerNodeType("frameClock", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
         });
 

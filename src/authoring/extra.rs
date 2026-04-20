@@ -1315,8 +1315,8 @@ pub fn frame_shaper(
 /// Reads a source wavetable by normalized phase for each track in the frame and
 /// de-correlates the tracks over time using a base low-rate `bpm` plus two
 /// per-track control signals:
-/// - `shape_phases`: additional lookup phase offset per track
-/// - `shape_frequencies`: per-track rate multiplier bias
+/// - `shape_phases`: scales an internal full ramp [-1, 1] into per-track lookup phase offsets
+/// - `shape_frequencies`: scales an internal full ramp [-1, 1] into per-track rate multiplier bias
 ///
 /// If `path` is omitted, the source defaults to an internal sine wave.
 pub fn frame_poly_signal(
