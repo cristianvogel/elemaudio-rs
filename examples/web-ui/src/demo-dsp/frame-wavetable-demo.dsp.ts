@@ -48,6 +48,49 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         2
     );
 
+    // Mode A: Uniform frameSmooth (no shaping) - applied to raw oscillator
+    const uniformSmoothedFrame = el.extra.frameSmooth(
+        {key: "fwt:uniformSmooth", framelength: FRAME_LENGTH},
+        el.const({key: "fwt:smoothTime", value: p.smooth}),
+        0, // No shaping - use 0 instead of rampShaper
+        statelessOscillator
+    );
+
+    // Mode B: frameSmooth with shaping activated - applied to raw oscillator
+    const shapedSmoothedFrame = el.extra.frameSmooth(
+        {key: "fwt:shapedSmooth", framelength: FRAME_LENGTH},
+        el.const({key: "fwt:smoothTime", value: p.smooth}),
+        el.mul(el.const({key: "fwt:smoothShape", value: p.smoothShape}), rampShaper),
+        statelessOscillator
+    );
+
+    // Mode C: frameBiDiSmooth - applied to raw oscillator
+    const bidiSmoothedFrame = el.extra.frameBiDiSmooth(
+        {key: "fwt:bidiSmooth", framelength: FRAME_LENGTH},
+        el.const({key: "fwt:attackTime", value: p.smooth * 0.1}),
+        el.const({key: "fwt:releaseTime", value: p.smooth * 2.0}),
+        0,
+        0,
+        statelessOscillator
+    );
+
+    // Select based on smoothMode:
+    // 0 = A (uniform), 1 = B (shaped), 2 = C (bidi)
+    const mode = el.const({ key: "fwt:smoothMode", value: p.smoothMode });
+
+    const smoothedFrame = el.extra.frameSelect(
+        { framelength: FRAME_LENGTH },
+        el.eq(mode, 0),
+        uniformSmoothedFrame,
+        el.extra.frameSelect(
+            { framelength: FRAME_LENGTH },
+            el.eq(mode, 1),
+            shapedSmoothedFrame,
+            bidiSmoothedFrame,
+        ),
+    );
+
+    // Generate random walks using the smoothed frame as input (modulation happens AFTER smoothing)
     let randomWalks = el.extra.frameRandomWalks(
         {
             key: "fwt:randomWalks",
@@ -60,58 +103,17 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
         0.1,
         0.5,
         0,
-        el.sub( 1, statelessOscillator)
+        el.sub( 1, smoothedFrame)
     );
 
     // use the frames compatible box helpers to cluster the random walks , less hf buzz
     let modSource =  el.extra.boxAverage( { window: 16 } , randomWalks)
 
-    const rawFrameWithMod = el.add(
-                statelessOscillator,
+    // Apply modulation AFTER smoothing
+    const finalFrame = el.add(
+                smoothedFrame,
                 el.mul( modGain, modSource)
             );
-
-    // Mode A: Uniform frameSmooth (no shaping)
-    const uniformSmoothedFrame = el.extra.frameSmooth(
-        {key: "fwt:uniformSmooth", framelength: FRAME_LENGTH},
-        el.const({key: "fwt:smoothTime", value: p.smooth}),
-        0, // No shaping - use 0 instead of rampShaper
-        rawFrameWithMod
-    );
-
-    // Mode B: frameSmooth with shaping activated
-    const shapedSmoothedFrame = el.extra.frameSmooth(
-        {key: "fwt:shapedSmooth", framelength: FRAME_LENGTH},
-        el.const({key: "fwt:smoothTime", value: p.smooth}),
-        el.mul(el.const({key: "fwt:smoothShape", value: p.smoothShape}), rampShaper),
-        rawFrameWithMod
-    );
-
-    // Mode C: frameBiDiSmooth
-    const bidiSmoothedFrame = el.extra.frameBiDiSmooth(
-        {key: "fwt:bidiSmooth", framelength: FRAME_LENGTH},
-        el.const({key: "fwt:attackTime", value: p.smooth * 0.5}),
-        el.const({key: "fwt:releaseTime", value: p.smooth * 2.0}),
-        0,
-        0,
-        rawFrameWithMod
-    );
-
-    // Select based on smoothMode:
-    // 0 = A (uniform), 1 = B (shaped), 2 = C (bidi)
-    const mode = el.const({ key: "fwt:smoothMode", value: p.smoothMode });
-
-    const finalFrame = el.extra.frameSelect(
-        { framelength: FRAME_LENGTH },
-        el.eq(mode, 0),
-        uniformSmoothedFrame,
-        el.extra.frameSelect(
-            { framelength: FRAME_LENGTH },
-            el.eq(mode, 1),
-            shapedSmoothedFrame,
-            bidiSmoothedFrame,
-        ),
-    );
 
     // a direct JS pick will reset the frame , as js cannot be frame synchronised like audio
    //  const finalFrame = [neutralSmoothedFrame, smoothedFrame, bidiSmoothedFrame][p.smoothMode]
