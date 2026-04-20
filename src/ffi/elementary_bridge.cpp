@@ -15,6 +15,7 @@
 #include <extra/frame_delay.h>
 #include <extra/frame_phasor.h>
 #include <extra/frame_shaper.h>
+#include <extra/frame_poly_signal.h>
 #include <extra/frame_select.h>
 #include <extra/frame_bidi_smooth.h>
 #include <extra/frame_smooth.h>
@@ -98,6 +99,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("frameShaper", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameShaperNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("framePolySignal", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FramePolySignalNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("frameSelect", [](elem::NodeId const id, double fs, int const bs) {

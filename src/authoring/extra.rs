@@ -1310,6 +1310,29 @@ pub fn frame_shaper(
     )
 }
 
+/// Frame PolySignal / Frame MultiLFO primitive.
+///
+/// Reads a source wavetable by normalized phase for each track in the frame and
+/// de-correlates the tracks over time using a base low-rate `bpm` plus two
+/// per-track control signals:
+/// - `shape_phases`: additional lookup phase offset per track
+/// - `shape_frequencies`: per-track rate multiplier bias
+///
+/// If `path` is omitted, the source defaults to an internal sine wave.
+pub fn frame_poly_signal(
+    props: serde_json::Value,
+    shape_phases: impl Into<ElemNode>,
+    shape_frequencies: impl Into<ElemNode>,
+    reset: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_poly_signal");
+    Node::new(
+        "framePolySignal",
+        props,
+        vec![resolve(shape_phases), resolve(shape_frequencies), resolve(reset)],
+    )
+}
+
 /// Frame-synchronised select helper.
 ///
 /// Latches the boolean interpretation of `condition` on each absolute frame

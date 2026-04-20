@@ -101,7 +101,7 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
             initialdeviation: 0.1
         },
         0.1,
-        0.5,
+        1.5,
         0,
         el.sub( 1, smoothedFrame)
     );

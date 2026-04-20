@@ -60,7 +60,7 @@ const layout = `
             <option value="2">C · frameBiDi AR smooth</option>
           </select>
         </div>
-        <div class="dial"><label for="smooth"><span>Smooth</span><span id="smooth-value">0.00 s</span></label><input id="smooth" type="range" min="0" max="3" value="0.01" step="0.01" /></div>
+        <div class="dial"><label for="smooth"><span>Smooth</span><span id="smooth-value">0.00 s</span></label><input id="smooth" type="range" min="0" max="10" value="0.1" step="0.01" /></div>
         <div class="dial"><label for="smooth-shape"><span>Smooth Shape</span><span id="smooth-shape-value">0.00</span></label><input id="smooth-shape" type="range" min="-1" max="1" value="0" step="0.01" /></div>
       </div>
       <div class="dial-strip">

@@ -46,6 +46,7 @@ export default defineConfig({
         boxsum: resolve(__dirname, "boxsum.html"),
         frameDomain: resolve(__dirname, "frame-domain.html"),
         frameShaper: resolve(__dirname, "frame-shaper.html"),
+        framePolySignal: resolve(__dirname, "frame-polysignal.html"),
         frameRandomWalks: resolve(__dirname, "frame-random-walks.html"),
         frameWavetable: resolve(__dirname, "frame-wavetable.html"),
         ramp00: resolve(__dirname, "ramp00.html"),

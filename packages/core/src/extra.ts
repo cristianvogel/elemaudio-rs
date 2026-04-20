@@ -1032,6 +1032,18 @@ export interface FrameShaperProps extends Record<string, unknown> {
   framelength: number;
 }
 
+/** Props for `el.extra.framePolySignal(...)`. */
+export interface FramePolySignalProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+  /** Base low-rate dephasing speed in beats per minute. */
+  bpm: number;
+  /** Optional mono wavetable resource path. If omitted, uses an internal sine. */
+  path?: string;
+}
+
 /** Props for `el.extra.frameSelect(...)`. */
 export interface FrameSelectProps extends Record<string, unknown> {
   /** Fixed frame length in samples. Must be a positive even integer. */
@@ -1161,6 +1173,27 @@ export function frameShaper(
     resolve(zoom),
     resolve(scale),
     resolve(wave),
+  ]);
+}
+
+/**
+ * Frame PolySignal / Frame MultiLFO primitive.
+ *
+ * Reads one source wavetable across the frame and de-correlates each track's
+ * time path using `shapePhases` and `shapeFrequencies`. If `path` is omitted,
+ * the source defaults to an internal sine wave.
+ */
+export function framePolySignal(
+  props: FramePolySignalProps,
+  shapePhases: ElemNode,
+  shapeFrequencies: ElemNode,
+  reset: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("framePolySignal", props.framelength);
+  return createNode("framePolySignal", props, [
+    resolve(shapePhases),
+    resolve(shapeFrequencies),
+    resolve(reset),
   ]);
 }
 

@@ -952,6 +952,19 @@ fn covers_extra_helpers() {
         6,
     );
 
+    let frame_poly_signal_node = extra::frame_poly_signal(
+        serde_json::json!({"framelength": 128, "bpm": 30}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &frame_poly_signal_node,
+        "framePolySignal",
+        serde_json::json!({"framelength": 128, "bpm": 30}),
+        3,
+    );
+
     let frame_select_node = extra::frame_select(
         serde_json::json!({"framelength": 128}),
         ElemNode::from(node(1.0)),
