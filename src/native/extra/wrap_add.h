@@ -7,7 +7,7 @@
 namespace elem
 {
     template <typename FloatType>
-    struct WrappingAddNode : public GraphNode<FloatType> {
+    struct WrapAddNode : public GraphNode<FloatType> {
         using GraphNode<FloatType>::GraphNode;
         using Sample = FloatType;
 

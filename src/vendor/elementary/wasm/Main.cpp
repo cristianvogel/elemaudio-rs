@@ -8,9 +8,10 @@
 //   "boxsum"       — BoxSumNode
 //   "boxaverage"   — BoxAverageNode
 //   "frameClock"   — FrameClockNode
-//   "wrappingAdd"  — WrappingAddNode
+//   "wrapAdd"      — WrapAddNode
 //   "mirrorAdd"    — MirrorAddNode
 //   "frameDelay"   — FrameDelayNode
+//   "frameDerivative" — FrameDerivativeNode
 //   "framePhasor"  — FramePhasorNode
 //   "frameShaper"  — FrameShaperNode
 //   "framePolySignal" — FramePolySignalNode
@@ -42,6 +43,7 @@
 #include "FFT.h"
 #include "../../../../native/extra/boxsum.h"
 #include "../../../../native/extra/frame_clock.h"
+#include "../../../../native/extra/frame_derivative.h"
 #include "../../../../native/extra/mirror_add.h"
 #include "../../../../native/extra/frame_delay.h"
 #include "../../../../native/extra/frame_phasor.h"
@@ -52,7 +54,7 @@
 #include "../../../../native/extra/frame_smooth.h"
 #include "../../../../native/extra/frame_write_ram.h"
 #include "../../../../native/extra/frame_random_walks.h"
-#include "../../../../native/extra/wrapping_add.h"
+#include "../../../../native/extra/wrap_add.h"
 #include "../../../../native/extra/frame_scope.h"
 #include "../../../../native/extra/frame_value.h"
 #include "../../../../native/extra/freqshift.h"
@@ -128,8 +130,8 @@ public:
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
         });
 
-        runtime->registerNodeType("wrappingAdd", [](elem::NodeId const id, double fs, int const bs) {
-            return std::make_shared<elem::WrappingAddNode<double>>(id, fs, bs);
+        runtime->registerNodeType("wrapAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::WrapAddNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("mirrorAdd", [](elem::NodeId const id, double fs, int const bs) {
@@ -138,6 +140,10 @@ public:
 
         runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameDelayNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameDerivative", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDerivativeNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("frameScope", [](elem::NodeId const id, double fs, int const bs) {

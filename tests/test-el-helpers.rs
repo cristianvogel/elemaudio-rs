@@ -978,13 +978,24 @@ fn covers_extra_helpers() {
         3,
     );
 
-    let wrapping_add_node = extra::wrapping_add(
+    let wrap_add_node = extra::wrap_add(
         ElemNode::from(node(-1.0)),
         ElemNode::from(node(1.0)),
         ElemNode::from(node(0.75)),
         ElemNode::from(node(0.5)),
     );
-    assert_node(&wrapping_add_node, "wrappingAdd", serde_json::Value::Null, 4);
+    assert_node(&wrap_add_node, "wrapAdd", serde_json::Value::Null, 4);
+
+    let frame_derivative_node = extra::frame_derivative(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.25)),
+    );
+    assert_node(
+        &frame_derivative_node,
+        "frameDerivative",
+        serde_json::json!({"framelength": 128}),
+        1,
+    );
 
     let mirror_add_node = extra::mirror_add(
         ElemNode::from(node(-1.0)),

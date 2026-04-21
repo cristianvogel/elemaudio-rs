@@ -1011,6 +1011,14 @@ export interface FrameDelayProps extends Record<string, unknown> {
   maxframes: number;
 }
 
+/** Props for `el.extra.frameDerivative(...)`. */
+export interface FrameDerivativeProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
 /** Props for `el.extra.frameScope(...)`. */
 export interface FrameScopeProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
@@ -1285,8 +1293,8 @@ export function frameWriteRAM(
 }
 
 /** Wrapping addition inside a runtime range `[min, max)`. */
-export function wrappingAdd(min: ElemNode, max: ElemNode, x: ElemNode, y: ElemNode): NodeRepr_t {
-  return createNode("wrappingAdd", {}, [resolve(min), resolve(max), resolve(x), resolve(y)]);
+export function wrapAdd(min: ElemNode, max: ElemNode, x: ElemNode, y: ElemNode): NodeRepr_t {
+  return createNode("wrapAdd", {}, [resolve(min), resolve(max), resolve(x), resolve(y)]);
 }
 
 /** Mirror-reflected addition inside a runtime range `[min, max]`. */
@@ -1337,6 +1345,19 @@ export function frameDelay(
   }
 
   return createNode("frameDelay", props, [resolve(delayFrames), resolve(x)]);
+}
+
+/**
+ * Frame-synchronised derivative against the previous frame at the same sample offset.
+ *
+ * Emits `x[n] - x[n - framelength]` with a fixed latency of one frame.
+ */
+export function frameDerivative(
+  props: FrameDerivativeProps,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameDerivative", props.framelength);
+  return createNode("frameDerivative", props, [resolve(x)]);
 }
 
 /**

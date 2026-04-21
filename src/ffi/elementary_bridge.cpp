@@ -12,6 +12,7 @@
 #include <extra/crunch.h>
 #include <extra/boxsum.h>
 #include <extra/frame_clock.h>
+#include <extra/frame_derivative.h>
 #include <extra/mirror_add.h>
 #include <extra/frame_delay.h>
 #include <extra/frame_phasor.h>
@@ -22,7 +23,7 @@
 #include <extra/frame_smooth.h>
 #include <extra/frame_write_ram.h>
 #include <extra/frame_random_walks.h>
-#include <extra/wrapping_add.h>
+#include <extra/wrap_add.h>
 #include <extra/frame_scope.h>
 #include <extra/frame_value.h>
 #include <extra/freqshift.h>
@@ -87,8 +88,8 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
         });
 
-        handle->runtime->registerNodeType("wrappingAdd", [](elem::NodeId const id, double fs, int const bs) {
-            return std::make_shared<elem::WrappingAddNode<double>>(id, fs, bs);
+        handle->runtime->registerNodeType("wrapAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::WrapAddNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("mirrorAdd", [](elem::NodeId const id, double fs, int const bs) {
@@ -97,6 +98,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FrameDelayNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameDerivative", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDerivativeNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("frameScope", [](elem::NodeId const id, double fs, int const bs) {
@@ -176,7 +181,7 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
-        // "dust" — DustNode.
+        // "rain" — rainNode (was 'dust').
         // Sparse random impulses with optional overlapping decaying releases.
         // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
         // Properties: seed, jitter.

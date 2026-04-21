@@ -1219,6 +1219,18 @@ pub fn frame_delay(
     Node::new("frameDelay", props, vec![resolve(delay_frames), resolve(x)])
 }
 
+/// Frame-synchronised derivative against the previous frame at the same sample offset.
+///
+/// Emits `x[n] - x[n - framelength]` with a fixed latency of one frame.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `key`: optional authoring key
+pub fn frame_derivative(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+    assert_even_framelength(&props, "frame_derivative");
+    Node::new("frameDerivative", props, vec![resolve(x)])
+}
+
 /// Frame-synchronised scope that emits one exact frame of samples per event.
 ///
 /// Props:
@@ -1427,14 +1439,14 @@ pub fn frame_write_ram(
 }
 
 /// Wrapping addition inside a runtime range `[min, max)`.
-pub fn wrapping_add(
+pub fn wrap_add(
     min: impl Into<ElemNode>,
     max: impl Into<ElemNode>,
     x: impl Into<ElemNode>,
     y: impl Into<ElemNode>,
 ) -> Node {
     Node::new(
-        "wrappingAdd",
+        "wrapAdd",
         serde_json::Value::Null,
         vec![resolve(min), resolve(max), resolve(x), resolve(y)],
     )
