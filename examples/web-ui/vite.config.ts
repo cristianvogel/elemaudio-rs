@@ -42,7 +42,7 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
         synth: resolve(__dirname, "synth.html"),
         sample: resolve(__dirname, "sample.html"),
-        dust: resolve(__dirname, "dust.html"),
+        rain: resolve(__dirname, "rain.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
         frameDomain: resolve(__dirname, "frame-domain.html"),
         frameShaper: resolve(__dirname, "frame-shaper.html"),

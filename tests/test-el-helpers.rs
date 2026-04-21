@@ -1120,15 +1120,15 @@ fn covers_extra_helpers() {
         2,
     );
 
-    // dust: seed prop preserved; two signal children (density, release).
-    let dust_node = extra::dust(
+    // rain: seed prop preserved; two signal children (density, release).
+    let rain_node = extra::rain(
         serde_json::json!({"seed": 1234, "jitter": 0.25}),
         ElemNode::from(node(200.0)),
         ElemNode::from(node(0.05)),
     );
     assert_node(
-        &dust_node,
-        "dust",
+        &rain_node,
+        "rain",
         serde_json::json!({"seed": 1234, "jitter": 0.25}),
         2,
     );

@@ -1019,7 +1019,7 @@ mod tests {
     }
 
     #[test]
-    fn dust_produces_sparse_random_impulses() {
+    fn rain_produces_sparse_random_impulses() {
         use crate::Runtime;
 
         let sr = 44100.0;
@@ -1032,9 +1032,9 @@ mod tests {
 
         let density = el::const_(100.0);
         let release = el::const_(0.0);
-        let dust = extra::dust(serde_json::json!({ "seed": 42 }), density, release);
+        let rain = extra::rain(serde_json::json!({ "seed": 42 }), density, release);
 
-        let graph = Graph::new().render(vec![dust]);
+        let graph = Graph::new().render(vec![rain]);
         let mounted = graph.mount().expect("mount");
         runtime
             .apply_instructions(mounted.batch())
@@ -1081,7 +1081,7 @@ mod tests {
                 }
                 if periodic {
                     panic!(
-                        "dust output is periodic with cycle length {cycle_len} impulses (total {} impulses in sample)",
+                        "rain output is periodic with cycle length {cycle_len} impulses (total {} impulses in sample)",
                         gaps.len()
                     );
                 }
@@ -1093,7 +1093,7 @@ mod tests {
         let actual = impulse_count as f64;
         assert!(
             actual > lo && actual < hi,
-            "dust produced {impulse_count} impulses, expected ~{expected_count}"
+            "rain produced {impulse_count} impulses, expected ~{expected_count}"
         );
     }
 }

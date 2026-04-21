@@ -45,10 +45,10 @@
 // audio resource as a constant-valued signal. Zero children.
 // Property: path (string, required) — VFS key of the resource.
 #include <extra/sample_count.h>
-// DustNode: sparse impulses with a vactrol-like pinged decay.
+// RainNode: sparse impulses with a vactrol-like pinged decay.
 // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
 // Properties: seed (number, optional), jitter (0..1).
-#include <extra/dust.h>
+#include <extra/rain.h>
 
 extern "C" {
 
@@ -181,12 +181,12 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
-        // "rain" — rainNode (was 'dust').
+        // "rain" — RainNode.
         // Sparse random impulses with optional overlapping decaying releases.
         // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
         // Properties: seed, jitter.
-        handle->runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
-            return std::make_shared<elem::DustNode<double>>(id, fs, bs);
+        handle->runtime->registerNodeType("rain", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::RainNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("time", [](elem::NodeId const id, double fs, int const bs) {

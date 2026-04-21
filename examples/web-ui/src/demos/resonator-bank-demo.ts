@@ -36,7 +36,7 @@ const layout = `
       tuned Karplus-Strong-style delay resonator with per-mode damping
       ( dispersive wave propagation ).
       Excite with a <em>hammer</em> (velocity + hardness) or
-      <em>dust</em> for A/B. TS reference implementation; the Rust
+      <em>rain</em> for A/B. TS reference implementation; the Rust
       <code>el::extra::resonator_bank</code> is still in the works.
     </p>
     <div class="controls">
@@ -53,7 +53,7 @@ const layout = `
           </label>
           <select id="exciter">
             <option value="hammer" selected>Hammer</option>
-            <option value="dust">Dust</option>
+            <option value="rain">Rain</option>
           </select>
         </div>
 
@@ -151,27 +151,27 @@ const layout = `
 
       <div class="dial-strip">
         <div class="dial">
-          <label for="dustDensity">
-            <span>Dust density</span>
-            <span id="dustDensity-value">8 Hz</span>
+          <label for="rainDensity">
+            <span>Rain density</span>
+            <span id="rainDensity-value">8 Hz</span>
           </label>
-          <input id="dustDensity" type="range" min="1" max="500" value="8" step="1" />
+          <input id="rainDensity" type="range" min="1" max="500" value="8" step="1" />
         </div>
 
         <div class="dial">
-          <label for="dustReleaseMs">
-            <span>Dust release</span>
-            <span id="dustReleaseMs-value">1 ms</span>
+          <label for="rainReleaseMs">
+            <span>Rain release</span>
+            <span id="rainReleaseMs-value">1 ms</span>
           </label>
-          <input id="dustReleaseMs" type="range" min="0" max="200" value="1" step="1" />
+          <input id="rainReleaseMs" type="range" min="0" max="200" value="1" step="1" />
         </div>
 
         <div class="dial">
-          <label for="dustJitter">
-            <span>Dust jitter</span>
-            <span id="dustJitter-value">0 %</span>
+          <label for="rainJitter">
+            <span>Rain jitter</span>
+            <span id="rainJitter-value">0 %</span>
           </label>
-          <input id="dustJitter" type="range" min="0" max="100" value="0" step="1" />
+          <input id="rainJitter" type="range" min="0" max="100" value="0" step="1" />
         </div>
 
         <div class="dial">
@@ -230,12 +230,12 @@ let velocitySlider: HTMLInputElement;
 let velocityValue: HTMLSpanElement;
 let hardnessSlider: HTMLInputElement;
 let hardnessValue: HTMLSpanElement;
-let dustDensitySlider: HTMLInputElement;
-let dustDensityValue: HTMLSpanElement;
-let dustReleaseSlider: HTMLInputElement;
-let dustReleaseValue: HTMLSpanElement;
-let dustJitterSlider: HTMLInputElement;
-let dustJitterValue: HTMLSpanElement;
+let rainDensitySlider: HTMLInputElement;
+let rainDensityValue: HTMLSpanElement;
+let rainReleaseSlider: HTMLInputElement;
+let rainReleaseValue: HTMLSpanElement;
+let rainJitterSlider: HTMLInputElement;
+let rainJitterValue: HTMLSpanElement;
 let gainSlider: HTMLInputElement;
 let gainValue: HTMLSpanElement;
 let clipModeSelect: HTMLSelectElement;
@@ -286,9 +286,9 @@ function currentParams(): ResonatorBankParams {
         strikeRate: strikeRateFromSlider(Number(strikeRateSlider.value)),
         velocity: Number(velocitySlider.value) / 100,
         hardness: Number(hardnessSlider.value) / 100,
-        dustDensity: Number(dustDensitySlider.value),
-        dustReleaseMs: Number(dustReleaseSlider.value),
-        dustJitter: Number(dustJitterSlider.value) / 100,
+        rainDensity: Number(rainDensitySlider.value),
+        rainReleaseMs: Number(rainReleaseSlider.value),
+        rainJitter: Number(rainJitterSlider.value) / 100,
         gain: 0.65 * Math.pow(Number(gainSlider.value) / 100, 2.4),
         clipMode: clipModeSelect.value as ClipMode,
         isStopped
@@ -342,12 +342,12 @@ velocitySlider = q<HTMLInputElement>("#velocity");
 velocityValue = q<HTMLSpanElement>("#velocity-value");
 hardnessSlider = q<HTMLInputElement>("#hardness");
 hardnessValue = q<HTMLSpanElement>("#hardness-value");
-dustDensitySlider = q<HTMLInputElement>("#dustDensity");
-dustDensityValue = q<HTMLSpanElement>("#dustDensity-value");
-dustReleaseSlider = q<HTMLInputElement>("#dustReleaseMs");
-dustReleaseValue = q<HTMLSpanElement>("#dustReleaseMs-value");
-dustJitterSlider = q<HTMLInputElement>("#dustJitter");
-dustJitterValue = q<HTMLSpanElement>("#dustJitter-value");
+rainDensitySlider = q<HTMLInputElement>("#rainDensity");
+rainDensityValue = q<HTMLSpanElement>("#rainDensity-value");
+rainReleaseSlider = q<HTMLInputElement>("#rainReleaseMs");
+rainReleaseValue = q<HTMLSpanElement>("#rainReleaseMs-value");
+rainJitterSlider = q<HTMLInputElement>("#rainJitter");
+rainJitterValue = q<HTMLSpanElement>("#rainJitter-value");
 gainSlider = q<HTMLInputElement>("#gain");
 gainValue = q<HTMLSpanElement>("#gain-value");
 clipModeSelect = q<HTMLSelectElement>("#clip-mode");
@@ -376,9 +376,9 @@ wireControls([
     strikeRateSlider,
     velocitySlider,
     hardnessSlider,
-    dustDensitySlider,
-    dustReleaseSlider,
-    dustJitterSlider,
+    rainDensitySlider,
+    rainReleaseSlider,
+    rainJitterSlider,
     gainSlider,
     clipModeSelect
 ]);
@@ -414,7 +414,7 @@ zoomButton.addEventListener("click", () => {
 });
 
 function updateReadouts() {
-    exciterValue.textContent = exciterSelect.value === "hammer" ? "Hammer" : "Dust";
+    exciterValue.textContent = exciterSelect.value === "hammer" ? "Hammer" : "Rain";
     f0Value.textContent = `${Number(f0Slider.value)} Hz`;
     modesValue.textContent = `${Number(modesSlider.value)}`;
     const B = inharmFromSlider(Number(inharmSlider.value));
@@ -429,11 +429,11 @@ function updateReadouts() {
         rate < 1 ? `${rate.toFixed(2)} Hz` : `${rate.toFixed(1)} Hz`;
     velocityValue.textContent = `${Number(velocitySlider.value)} %`;
     hardnessValue.textContent = `${Number(hardnessSlider.value)} %`;
-    const d = densityFromSlider(Number(dustDensitySlider.value));
+    const d = densityFromSlider(Number(rainDensitySlider.value));
     // Finer formatting at low density for visibility below 1 Hz.
-    dustDensityValue.textContent = d < 1 ? `${d.toFixed(2)} Hz` : `${d.toFixed(1)} Hz`;
-    dustReleaseValue.textContent = `${Number(dustReleaseSlider.value)} ms`;
-    dustJitterValue.textContent = `${Number(dustJitterSlider.value)} %`;
+    rainDensityValue.textContent = d < 1 ? `${d.toFixed(2)} Hz` : `${d.toFixed(1)} Hz`;
+    rainReleaseValue.textContent = `${Number(rainReleaseSlider.value)} ms`;
+    rainJitterValue.textContent = `${Number(rainJitterSlider.value)} %`;
     gainValue.textContent = `${Number(gainSlider.value)} %`;
     clipModeValue.textContent = clipModeSelect.value === "limiter" ? "Limiter" : "Soft";
 }

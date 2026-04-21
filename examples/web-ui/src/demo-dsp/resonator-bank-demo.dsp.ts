@@ -242,7 +242,7 @@ export function hammerStrikeReference(
 // Demo graph
 // -----------------------------------------------------------------------
 
-export type ExciterKind = "hammer" | "dust";
+export type ExciterKind = "hammer" | "rain";
 export type ClipMode = "soft" | "limiter";
 
 export interface ResonatorBankParams {
@@ -275,13 +275,13 @@ export interface ResonatorBankParams {
     /** Hammer hardness 0..1. */
     hardness: number;
 
-    // --- Dust exciter (for A/B) ---------------------------------------
-    /** Dust density in impulses/sec. */
-    dustDensity: number;
-    /** Dust release in ms. */
-    dustReleaseMs: number;
-    /** Dust amp jitter 0..1. */
-    dustJitter: number;
+    // --- Rain exciter (for A/B) ---------------------------------------
+    /** Rain density in impulses/sec. */
+    rainDensity: number;
+    /** Rain release in ms. */
+    rainReleaseMs: number;
+    /** Rain amp jitter 0..1. */
+    rainJitter: number;
 
     // --- Output --------------------------------------------------------
     /** Final output gain 0..1. */
@@ -308,11 +308,11 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
     const strikePos = el.const({key: "rb:strikePos", value: p.strikePos});
     const strikePosJitter = el.const({key: "rb:strikePosJitter", value: p.strikePosJitter});
 
-    let dust: NodeRepr_t =
-        el.extra.dust(
-            {key: "rb:dust", seed: 137, jitter: p.dustJitter},
-            el.const({key: "rb:dustDensity", value: p.dustDensity}),
-            el.const({key: "rb:dustRelease", value: p.dustReleaseMs / 1000})
+    let rain: NodeRepr_t =
+        el.extra.rain(
+            {key: "rb:rain", seed: 137, jitter: p.rainJitter},
+            el.const({key: "rb:rainDensity", value: p.rainDensity}),
+            el.const({key: "rb:rainRelease", value: p.rainReleaseMs / 1000})
         );
 
     if (p.exciter === "hammer") {
@@ -324,13 +324,13 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
             el.const({key: "rb:hardness", value: p.hardness})
         );
     } else {
-        // Dust path for A/B comparison against the hammer.
+        // Rain path for A/B comparison against the hammer.
         const hardness = el.const({key: "rb:hardness", value: p.hardness});
         exciter =
             el.mul(el.const({
                 key: "rb:velocity",
                 value: p.velocity
-            }), el.select(hardness, el.mul(dust, el.db2gain(-6.0), rng), dust));
+            }), el.select(hardness, el.mul(rain, el.db2gain(-6.0), rng), rain));
     }
 
     const strikePosWithJitter: NodeRepr_t = wrap01(el.add( strikePos,

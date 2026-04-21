@@ -12,7 +12,7 @@
 
 namespace elem
 {
-    // DustNode — sparse random impulses with optional decaying release.
+    // RainNode — sparse random impulses with optional decaying release.
     //
     // Inspired by SuperCollider's Dust with a twist: each impulse
     // can have a trailing exponential release instead of being a single-sample
@@ -49,12 +49,12 @@ namespace elem
     //
     //     This is the right model for a Poisson event train with overlap:
     //     a fresh trigger "refreshes" the envelope peak, it does not stack
-    //     on top of it. Sonically: dense unipolar dust reads as a
+    //     on top of it. Sonically: dense unipolar rain reads as a
     //     probabilistically-retriggered exponential envelope whose decay
     //     tail shortens as density rises, then is recentered to zero.
 
     template <typename FloatType>
-    struct DustNode : public GraphNode<FloatType> {
+    struct RainNode : public GraphNode<FloatType> {
         using GraphNode<FloatType>::GraphNode;
         using Sample = FloatType;
 
@@ -65,7 +65,7 @@ namespace elem
         // Fixed voice pool — bounded, no heap allocation on audio thread.
         static constexpr size_t MAX_VOICES = 64;
 
-        DustNode(NodeId id, double sr, int blockSize)
+        RainNode(NodeId id, double sr, int blockSize)
             : GraphNode<FloatType>(id, sr, blockSize)
         {
             // Non-zero seed required for xorshift32. Request counter starts

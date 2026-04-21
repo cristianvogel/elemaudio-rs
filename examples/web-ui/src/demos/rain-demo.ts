@@ -1,24 +1,24 @@
 /**
- * elemaudio-rs dust signal utility demo.
+ * elemaudio-rs rain signal utility demo.
  *
- * Shows sparse impulses from `el.extra.dust` and their characteristics.
+ * Shows sparse impulses from `el.extra.rain` and their characteristics.
  * No audio output — only a scope visualization. The graph is still rendered
- * (so the dust generator ticks), but the final output is muted.
+ * (so the rain generator ticks), but the final output is muted.
  */
 
 import { MAX_ZOOM } from "../components/Oscilloscope";
 import "../components/Oscilloscope";
 import { initDemo } from "./demo-harness";
-import { buildGraph as buildDspGraph, SCOPE_NAME, type DustParams } from "../demo-dsp/dust-demo.dsp";
+import { buildGraph as buildDspGraph, SCOPE_NAME, type RainParams } from "../demo-dsp/rain-demo.dsp";
 
 const layout = `
   <elemaudio-oscilloscope id="scope" zoom="16"></elemaudio-oscilloscope>
-  <div class="scope-title"><p>Dust impulses (no audio)</p></div>
+  <div class="scope-title"><p>Rain impulses (no audio)</p></div>
   <div class="panel">
     <h1>elemaudio-rs</h1>
-    <h3>dust — sparse impulse generator</h3>
+    <h3>rain — sparse impulse generator</h3>
     <p>
-      Visualize sparse impulses from <code>el.extra.dust</code>.
+      Visualize sparse impulses from <code>el.extra.rain</code>.
       Density controls impulse rate in Hz. Release (duration) and jitter
       (amplitude randomness) shape each burst. A native DC blocker keeps
       the output centered around 0 as releases overlap. This is a scope-only
@@ -88,7 +88,7 @@ function densityFromSlider(v: number): number {
   return DENSITY_MIN_HZ * Math.pow(DENSITY_MAX_HZ / DENSITY_MIN_HZ, t);
 }
 
-function currentParams(): DustParams {
+function currentParams(): RainParams {
   return {
     density: densityFromSlider(Number(densitySlider.value)),
     releaseMs: Number(releaseSlider.value),

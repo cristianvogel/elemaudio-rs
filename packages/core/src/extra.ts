@@ -1451,13 +1451,13 @@ export function ramp00(
 }
 
 // ---------------------------------------------------------------------------
-// dust
+// rain
 // ---------------------------------------------------------------------------
 
 /**
- * Props for `el.extra.dust(...)`.
+ * Props for `el.extra.rain(...)`.
  */
-export interface DustProps extends Record<string, unknown> {
+export interface RainProps extends Record<string, unknown> {
   /** Optional authoring key for stable identity. */
   key?: string;
   /** Optional deterministic RNG seed (0 treated as 1). */
@@ -1499,31 +1499,31 @@ export interface DustProps extends Record<string, unknown> {
  * For the `release <= 0` impulse mode, voices expire on the next sample so
  * there is no overlap to manage.
  *
- * @param props   - see {@link DustProps}
+ * @param props   - see {@link RainProps}
  * @param density - impulses per second (Poisson rate, signal)
  * @param release - T60 decay time in seconds per impulse (signal, audio-rate)
  *
  * @example
  * ```ts
- * // Dense dust with 50ms release
- * const noise = el.extra.dust(
+ * // Dense rain with 50ms release
+ * const noise = el.extra.rain(
  *   { seed: 1 },
  *   el.const({ value: 200 }),
  *   el.const({ value: 0.05 }),
  * );
  *
  * // Single-sample impulses
- * const clicks = el.extra.dust(
+ * const clicks = el.extra.rain(
  *   {},
  *   el.const({ value: 10 }),
  *   el.const({ value: 0 }),
  * );
  * ```
  */
-export function dust(
-  props: DustProps,
+export function rain(
+  props: RainProps,
   density: ElemNode,
   release: ElemNode,
 ): NodeRepr_t {
-  return createNode("dust", props, [resolve(density), resolve(release)]);
+  return createNode("rain", props, [resolve(density), resolve(release)]);
 }

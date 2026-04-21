@@ -1574,16 +1574,16 @@ pub fn frame_value(
 /// use elemaudio_rs::{el, extra};
 /// use serde_json::json;
 ///
-/// let noise = extra::dust(
+/// let noise = extra::rain(
 ///     json!({ "seed": 1, "jitter": 0.25 }),
 ///     el::const_(200.0),
 ///     el::const_(0.05),
 /// );
 /// ```
-pub fn dust(
+pub fn rain(
     props: serde_json::Value,
     density: impl Into<ElemNode>,
     release: impl Into<ElemNode>,
 ) -> Node {
-    Node::new("dust", props, vec![resolve(density), resolve(release)])
+    Node::new("rain", props, vec![resolve(density), resolve(release)])
 }

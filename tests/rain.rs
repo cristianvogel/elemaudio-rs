@@ -1,4 +1,4 @@
-//! End-to-end tests for the `dust` native node.
+//! End-to-end tests for the `rain` native node.
 //!
 //! These exercise the full Rust authoring → Runtime → native C++ path.
 //! The node is intentionally sparse and stateful, so the tests focus on
@@ -22,14 +22,14 @@ fn warm_past_root_fade(runtime: &Runtime, sample_rate: f64, buffer_size: usize) 
 }
 
 #[test]
-fn dust_is_silent_when_density_is_zero() {
+fn rain_is_silent_when_density_is_zero() {
     let runtime = Runtime::new()
         .sample_rate(48_000.0)
         .buffer_size(64)
         .call()
         .expect("runtime");
 
-    let graph = Graph::new().render(extra::dust(
+    let graph = Graph::new().render(extra::rain(
         json!({ "seed": 1 }),
         elemaudio_rs::el::const_(0.0),
         elemaudio_rs::el::const_(0.05),
@@ -47,7 +47,7 @@ fn dust_is_silent_when_density_is_zero() {
 }
 
 #[test]
-fn dust_output_stays_bounded_across_release_sweeps() {
+fn rain_output_stays_bounded_across_release_sweeps() {
     let sample_rate = 48_000.0;
     let buffer_size = 512;
 
@@ -62,7 +62,7 @@ fn dust_output_stays_bounded_across_release_sweeps() {
     // output within ±1 regardless, preventing downstream clipping.
     let density = elemaudio_rs::el::const_with_key("density", sample_rate);
     let release = elemaudio_rs::el::const_with_key("release", 0.1);
-    let graph = Graph::new().render(extra::dust(
+    let graph = Graph::new().render(extra::rain(
         json!({ "seed": 1234, "jitter": 0.0 }),
         density,
         release,
@@ -91,11 +91,11 @@ fn dust_output_stays_bounded_across_release_sweeps() {
     const EPS: f64 = 1e-9;
     assert!(
         max_abs <= 1.0 + EPS,
-        "normalized dust must stay within ±1 at heavy polyphony; max abs = {max_abs}",
+        "normalized rain must stay within ±1 at heavy polyphony; max abs = {max_abs}",
     );
     assert!(
         energy_long > 0.0,
-        "dust should produce non-zero output: {energy_long}"
+        "rain should produce non-zero output: {energy_long}"
     );
 
     // Now shorten the release drastically. The bound must still hold.
@@ -114,6 +114,6 @@ fn dust_output_stays_bounded_across_release_sweeps() {
     let max_abs_short = out.iter().map(|s| s.abs()).fold(0.0_f64, f64::max);
     assert!(
         max_abs_short <= 1.0 + EPS,
-        "normalized dust must stay within ±1 after release change; max abs = {max_abs_short}",
+        "normalized rain must stay within ±1 after release change; max abs = {max_abs_short}",
     );
 }

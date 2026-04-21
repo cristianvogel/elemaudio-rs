@@ -28,7 +28,7 @@
 //   "vocoder"      — VocoderNode       (STFT channel vocoder, 4-in 2-out)
 //   "ramp00"       — Ramp00Node        (sample-accurate one-shot 0→1 ramp)
 //   "sampleCount"  — SampleCountNode   (VFS resource length as a constant signal)
-//   "dust"         — DustNode          (random impulses with optional release)
+//   "rain"         — RainNode          (random impulses with optional release)
 //   "convolve"     — ConvolutionNode   (WASM-only)
 //   "fft"          — FFTNode           (WASM-only)
 //   "metro"        — MetronomeNode     (WASM-only)
@@ -65,7 +65,7 @@
 #include "../../../../native/extra/vocoder.h"
 #include "../../../../native/extra/ramp00.h"
 #include "../../../../native/extra/sample_count.h"
-#include "../../../../native/extra/dust.h"
+#include "../../../../native/extra/rain.h"
 #include "../../../../native/extra/sample_count.h"
 #include "Metro.h"
 #include "SampleTime.h"
@@ -220,11 +220,11 @@ public:
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
-        // DustNode: sparse impulses with a pinged, vactrol-like trail.
+        // RainNode: sparse impulses with a pinged, vactrol-like trail.
         // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
         // Properties: seed, jitter.
-        runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
-            return std::make_shared<elem::DustNode<double>>(id, fs, bs);
+        runtime->registerNodeType("rain", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::RainNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("fft", [](elem::NodeId const id, double fs, int const bs) {
