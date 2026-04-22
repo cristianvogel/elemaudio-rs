@@ -10,6 +10,13 @@
 import { el, type NodeRepr_t } from "@elem-rs/core";
 import WebRenderer from "../WebRenderer";
 import "../style.css";
+import {
+  applyControlState,
+  attachPresetControls,
+  controlStorageKey,
+  createControlPresetManager,
+  readControlValue,
+} from "./control-presets";
 
 export type BuildGraph = () => NodeRepr_t[];
 
@@ -74,50 +81,18 @@ export function initDemo(config: DemoConfig) {
   let renderer: WebRenderer | null = null;
   const persistKey = config.persistKey ?? `elemaudio-rs:demo:${location.pathname}`;
   const persistenceEnabled = persistKey !== "no-persist";
+  const presetManager = persistenceEnabled ? createControlPresetManager(`${persistKey}:presets`) : null;
   const defaultValues = new Map<HTMLInputElement | HTMLSelectElement, string>();
   const defaultChecks = new Map<HTMLInputElement, boolean>();
 
   function loadPersistedState(): Record<string, string | boolean> {
-    if (!persistenceEnabled) return {};
-    try {
-      const raw = localStorage.getItem(persistKey);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object") return {};
-      return parsed as Record<string, string | boolean>;
-    } catch {
-      return {};
-    }
+    if (!presetManager) return {};
+    return presetManager.loadCurrentState();
   }
 
   function savePersistedState(state: Record<string, string | boolean>) {
-    if (!persistenceEnabled) return;
-    try {
-      localStorage.setItem(persistKey, JSON.stringify(state));
-    } catch {
-      // Ignore quota/privacy failures during dev.
-    }
-  }
-
-  function controlStorageKey(control: HTMLInputElement | HTMLSelectElement): string | null {
-    return control.id || control.getAttribute("name");
-  }
-
-  function readControlValue(control: HTMLInputElement | HTMLSelectElement): string | boolean {
-    if (control instanceof HTMLInputElement && control.type === "checkbox") {
-      return control.checked;
-    }
-
-    return control.value;
-  }
-
-  function writeControlValue(control: HTMLInputElement | HTMLSelectElement, value: string | boolean) {
-    if (control instanceof HTMLInputElement && control.type === "checkbox") {
-      if (typeof value === "boolean") control.checked = value;
-      return;
-    }
-
-    if (typeof value === "string") control.value = value;
+    if (!presetManager) return;
+    presetManager.saveCurrentState(state);
   }
 
   function persistControl(control: HTMLInputElement | HTMLSelectElement) {
@@ -132,12 +107,7 @@ export function initDemo(config: DemoConfig) {
   function restoreControls(controls: Array<HTMLInputElement | HTMLSelectElement>) {
     if (!persistenceEnabled) return;
     const state = loadPersistedState();
-    controls.forEach((control) => {
-      const key = controlStorageKey(control);
-      if (!key) return;
-      if (!(key in state)) return;
-      writeControlValue(control, state[key]);
-    });
+    applyControlState(controls, state);
   }
 
   async function ensureAudio() {
@@ -223,6 +193,17 @@ export function initDemo(config: DemoConfig) {
     });
 
     restoreControls(controls);
+
+    if (presetManager) {
+      attachPresetControls({
+        controlsHost: app.querySelector<HTMLElement>(".controls") ?? app,
+        controls,
+        storageKey: `${persistKey}:presets`,
+        updateReadouts: config.updateReadouts,
+        rerender: renderCurrentGraph,
+        isAudioRunning: () => audioContext?.state === "running" && renderer !== null,
+      });
+    }
 
     controls.forEach((control) => {
       const onChange = () => {

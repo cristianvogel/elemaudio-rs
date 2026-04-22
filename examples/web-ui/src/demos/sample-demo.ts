@@ -2,8 +2,15 @@ import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
 import sampleUrl from "../../../demo-resources/115bpm_808_Beat_mono.wav?url";
 import irUrl from "../../../demo-resources/DEEPNESS.wav?url";
-import { buildGraph as dspBuildGraph, type SampleParams } from "../demo-dsp/sample-demo.dsp";
+import { buildGraph as dspBuildGraph } from "../demo-dsp/sample-demo.dsp";
 import WebRenderer from "../WebRenderer";
+import {
+  applyControlState,
+  attachPresetControls,
+  controlStorageKey,
+  createControlPresetManager,
+  readControlValue,
+} from "./control-presets";
 import "../style.css";
 
 const bundledSamplePath = "demo-resources/115bpm_808_Beat_mono.wav";
@@ -124,6 +131,16 @@ const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
 const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
 const status = mustQuery<HTMLDivElement>("#status");
+const controlsHost = mustQuery<HTMLDivElement>(".controls");
+const persistKey = `elemaudio-rs:demo:${location.pathname}:presets`;
+const presetManager = createControlPresetManager(persistKey);
+const presetControls = [
+  rateSlider,
+  blendSlider,
+  chopperThresholdSlider,
+  freqShiftHzSlider,
+  sideBandMixSlider,
+] as const;
 
 updateIrToggleLabel();
 
@@ -158,6 +175,28 @@ function updateIrToggleLabel() {
 
   toggleIrButton.disabled = irChannelPaths.length < 4;
   toggleIrButton.textContent = activeIrPairStart === 0 ? "Use IR pair 1/2" : "Use IR pair 3/4";
+}
+
+function persistCurrentControls() {
+  const state: Record<string, string | boolean> = {};
+
+  presetControls.forEach((control) => {
+    const key = controlStorageKey(control);
+    if (!key) return;
+    state[key] = readControlValue(control);
+  });
+
+  state["freqshift-zoom-mode"] = freqShiftFiveHzScale;
+  presetManager.saveCurrentState(state);
+}
+
+function restoreCurrentControls() {
+  const state = presetManager.loadCurrentState();
+  applyControlState([...presetControls], state);
+
+  if (typeof state["freqshift-zoom-mode"] === "boolean") {
+    freqShiftFiveHzScale = state["freqshift-zoom-mode"];
+  }
 }
 
 async function updateBlend() {
@@ -320,6 +359,10 @@ function buildGraph(rate: number): NodeRepr_t[] {
   });
 }
 
+restoreCurrentControls();
+configureFreqShiftSlider(false);
+persistCurrentControls();
+
 async function ensureAudio() {
   if (audioContext && renderer) {
     return;
@@ -345,6 +388,35 @@ async function renderCurrentGraph() {
 
   await renderer.render(...buildGraph(rate));
 }
+
+attachPresetControls({
+  controlsHost,
+  controls: [...presetControls],
+  storageKey: persistKey,
+  updateReadouts: () => {
+    configureFreqShiftSlider(false);
+    rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
+    blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
+    chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
+    freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
+    const sideBandValue = Number(sideBandMixSlider.value);
+    const lower = Math.round((1 - sideBandValue) * 100);
+    const upper = Math.round(sideBandValue * 100);
+    sideBandMixValue.textContent = `L ${lower} / U ${upper}`;
+  },
+  rerender: async () => {
+    persistCurrentControls();
+    await renderCurrentGraph();
+  },
+  isAudioRunning: () => audioContext?.state === "running" && renderer !== null,
+  readExtraState: () => ({ "freqshift-zoom-mode": freqShiftFiveHzScale }),
+  applyExtraState: (state) => {
+    if (typeof state["freqshift-zoom-mode"] === "boolean") {
+      freqShiftFiveHzScale = state["freqshift-zoom-mode"];
+      configureFreqShiftSlider(false);
+    }
+  },
+});
 
 startButton.addEventListener("click", async () => {
   isStopped = false;
@@ -428,6 +500,7 @@ sampleFileInput.addEventListener("change", async () => {
 });
 
 rateSlider.addEventListener("input", () => {
+  persistCurrentControls();
   rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
 
   if (renderer && audioContext?.state === "running") {
@@ -436,28 +509,34 @@ rateSlider.addEventListener("input", () => {
 });
 
 blendSlider.addEventListener("input", () => {
+  persistCurrentControls();
   void updateBlend();
 });
 
 chopperThresholdSlider.addEventListener("input", () => {
+  persistCurrentControls();
   void updateChopperThreshold();
 });
 
 freqShiftHzSlider.addEventListener("input", () => {
+  persistCurrentControls();
   void updateFreqShiftHz();
 });
 
 freqShiftZoomButton.addEventListener("click", () => {
   freqShiftFiveHzScale = !freqShiftFiveHzScale;
   configureFreqShiftSlider();
+  persistCurrentControls();
   void updateFreqShiftHz();
 });
 
 sideBandMixSlider.addEventListener("input", () => {
+  persistCurrentControls();
   void updateSideBandMix();
 });
 
+rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
+blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
 chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
-configureFreqShiftSlider(false);
 freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
 void updateSideBandMix();
