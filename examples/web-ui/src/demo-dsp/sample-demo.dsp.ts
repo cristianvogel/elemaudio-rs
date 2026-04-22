@@ -10,6 +10,8 @@ export interface SampleParams {
     rate: number;
     blend: number;
     chopperThreshold: number;
+    freqShiftHz: number;
+    sideBandMix: number;
     leftIrPath: string;
     rightIrPath: string;
     isStopped?: boolean;
@@ -23,31 +25,41 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const trigger = el.train(el.mul(smRate, el.extra.sampleCount({unit: "hz", path: p.samplePath})));
     const blendNode = el.const({key: "fx:blend", value: p.blend});
 
-    const sample = el.extra.sample({path: p.samplePath}, 0.0, 1.0, smRate, trigger);
+    const sampleGainDb = el.const({key: "sample:gain-db", value: -3});
+    const sample = el.extra.sample({path: p.samplePath}, 0.0, 1.0, smRate, sampleGainDb, trigger);
+
     const leftSource = sample[0];
-    const rightSource = sample[1];
+    const rightSource =sample[1];
 
     const chopperThreshold = el.const({key: "sample:chopper-threshold", value: p.chopperThreshold});
+    const freqShiftHz = el.const({key: "sample:freqshift-hz", value: p.freqShiftHz});
+    const sideBandMix = el.const({key: "sample:sideband-mix", value: p.sideBandMix});
 
     function thresh(x: NodeRepr_t): NodeRepr_t {
-        return el.extra.threshold({key: "threshold", hysteresis: 0.01, latch: true}, chopperThreshold, el.train(4), el.abs(x));
+        return el.extra.threshold({key: "threshold", hysteresis: 0.01, latch: true},
+            el.mul( chopperThreshold, (1/3)),
+            el.train(8),
+            el.abs(x));
     }
 
     const ar = {
-        atk: el.tau2pole(1.0e-4),
+        atk: el.tau2pole(1/4096),
         rel: el.tau2pole(1/128)
     }
 
     const choppedLeft = el.mul( el.env( ar.atk, ar.rel,  thresh(leftSource)), el.add(leftSource));
     const choppedRight = el.mul( el.env( ar.atk, ar.rel,  thresh(leftSource)), el.add( rightSource));
 
-    const shiftDown = el.extra.freqshift({shiftHz: 100, mix: 1.0, key: "fshift_Left", reflect: 3}, choppedLeft)[0];
-    const shiftUp = el.extra.freqshift({shiftHz: 101, mix: 1.0, key: "fshift_Right", reflect: 3}, choppedRight)[0];
+    const leftBands = el.extra.freqshift({ key: "fshift_Left", reflect: 1 }, freqShiftHz, choppedLeft);
+    const rightBands = el.extra.freqshift({ key: "fshift_Right", reflect: 1 }, el.mul(1.618, freqShiftHz), choppedRight);
+    const shiftDown = el.add(el.mul(el.sub(1, sideBandMix), leftBands[0]), el.mul(sideBandMix, leftBands[1]));
+    const shiftUp = el.add(el.mul(el.sub(1, sideBandMix), rightBands[1]), el.mul(sideBandMix, rightBands[0]));
+
     const leftWet = el.convolve({key: "ir-left", path: p.leftIrPath}, el.mul(1.0e-3, shiftDown));
     const rightWet = el.convolve({key: "ir-right", path: p.rightIrPath}, el.mul(1.0e-3, shiftUp));
 
     return [
-        el.mul(0.9, el.select(blendNode, leftWet, shiftDown)),
-        el.mul(0.9, el.select(blendNode, rightWet, shiftUp))
+         el.select(blendNode, leftWet, shiftDown),
+         el.select(blendNode, rightWet, shiftUp)
     ];
 }

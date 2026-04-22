@@ -100,6 +100,7 @@ First-party extras currently available:
 | `el::extra::foldback` | Foldback distortion with soft-knee |
 | `el::extra::vari_slope_svf` | Rossum-style continuously morphable SVF (12–72 dB/oct, Butterworth) |
 | `el::extra::vocoder` | STFT channel vocoder (port of Geraint Luff's JSFX) |
+| `el::extra::sample` | Always-stereo sample playback with SR `start`, `end`, `rate`, and dB gain |
 | `el::extra::box_sum` / `box_average` | Moving-window sum and mean |
 | `el::extra::limiter` / `stereo_limiter` | Lookahead brick-wall limiter |
 | `el::extra::stride_delay` / `stereo_stride_delay` | Delay with continuous time modulation across mode transitions |

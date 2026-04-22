@@ -4,7 +4,13 @@ import type { ElemNode, NodeRepr_t } from "./vendor";
 /**
  * Reflect modes for `freqshift`.
  *
- * These values match the native processor's integer `reflect` prop.
+ * These values match the native processor's integer `reflect` prop and only
+ * affect negative `shiftHz` values.
+ *
+ * - `0`: no reflection, no output swap
+ * - `1`: reflect negative shift to positive magnitude
+ * - `2`: swap lower/upper outputs for negative shift
+ * - `3`: reflect negative shift and swap outputs
  */
 export type FreqShiftReflectMode = 0 | 1 | 2 | 3;
 
@@ -14,10 +20,6 @@ export type FreqShiftReflectMode = 0 | 1 | 2 | 3;
 export interface FreqShiftProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
-  /** Frequency shift amount in Hz. */
-  shiftHz: number;
-  /** Wet mix in the range `0.0..=1.0`. */
-  mix?: number;
   /** Negative-frequency handling mode. */
   reflect?: FreqShiftReflectMode;
 }
@@ -147,13 +149,18 @@ export interface VariSlopeSvfProps extends Record<string, unknown> {
 /**
  * Native frequency shifter helper.
  *
- * Returns two outputs in order: down-shifted, then up-shifted.
+ * Returns two outputs in fixed order: lower sideband, then upper sideband.
+ *
+ * Child order:
+ * - `shiftHz`: audio-rate shift amount in Hz
+ * - `x`: audio input
  */
 export function freqshift(
   props: FreqShiftProps,
+  shiftHz: ElemNode,
   x: ElemNode,
 ): Array<NodeRepr_t> {
-  return unpack(createNode("freqshift", props, [resolve(x)]), 2);
+  return unpack(createNode("freqshift", props, [resolve(shiftHz), resolve(x)]), 2);
 }
 
 /**
@@ -1428,7 +1435,9 @@ export interface ThresholdProps extends Record<string, unknown> {
  * Props for `el.extra.sample(...)`.
  */
 export interface ExtraSampleProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
   key?: string;
+  /** VFS path of the source asset. */
   path: string;
 }
 
@@ -1504,21 +1513,26 @@ export function threshold(
 /**
  * Always-multichannel sample playback helper.
  *
- * Child order: `start`, `end`, `rate`, `trigger`.
+ * Child order: `start`, `end`, `rate`, `gainDb`, `trigger`.
  *
  * The native node always produces a stereo pair. Mono sources are copied to
  * both channels. Looping is always enabled inside the normalized `[start, end]`
- * region.
+ * region. `gainDb` is an audio-rate stereo gain control shared by both outputs.
+ * The native node converts dB to linear gain internally.
+ *
+ * Typical `gainDb` range is `0` down to silence, with optional positive headroom
+ * such as `+6 dB` when desired by the caller.
  */
 export function sample(
   props: ExtraSampleProps,
   start: ElemNode,
   end: ElemNode,
   rate: ElemNode,
+  gainDb: ElemNode,
   trigger: ElemNode,
 ): Array<NodeRepr_t> {
   return unpack(
-    createNode("extra.sample", props, [resolve(start), resolve(end), resolve(rate), resolve(trigger)]),
+    createNode("extra.sample", props, [resolve(start), resolve(end), resolve(rate), resolve(gainDb), resolve(trigger)]),
     2,
   );
 }

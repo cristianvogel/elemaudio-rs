@@ -48,16 +48,27 @@ fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value
 
 /// Frequency shifter helper.
 ///
-/// Returns two roots:
-/// - output 0: down-shifted
-/// - output 1: up-shifted
+/// Returns two roots in fixed order: lower sideband, then upper sideband.
 ///
 /// Props:
-/// - `shiftHz`: frequency shift in Hz
-/// - `mix`: wet amount in the range `0.0..=1.0`
 /// - `reflect`: integer mode for negative shift handling
-pub fn freqshift(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
-    unpack(Node::new("freqshift", props, vec![resolve(x)]), 2)
+///
+/// Child order:
+/// - `shift_hz`: audio-rate shift amount in Hz
+/// - `x`: audio input
+pub fn freqshift(
+    props: serde_json::Value,
+    shift_hz: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Vec<Node> {
+    unpack(
+        Node::new(
+            "freqshift",
+            props,
+            vec![resolve(shift_hz), resolve(x)],
+        ),
+        2,
+    )
 }
 
 /// Crunch distortion helper.
@@ -1179,16 +1190,21 @@ fn threshold_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 
 /// Always-multichannel sample playback helper.
 ///
-/// Child order: `[start, end, rate, trigger]`.
+/// Child order: `[start, end, rate, gain_db, trigger]`.
 ///
 /// The native node always returns two output roots. Mono sources are copied to
 /// both channels. Playback always loops inside the normalized `[start, end]`
-/// region.
+/// region. `gain_db` is an audio-rate stereo gain control shared by both
+/// outputs and converted to linear gain in the native node.
+///
+/// Typical `gain_db` range is `0` down to silence, with optional positive
+/// headroom such as `+6 dB` when desired by the caller.
 pub fn sample(
     props: serde_json::Value,
     start: impl Into<ElemNode>,
     end: impl Into<ElemNode>,
     rate: impl Into<ElemNode>,
+    gain_db: impl Into<ElemNode>,
     trigger: impl Into<ElemNode>,
 ) -> Vec<Node> {
     unpack(
@@ -1199,6 +1215,7 @@ pub fn sample(
                 resolve(start),
                 resolve(end),
                 resolve(rate),
+                resolve(gain_db),
                 resolve(trigger),
             ],
         ),

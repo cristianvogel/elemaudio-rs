@@ -67,7 +67,7 @@ namespace elem
             return lerp(static_cast<float>(alpha), data[left], data[right]);
         }
 
-        void sumInto(FloatType** outputData, size_t numOuts, size_t writeOffset, size_t numSamples, double playbackRate)
+        void sumInto(FloatType** outputData, size_t numOuts, size_t writeOffset, size_t numSamples, double playbackRate, double gainDb)
         {
             if (sourceBuffer == nullptr || sourceBuffer->numSamples() == 0 || numOuts == 0) {
                 return;
@@ -79,6 +79,7 @@ namespace elem
             auto const regionStart = std::min(readStart, readEnd);
             auto const regionEnd = std::max(readStart, readEnd);
             auto const regionLength = regionEnd - regionStart;
+            auto const gainLinear = std::pow(10.0, gainDb / 20.0);
 
             if (regionLength <= 0.0) {
                 return;
@@ -97,7 +98,7 @@ namespace elem
                     double readPos = pos + static_cast<double>(j) * playbackRate;
                     auto wrapped = regionStart + std::fmod(readPos - regionStart, regionLength);
                     if (wrapped < regionStart) wrapped += regionLength;
-                    outputData[outCh][writeOffset + j] += localFade(lerpRead(bufferView, wrapped));
+                    outputData[outCh][writeOffset + j] += localFade(lerpRead(bufferView, wrapped)) * static_cast<FloatType>(gainLinear);
                 }
             }
 
@@ -162,7 +163,7 @@ namespace elem
                 std::fill_n(outputData[j], numSamples, FloatType(0));
             }
 
-            if (numIns < 4 || numOuts == 0 || activeBuffer == nullptr) {
+            if (numIns < 5 || numOuts == 0 || activeBuffer == nullptr) {
                 return;
             }
 
@@ -170,14 +171,15 @@ namespace elem
             size_t j = 0;
 
             for (j = 0; j < numSamples; ++j) {
-                auto cv = change(inputData[3][j]);
+                auto cv = change(inputData[4][j]);
                 auto const start = static_cast<double>(inputData[0][j]);
                 auto const end = static_cast<double>(inputData[1][j]);
                 auto const rate = static_cast<double>(inputData[2][j]);
+                auto const gainDb = static_cast<double>(inputData[3][j]);
 
                 if (cv > FloatType(0.5)) {
-                    readers[0].sumInto(outputData, numOuts, i, j - i, rate);
-                    readers[1].sumInto(outputData, numOuts, i, j - i, rate);
+                    readers[0].sumInto(outputData, numOuts, i, j - i, rate, gainDb);
+                    readers[1].sumInto(outputData, numOuts, i, j - i, rate, gainDb);
                     readers[currentReader & 1].noteOff();
                     readers[++currentReader & 1].noteOn(start, end);
                     i = j;
@@ -185,8 +187,9 @@ namespace elem
             }
 
             auto const tailRate = static_cast<double>(inputData[2][numSamples - 1]);
-            readers[0].sumInto(outputData, numOuts, i, j - i, tailRate);
-            readers[1].sumInto(outputData, numOuts, i, j - i, tailRate);
+            auto const tailGainDb = static_cast<double>(inputData[3][numSamples - 1]);
+            readers[0].sumInto(outputData, numOuts, i, j - i, tailRate, tailGainDb);
+            readers[1].sumInto(outputData, numOuts, i, j - i, tailRate, tailGainDb);
 
             for (size_t c = std::min<size_t>(2, numOuts); c < numOuts; ++c) {
                 std::fill_n(outputData[c], numSamples, FloatType(0));

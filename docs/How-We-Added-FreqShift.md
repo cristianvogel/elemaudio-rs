@@ -22,7 +22,7 @@ Add a first-party `el::extra::freqshift` helper backed by Signalsmith Audio's Hi
 
 4. Implement the native processor.
    - Added a `FreqShiftNode` native runtime node.
-   - The node returns two outputs: down-shifted and up-shifted audio.
+   - The node returns two outputs in fixed order: lower sideband, then upper sideband.
 
 5. Register the node in the native bridge.
    - Added `freqshift` registration in `src/ffi/elementary_bridge.cpp`.
@@ -55,4 +55,4 @@ A JS helper alone is not enough.
 
 ## Result
 
-`el::extra::freqshift` is now a repo-owned extension that can be used from Rust and JS authoring surfaces, with browser support tied to a rebuilt WASM runtime.
+`el::extra::freqshift` is now a repo-owned extension that can be used from Rust and JS authoring surfaces, with browser support tied to a rebuilt WASM runtime. It is a split-sideband device; if a mixed result is wanted, authors should blend the lower and upper outputs explicitly in DSP code.

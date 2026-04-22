@@ -14,9 +14,15 @@ namespace elem
 
     // Frequency shifter built from a Hilbert / single-sideband modulator.
     //
-    // One input signal produces two outputs:
-    //   - output 0: down-shifted
-    //   - output 1: up-shifted
+    // One input signal produces two sideband outputs in fixed order.
+    //
+    // Child layout:
+    //   [0] shiftHz - audio-rate frequency shift amount in Hz
+    //   [1] input   - audio input
+    //
+    // Output order:
+    //   [0] lower sideband
+    //   [1] upper sideband
     template <typename FloatType>
     struct FreqShiftNode : public GraphNode<FloatType> {
         using GraphNode<FloatType>::GraphNode;
@@ -30,17 +36,7 @@ namespace elem
 
         int setProperty(std::string const& key, js::Value const& val, SharedResourceMap&) override
         {
-            if (key == "shiftHz") {
-                if (!val.isNumber())
-                    return ReturnCode::InvalidPropertyType();
-
-                shiftHzTarget.store(static_cast<Sample>((js::Number) val), std::memory_order_relaxed);
-            } else if (key == "mix") {
-                if (!val.isNumber())
-                    return ReturnCode::InvalidPropertyType();
-
-                mixTarget.store(clamp01(static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
-            } else if (key == "reflect") {
+            if (key == "reflect") {
                 if (!val.isNumber())
                     return ReturnCode::InvalidPropertyType();
 
@@ -53,8 +49,6 @@ namespace elem
         void reset() override
         {
             phase = 0;
-            currentShiftHz = shiftHzTarget.load(std::memory_order_relaxed);
-            currentMix = mixTarget.load(std::memory_order_relaxed);
             currentReflect = reflectTarget.load(std::memory_order_relaxed);
             hilbert.reset();
         }
@@ -71,27 +65,21 @@ namespace elem
                 std::fill_n(outputData[j], numSamples, FloatType(0));
             }
 
-            if (numIns < 1 || numOuts < 1 || numSamples == 0) {
+            if (numIns < 2 || numOuts < 1 || numSamples == 0) {
                 return;
             }
 
             auto const sampleRate = GraphNode<FloatType>::getSampleRate();
-            auto const targetShiftHz = shiftHzTarget.load(std::memory_order_relaxed);
-            auto const targetMix = mixTarget.load(std::memory_order_relaxed);
             auto const targetReflect = reflectTarget.load(std::memory_order_relaxed);
-            auto const shiftStep = (targetShiftHz - currentShiftHz) / static_cast<Sample>(numSamples);
-            auto const mixStep = (targetMix - currentMix) / static_cast<Sample>(numSamples);
-            auto shiftHz = currentShiftHz;
-            auto mix = currentMix;
             auto phaseLocal = phase;
-            auto const* in = inputData[0];
+            auto const* shiftSignal = inputData[0];
+            auto const* in = inputData[1];
             auto const twoPi = Sample(6.28318530717958647692528676655900576839);
-            bool swapOutputs = shouldSwapOutputs(targetReflect, targetShiftHz);
-            bool reflectShift = shouldReflectShift(targetReflect, targetShiftHz);
 
             for (size_t i = 0; i < numSamples; ++i) {
-                shiftHz += shiftStep;
-                mix += mixStep;
+                auto shiftHz = shiftSignal[i];
+                bool swapOutputs = shouldSwapOutputs(targetReflect, shiftHz);
+                bool reflectShift = shouldReflectShift(targetReflect, shiftHz);
 
                 auto effectiveShiftHz = reflectShift && shiftHz < 0 ? -shiftHz : shiftHz;
                 phaseLocal += effectiveShiftHz / static_cast<Sample>(sampleRate);
@@ -100,31 +88,20 @@ namespace elem
                 auto rot = std::polar(Sample(1), phaseLocal * twoPi);
                 auto down = std::real(analytic * std::conj(rot));
                 auto up = std::real(analytic * rot);
-                auto dry = in[i];
-                auto wet = mix;
 
                 if (numOuts > 0) {
-                    auto first = swapOutputs ? up : down;
-                    outputData[0][i] = dry * (Sample(1) - wet) + wet * first;
+                    outputData[0][i] = swapOutputs ? up : down;
                 }
                 if (numOuts > 1) {
-                    auto second = swapOutputs ? down : up;
-                    outputData[1][i] = dry * (Sample(1) - wet) + wet * second;
+                    outputData[1][i] = swapOutputs ? down : up;
                 }
             }
 
-            currentShiftHz = targetShiftHz;
-            currentMix = targetMix;
             currentReflect = targetReflect;
             phase = wrapPhase(phaseLocal);
         }
 
     private:
-        static Sample clamp01(Sample value)
-        {
-            return std::max<Sample>(0, std::min<Sample>(1, value));
-        }
-
         static bool shouldReflectShift(int reflect, Sample shiftHz)
         {
             return (reflect == 1 || reflect == 3) && shiftHz < 0;
@@ -141,11 +118,7 @@ namespace elem
             return phase;
         }
 
-        std::atomic<Sample> shiftHzTarget{Sample(50)};
-        std::atomic<Sample> mixTarget{Sample(1)};
         std::atomic<int> reflectTarget{0};
-        Sample currentShiftHz = Sample(50);
-        Sample currentMix = Sample(1);
         int currentReflect = 0;
         Sample phase = Sample(0);
         signalsmith::hilbert::HilbertIIR<Sample> hilbert;

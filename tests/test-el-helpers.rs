@@ -821,7 +821,8 @@ fn covers_mc_helpers() {
 #[test]
 fn covers_extra_helpers() {
     let freqshift_nodes = extra::freqshift(
-        serde_json::json!({"shiftHz": 250.0, "mix": 0.75, "reflect": 2}),
+        serde_json::json!({"reflect": 2}),
+        ElemNode::from(node(250.0)),
         ElemNode::from(node(1.0)),
     );
 
@@ -829,8 +830,8 @@ fn covers_extra_helpers() {
     assert_nodes(
         &freqshift_nodes,
         "freqshift",
-        serde_json::json!({"shiftHz": 250.0, "mix": 0.75, "reflect": 2}),
-        1,
+        serde_json::json!({"reflect": 2}),
+        2,
     );
 
     let crunch_nodes = extra::crunch(
@@ -926,6 +927,7 @@ fn covers_extra_helpers() {
         ElemNode::from(node(0.0)),
         ElemNode::from(node(1.0)),
         ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.0)),
         ElemNode::from(node(1.0)),
     );
     assert_eq!(extra_sample_nodes.len(), 2);
@@ -933,7 +935,7 @@ fn covers_extra_helpers() {
         &extra_sample_nodes,
         "extra.sample",
         serde_json::json!({"path": "drums/kick.wav"}),
-        4,
+        5,
     );
 
     // sampleCount: zero children, props pass through verbatim.

@@ -33,7 +33,7 @@ function mustQuery<T extends Element>(selector: string): T {
 
 app.innerHTML = `
   <div class="panel">
-    <h1>elemaudio-rs</h1> <h3>sample, frequency shifter and convolver</h3>
+    <h1>elemaudiors</h1> <h3><i>extra</i> ⊙ sample ⊙ freqShift ⊙ convolver</h3>
     <p>Loads a sample and a four-channel IR from <code>demo-resources/</code> 
     then processes the audio through 
     <code>el.extra.freqShift(...)</code> into <code>el.convolve(...)</code>. 
@@ -41,26 +41,50 @@ app.innerHTML = `
     This makes it trivial to swap the IR flavour, as demonstrated by the UI button.</p>
 
     <div class="controls">
-      <div class="row">
-        <label for="rate">
-          <span>Playback rate</span>
-          <span id="rate-value">1.00x</span>
-        </label>
-        <input id="rate" type="range" min="0.5" max="1.5" value="1" step="0.01" />
-      </div>
-      <div class="row">
-        <label for="blend">
-          <span>Dry / wet blend</span>
-          <span id="blend-value">50%</span>
-        </label>
-        <input id="blend" type="range" min="0" max="100" value="50" step="1" />
-      </div>
-      <div class="row">
-        <label for="chopper-threshold">
-          <span>Chopper threshold</span>
-          <span id="chopper-threshold-value">0.50</span>
-        </label>
-        <input id="chopper-threshold" type="range" min="0" max="1" value="0" step="0.01" />
+      <div class="dial-strip" aria-label="Sample processing controls">
+        <div class="dial">
+          <label for="rate">
+            <span>Playback</span>
+            <span id="rate-value">1.00x</span>
+          </label>
+          <input id="rate" type="range" min="0.5" max="1.5" value="1" step="0.01" />
+        </div>
+        <div class="dial">
+          <label for="blend">
+            <span>Dry/Wet</span>
+            <span id="blend-value">50%</span>
+          </label>
+          <input id="blend" type="range" min="0" max="100" value="50" step="1" />
+        </div>
+        <div class="dial">
+          <label for="chopper-threshold">
+            <span>Chopper</span>
+            <span id="chopper-threshold-value">0.50</span>
+          </label>
+          <input id="chopper-threshold" type="range" min="1.0e-4" max="1" value="0.01" step="0.01" />
+        </div>
+        <div class="dial">
+          <label for="freq-shift-hz">
+            <span class="dial-heading-with-action">
+              <button id="freqshift-zoom" class="dial-corner-button" type="button" aria-label="Toggle freqshift zoom">x0.01</button>
+              <span>Freq Shift</span>
+            </span>
+            <span id="freq-shift-hz-value">110 Hz</span>
+          </label>
+          <input id="freq-shift-hz" type="range" min="-600" max="600" value="110" step="0.001" />
+        </div>
+        <div class="dial">
+          <label for="sideband-mix">
+            <span>Sideband Mix</span>
+            <span id="sideband-mix-value">L 100 / U 0</span>
+          </label>
+          <input id="sideband-mix" type="range" min="0" max="1" value="0" step="0.01" list="sideband-mix-marks" />
+          <datalist id="sideband-mix-marks">
+            <option value="0" label="Lower"></option>
+            <option value="0.5" label="50/50"></option>
+            <option value="1" label="Upper"></option>
+          </datalist>
+        </div>
       </div>
       <div class="row">
         <label for="sample-file">
@@ -69,10 +93,12 @@ app.innerHTML = `
         </label>
         <input id="sample-file" type="file" accept="audio/*" />
       </div>
-      <button id="start">Start audio</button>
-      <button id="stop">Stop audio</button>
-      <button id="reload" class="secondary">Reload sample</button>
-      <button id="toggle-ir" class="secondary">Use IR pair 1/2</button>
+      <div class="button-row">
+        <button id="start" class="state-button">Start audio</button>
+        <button id="stop" class="state-button">Stop audio</button>
+        <button id="reload" class="secondary">Reload sample</button>
+        <button id="toggle-ir" class="secondary">Use IR pair 1/2</button>
+      </div>
       <div class="status" id="status">Idle</div>
       <div class="resource-status" id="resource-status">Sample not loaded</div>
     </div>
@@ -82,13 +108,18 @@ app.innerHTML = `
 const startButton = mustQuery<HTMLButtonElement>("#start");
 const stopButton = mustQuery<HTMLButtonElement>("#stop");
 const reloadButton = mustQuery<HTMLButtonElement>("#reload");
+const freqShiftZoomButton = mustQuery<HTMLButtonElement>("#freqshift-zoom");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
+const freqShiftHzSlider = mustQuery<HTMLInputElement>("#freq-shift-hz");
+const sideBandMixSlider = mustQuery<HTMLInputElement>("#sideband-mix");
 const sampleFileInput = mustQuery<HTMLInputElement>("#sample-file");
 const rateValue = mustQuery<HTMLSpanElement>("#rate-value");
 const blendValue = mustQuery<HTMLSpanElement>("#blend-value");
 const chopperThresholdValue = mustQuery<HTMLSpanElement>("#chopper-threshold-value");
+const freqShiftHzValue = mustQuery<HTMLSpanElement>("#freq-shift-hz-value");
+const sideBandMixValue = mustQuery<HTMLSpanElement>("#sideband-mix-value");
 const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
 const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
@@ -100,6 +131,7 @@ let audioContext: AudioContext | null = null;
 let renderer: WebRenderer | null = null;
 let sampleLoaded = false;
 let isStopped = false;
+let freqShiftFiveHzScale = false;
 
 function formatError(error: unknown): string {
   if (error instanceof Error) {
@@ -139,6 +171,56 @@ async function updateBlend() {
 
 async function updateChopperThreshold() {
   chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
+
+  if (renderer && audioContext?.state === "running") {
+    await renderCurrentGraph();
+  }
+}
+
+async function updateFreqShiftHz() {
+  freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
+
+  if (renderer && audioContext?.state === "running") {
+    await renderCurrentGraph();
+  }
+}
+
+function getFreqShiftHz() {
+  return Number(freqShiftHzSlider.value);
+}
+
+function setFreqShiftSliderFromHz(hz: number) {
+  const limit = freqShiftFiveHzScale ? 6 : 600;
+  const clamped = Math.max(-limit, Math.min(limit, hz));
+  freqShiftHzSlider.value = String(clamped);
+}
+
+function configureFreqShiftSlider(rescaleCurrentHz = true) {
+  const currentHz = getFreqShiftHz();
+  if (freqShiftFiveHzScale) {
+    freqShiftHzSlider.min = "-6";
+    freqShiftHzSlider.max = "6";
+    freqShiftHzSlider.step = "0.001";
+    freqShiftZoomButton.textContent = "x100";
+    if (rescaleCurrentHz) {
+      setFreqShiftSliderFromHz(currentHz * 0.01);
+    }
+  } else {
+    freqShiftHzSlider.min = "-600";
+    freqShiftHzSlider.max = "600";
+    freqShiftHzSlider.step = "0.1";
+    freqShiftZoomButton.textContent = "x0.01";
+    if (rescaleCurrentHz) {
+      setFreqShiftSliderFromHz(currentHz * 100);
+    }
+  }
+}
+
+async function updateSideBandMix() {
+  const value = Number(sideBandMixSlider.value);
+  const lower = Math.round((1 - value) * 100);
+  const upper = Math.round(value * 100);
+  sideBandMixValue.textContent = `L ${lower} / U ${upper}`;
 
   if (renderer && audioContext?.state === "running") {
     await renderCurrentGraph();
@@ -230,6 +312,8 @@ function buildGraph(rate: number): NodeRepr_t[] {
     rate,
     blend: Number(blendSlider.value) / 100,
     chopperThreshold: Number(chopperThresholdSlider.value),
+    freqShiftHz: getFreqShiftHz(),
+    sideBandMix: Number(sideBandMixSlider.value),
     leftIrPath,
     rightIrPath,
     isStopped,
@@ -359,4 +443,21 @@ chopperThresholdSlider.addEventListener("input", () => {
   void updateChopperThreshold();
 });
 
+freqShiftHzSlider.addEventListener("input", () => {
+  void updateFreqShiftHz();
+});
+
+freqShiftZoomButton.addEventListener("click", () => {
+  freqShiftFiveHzScale = !freqShiftFiveHzScale;
+  configureFreqShiftSlider();
+  void updateFreqShiftHz();
+});
+
+sideBandMixSlider.addEventListener("input", () => {
+  void updateSideBandMix();
+});
+
 chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
+configureFreqShiftSlider(false);
+freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
+void updateSideBandMix();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>elemaudio-rs demos</title>
+  <title>elemaudiors interactive</title>
   <style>
     :root {
       color-scheme: dark;
@@ -148,14 +148,30 @@
       color: var(--muted);
       font-size: 14px;
     }
+    .shepard-lockup {
+      min-height: auto;
+      overflow: visible;
+    }
+
+    .shepard-text {
+      position: static;
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
   </style>
 </head>
 <body>
 
 <aside>
     <div class="sidebar-header">
-        <h1>elemaudio-rs</h1>
-        <p>Interactive demos for the NeLemAudio runtime. These demos were written using the JS authoring surface. The sound design can also be compiled to Rust native code. For that path, also the UIs can be deployed as WebView</p>
+        <div class="shepard-lockup">
+            <h1 class="shepard-text">elemaudiors</h1>
+        </div>
+        <p>Interactive demos for the <span style="font-width: expanded">elemaudiors</span> runtime. These demos were written using the JS authoring surface. The sound design can also be compiled to Rust native code. The UIs can be deployed as WebView or in Browser.</p>
     </div>
 
     <div class="demo-group">
