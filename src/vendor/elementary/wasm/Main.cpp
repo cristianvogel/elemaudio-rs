@@ -12,6 +12,7 @@
 //   "stridedelay"  — StrideDelayNode
 //   "vocoder"      — VocoderNode       (STFT channel vocoder, 4-in 2-out)
 //   "ramp00"       — Ramp00Node        (sample-accurate one-shot 0→1 ramp)
+//   "threshold"    — ThresholdNode     (sample-accurate threshold edge detector)
 //   "sampleCount"  — SampleCountNode   (VFS resource length as a constant signal)
 //   "dust"         — DustNode          (random impulses with optional trails)
 //   "convolve"     — ConvolutionNode   (WASM-only)
@@ -34,6 +35,7 @@
 #include "../../../../native/extra/stridedelay.h"
 #include "../../../../native/extra/vocoder.h"
 #include "../../../../native/extra/ramp00.h"
+#include "../../../../native/extra/threshold.h"
 #include "../../../../native/extra/sample_count.h"
 #include "../../../../native/extra/dust.h"
 #include "../../../../native/extra/sample_count.h"
@@ -121,6 +123,10 @@ public:
         // Property: blocking (bool, default true).
         runtime->registerNodeType("ramp00", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("threshold", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::ThresholdNode<double>>(id, fs, bs);
         });
 
         // SampleCountNode: emits the length (in samples) of a VFS-resident

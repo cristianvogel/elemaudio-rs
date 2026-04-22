@@ -23,6 +23,7 @@
 // Inputs: [0] dur (samples), [1] trigger (rising-edge gate).
 // Property: blocking (bool, default true).
 #include <extra/ramp00.h>
+#include <extra/threshold.h>
 // SampleCountNode: emits the exact length (in samples) of a VFS-resident
 // audio resource as a constant-valued signal. Zero children.
 // Property: path (string, required) — VFS key of the resource.
@@ -94,6 +95,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
         // Property: blocking (bool, default true) — block retriggers while running.
         handle->runtime->registerNodeType("ramp00", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("threshold", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::ThresholdNode<double>>(id, fs, bs);
         });
 
         // "sampleCount" — SampleCountNode.

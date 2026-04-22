@@ -1006,6 +1006,22 @@ export interface Ramp00Props extends Record<string, unknown> {
 }
 
 /**
+ * Props for `el.extra.threshold(...)`.
+ */
+export interface ThresholdProps extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /** Hysteresis width applied around the threshold. Default: 0. */
+  hysteresis?: number;
+  /**
+   * When `true`, output holds at `1` after a threshold crossing until the
+   * `reset` signal rises. When `false` (default), `reset` is ignored and the
+   * node emits one-sample pulses on rising crossings only.
+   */
+  latch?: boolean;
+}
+
+/**
  * Sample-accurate one-shot 0→1 ramp.
  *
  * On a rising edge of the trigger `x` (crossing 0.5 upward), the signal
@@ -1045,6 +1061,30 @@ export function ramp00(
   const { blocking = true, ...other } = props;
   const resolvedProps = { ...other, blocking };
   return createNode("ramp00", resolvedProps, [resolve(dur), resolve(x)]);
+}
+
+/**
+ * Sample-accurate threshold edge detector with optional latched output.
+ *
+ * Child order: `threshold`, `reset`, `x`.
+ *
+ * - `threshold` is a signal and may vary per-sample.
+ * - `x` is the observed signal.
+ * - `reset` is only used when `latch: true`.
+ *
+ * When `latch: false`, the node emits a one-sample `1` pulse when `x` crosses
+ * upward through the effective threshold band. When `latch: true`, the node
+ * sets output to `1` on that crossing and holds there until `reset` rises.
+ */
+export function threshold(
+  props: ThresholdProps,
+  threshold: ElemNode,
+  reset: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  const { hysteresis = 0, latch = false, ...other } = props;
+  const resolvedProps = { ...other, hysteresis, latch };
+  return createNode("threshold", resolvedProps, [resolve(threshold), resolve(reset), resolve(x)]);
 }
 
 // ---------------------------------------------------------------------------

@@ -1129,6 +1129,47 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
+/// Sample-accurate threshold edge detector with optional latched output.
+///
+/// Child order follows the requested contract: `[threshold, reset, x]`.
+///
+/// - `threshold` is read at sample rate.
+/// - `reset` is only used when `latch = true`.
+/// - `x` is the observed signal.
+///
+/// Props:
+/// - `key`: optional authoring key for stable identity
+/// - `hysteresis`: hysteresis width around the threshold, default `0`
+/// - `latch`: when `true`, output holds at `1` until `reset` rises;
+///   when `false`, `reset` is ignored and the node emits one-sample pulses
+pub fn threshold(
+    props: serde_json::Value,
+    threshold: impl Into<ElemNode>,
+    reset: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    let resolved_props = threshold_resolve_defaults(props);
+    Node::new(
+        "threshold",
+        resolved_props,
+        vec![resolve(threshold), resolve(reset), resolve(x)],
+    )
+}
+
+fn threshold_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
+    let mut map = match props {
+        serde_json::Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+
+    map.entry("hysteresis")
+        .or_insert_with(|| serde_json::Value::from(0.0));
+    map.entry("latch")
+        .or_insert_with(|| serde_json::Value::from(false));
+
+    serde_json::Value::Object(map)
+}
+
 /// Emit the length of a VFS-resident audio resource as a constant signal,
 /// optionally scaled into a natural domain (`samp`, `ms`, or `hz`).
 ///
