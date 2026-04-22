@@ -362,7 +362,7 @@ function buildGraph(): NodeRepr_t[] {
   const silentTap = el.mul(el.const({ value: 0 }), metered);
 
   if (activeMirrorChannels > 1) {
-    const roots = el.mc.sample({ path: activeMirrorPath, channels: activeMirrorChannels }, trigger);
+    const roots = el.extra.sample({ path: activeMirrorPath }, 0, 1, 1, trigger);
 
     const left = roots[0]
       ? el.add(el.mul(el.const({ value: 0.5 }), roots[0]), silentTap)

@@ -1409,6 +1409,30 @@ export interface Ramp00Props extends Record<string, unknown> {
 }
 
 /**
+ * Props for `el.extra.threshold(...)`.
+ */
+export interface ThresholdProps extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /** Hysteresis width applied around the threshold. Default: 0. */
+  hysteresis?: number;
+  /**
+   * When `true`, output holds at `1` after a threshold crossing until the
+   * `reset` signal rises. When `false` (default), `reset` is ignored and the
+   * node emits one-sample threshold-gate pulses on rising crossings only.
+   */
+  latch?: boolean;
+}
+
+/**
+ * Props for `el.extra.sample(...)`.
+ */
+export interface ExtraSampleProps extends Record<string, unknown> {
+  key?: string;
+  path: string;
+}
+
+/**
  * Sample-accurate one-shot 0→1 ramp.
  *
  * On a rising edge of the trigger `x` (crossing 0.5 upward), the signal
@@ -1448,6 +1472,55 @@ export function ramp00(
   const { blocking = true, ...other } = props;
   const resolvedProps = { ...other, blocking };
   return createNode("ramp00", resolvedProps, [resolve(dur), resolve(x)]);
+}
+
+/**
+ * Sample-accurate threshold gate with optional hold/reset behavior.
+ *
+ * Child order: `threshold`, `reset`, `x`.
+ *
+ * - `threshold` is a signal and may vary per-sample.
+ * - `reset` is only used when `latch: true`.
+ * - `x` is the observed signal.
+ *
+ * Vendor comparators already cover basic thresholding. This node is the
+ * threshold-gate variant: it watches for upward crossings through a threshold
+ * band and emits either one-sample pulses or a held gate, depending on `latch`.
+ *
+ * It rearms when `x <= threshold - hysteresis/2`, then fires when
+ * `x > threshold + hysteresis/2`.
+ */
+export function threshold(
+  props: ThresholdProps,
+  threshold: ElemNode,
+  reset: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  const { hysteresis = 0, latch = false, ...other } = props;
+  const resolvedProps = { ...other, hysteresis, latch };
+  return createNode("threshold", resolvedProps, [resolve(threshold), resolve(reset), resolve(x)]);
+}
+
+/**
+ * Always-multichannel sample playback helper.
+ *
+ * Child order: `start`, `end`, `rate`, `trigger`.
+ *
+ * The native node always produces a stereo pair. Mono sources are copied to
+ * both channels. Looping is always enabled inside the normalized `[start, end]`
+ * region.
+ */
+export function sample(
+  props: ExtraSampleProps,
+  start: ElemNode,
+  end: ElemNode,
+  rate: ElemNode,
+  trigger: ElemNode,
+): Array<NodeRepr_t> {
+  return unpack(
+    createNode("extra.sample", props, [resolve(start), resolve(end), resolve(rate), resolve(trigger)]),
+    2,
+  );
 }
 
 // ---------------------------------------------------------------------------
