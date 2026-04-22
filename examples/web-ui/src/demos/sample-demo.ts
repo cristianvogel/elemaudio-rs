@@ -56,6 +56,13 @@ app.innerHTML = `
         <input id="blend" type="range" min="0" max="100" value="50" step="1" />
       </div>
       <div class="row">
+        <label for="chopper-threshold">
+          <span>Chopper threshold</span>
+          <span id="chopper-threshold-value">0.50</span>
+        </label>
+        <input id="chopper-threshold" type="range" min="0" max="1" value="0" step="0.01" />
+      </div>
+      <div class="row">
         <label for="sample-file">
           <span>Browser file</span>
           <span id="sample-file-name">Built-in sample</span>
@@ -77,9 +84,11 @@ const stopButton = mustQuery<HTMLButtonElement>("#stop");
 const reloadButton = mustQuery<HTMLButtonElement>("#reload");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
+const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
 const sampleFileInput = mustQuery<HTMLInputElement>("#sample-file");
 const rateValue = mustQuery<HTMLSpanElement>("#rate-value");
 const blendValue = mustQuery<HTMLSpanElement>("#blend-value");
+const chopperThresholdValue = mustQuery<HTMLSpanElement>("#chopper-threshold-value");
 const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
 const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
@@ -122,6 +131,14 @@ function updateIrToggleLabel() {
 async function updateBlend() {
   const blend = Number(blendSlider.value) / 100;
   blendValue.textContent = `${Math.round(blend * 100)}%`;
+
+  if (renderer && audioContext?.state === "running") {
+    await renderCurrentGraph();
+  }
+}
+
+async function updateChopperThreshold() {
+  chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
 
   if (renderer && audioContext?.state === "running") {
     await renderCurrentGraph();
@@ -210,9 +227,9 @@ function buildGraph(rate: number): NodeRepr_t[] {
 
   return dspBuildGraph({
     samplePath,
-    sampleChannels,
     rate,
     blend: Number(blendSlider.value) / 100,
+    chopperThreshold: Number(chopperThresholdSlider.value),
     leftIrPath,
     rightIrPath,
     isStopped,
@@ -337,3 +354,9 @@ rateSlider.addEventListener("input", () => {
 blendSlider.addEventListener("input", () => {
   void updateBlend();
 });
+
+chopperThresholdSlider.addEventListener("input", () => {
+  void updateChopperThreshold();
+});
+
+chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);

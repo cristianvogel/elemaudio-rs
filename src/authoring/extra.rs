@@ -1129,7 +1129,7 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-/// Sample-accurate threshold edge detector with optional latched output.
+/// Sample-accurate threshold gate with optional hold/reset behavior.
 ///
 /// Child order follows the requested contract: `[threshold, reset, x]`.
 ///
@@ -1141,7 +1141,11 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
 /// - `key`: optional authoring key for stable identity
 /// - `hysteresis`: hysteresis width around the threshold, default `0`
 /// - `latch`: when `true`, output holds at `1` until `reset` rises;
-///   when `false`, `reset` is ignored and the node emits one-sample pulses
+///   when `false`, `reset` is ignored and the node emits threshold-gate pulses
+///
+/// Vendor comparators already cover basic thresholding. This node is the
+/// threshold-gate variant: it rearms when `x <= threshold - hysteresis/2`, then
+/// fires when `x > threshold + hysteresis/2`.
 pub fn threshold(
     props: serde_json::Value,
     threshold: impl Into<ElemNode>,
@@ -1166,8 +1170,36 @@ fn threshold_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
         .or_insert_with(|| serde_json::Value::from(0.0));
     map.entry("latch")
         .or_insert_with(|| serde_json::Value::from(false));
-
     serde_json::Value::Object(map)
+}
+
+/// Always-multichannel sample playback helper.
+///
+/// Child order: `[start, end, rate, trigger]`.
+///
+/// The native node always returns two output roots. Mono sources are copied to
+/// both channels. Playback always loops inside the normalized `[start, end]`
+/// region.
+pub fn sample(
+    props: serde_json::Value,
+    start: impl Into<ElemNode>,
+    end: impl Into<ElemNode>,
+    rate: impl Into<ElemNode>,
+    trigger: impl Into<ElemNode>,
+) -> Vec<Node> {
+    unpack(
+        Node::new(
+            "extra.sample",
+            props,
+            vec![
+                resolve(start),
+                resolve(end),
+                resolve(rate),
+                resolve(trigger),
+            ],
+        ),
+        2,
+    )
 }
 
 /// Emit the length of a VFS-resident audio resource as a constant signal,

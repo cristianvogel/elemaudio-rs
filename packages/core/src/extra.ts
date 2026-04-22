@@ -1016,9 +1016,17 @@ export interface ThresholdProps extends Record<string, unknown> {
   /**
    * When `true`, output holds at `1` after a threshold crossing until the
    * `reset` signal rises. When `false` (default), `reset` is ignored and the
-   * node emits one-sample pulses on rising crossings only.
+   * node emits one-sample threshold-gate pulses on rising crossings only.
    */
   latch?: boolean;
+}
+
+/**
+ * Props for `el.extra.sample(...)`.
+ */
+export interface ExtraSampleProps extends Record<string, unknown> {
+  key?: string;
+  path: string;
 }
 
 /**
@@ -1064,17 +1072,20 @@ export function ramp00(
 }
 
 /**
- * Sample-accurate threshold edge detector with optional latched output.
+ * Sample-accurate threshold gate with optional hold/reset behavior.
  *
  * Child order: `threshold`, `reset`, `x`.
  *
  * - `threshold` is a signal and may vary per-sample.
- * - `x` is the observed signal.
  * - `reset` is only used when `latch: true`.
+ * - `x` is the observed signal.
  *
- * When `latch: false`, the node emits a one-sample `1` pulse when `x` crosses
- * upward through the effective threshold band. When `latch: true`, the node
- * sets output to `1` on that crossing and holds there until `reset` rises.
+ * Vendor comparators already cover basic thresholding. This node is the
+ * threshold-gate variant: it watches for upward crossings through a threshold
+ * band and emits either one-sample pulses or a held gate, depending on `latch`.
+ *
+ * It rearms when `x <= threshold - hysteresis/2`, then fires when
+ * `x > threshold + hysteresis/2`.
  */
 export function threshold(
   props: ThresholdProps,
@@ -1085,6 +1096,28 @@ export function threshold(
   const { hysteresis = 0, latch = false, ...other } = props;
   const resolvedProps = { ...other, hysteresis, latch };
   return createNode("threshold", resolvedProps, [resolve(threshold), resolve(reset), resolve(x)]);
+}
+
+/**
+ * Always-multichannel sample playback helper.
+ *
+ * Child order: `start`, `end`, `rate`, `trigger`.
+ *
+ * The native node always produces a stereo pair. Mono sources are copied to
+ * both channels. Looping is always enabled inside the normalized `[start, end]`
+ * region.
+ */
+export function sample(
+  props: ExtraSampleProps,
+  start: ElemNode,
+  end: ElemNode,
+  rate: ElemNode,
+  trigger: ElemNode,
+): Array<NodeRepr_t> {
+  return unpack(
+    createNode("extra.sample", props, [resolve(start), resolve(end), resolve(rate), resolve(trigger)]),
+    2,
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -908,17 +908,32 @@ fn covers_extra_helpers() {
         3,
     );
 
-    let threshold_latched = extra::threshold(
+    let threshold_hysteretic = extra::threshold(
         serde_json::json!({"hysteresis": 0.25, "latch": true}),
         ElemNode::from(node(0.5)),
         ElemNode::from(node(0.0)),
         ElemNode::from(node(1.0)),
     );
     assert_node(
-        &threshold_latched,
+        &threshold_hysteretic,
         "threshold",
         serde_json::json!({"hysteresis": 0.25, "latch": true}),
         3,
+    );
+
+    let extra_sample_nodes = extra::sample(
+        serde_json::json!({"path": "drums/kick.wav"}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_eq!(extra_sample_nodes.len(), 2);
+    assert_nodes(
+        &extra_sample_nodes,
+        "extra.sample",
+        serde_json::json!({"path": "drums/kick.wav"}),
+        4,
     );
 
     // sampleCount: zero children, props pass through verbatim.
