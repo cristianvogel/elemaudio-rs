@@ -25,6 +25,9 @@ const DEVTOOLS_PANEL_READY_TYPE = "elemaudio.debug.panel-ready";
 
 declare global {
   interface Window {
+    // Latest scope payloads mirrored onto the inspected page so the DevTools
+    // panel can poll them directly through inspectedWindow.eval(...), even
+    // when the actual demo is hosted inside an iframe in index.html.
     __ELEMAUDIO_DEBUG_CACHE__?: {
       bridgeReady: boolean;
       updatedAt: number;
@@ -48,9 +51,14 @@ type DevtoolsScopeEvent = {
   channels?: unknown;
 };
 
+// Cache one latest event per named scope source. The panel only needs the most
+// recent block/frame for sparkline rendering and reconnect replay.
 const devtoolsScopeCache = new Map<string, DevtoolsScopeEvent>();
 let devtoolsPanelListenerInstalled = false;
 
+// Keep a JSON-safe mirror on window for the devtools panel. This is the most
+// reliable bridge in this dev-only setup because the panel can read it directly
+// from the inspected page without depending on extension message routing.
 function syncDevtoolsCacheToWindow() {
   window.__ELEMAUDIO_DEBUG_CACHE__ = {
     bridgeReady: true,
@@ -59,6 +67,9 @@ function syncDevtoolsCacheToWindow() {
   };
 }
 
+// Also emit postMessage events so page-local debug tooling can subscribe to the
+// same stream. The extension no longer depends on this path, but it remains
+// useful for ad-hoc in-page debugging.
 function postDevtoolsEvent(event: DevtoolsScopeEvent) {
   window.postMessage(
     {
@@ -70,6 +81,9 @@ function postDevtoolsEvent(event: DevtoolsScopeEvent) {
   );
 }
 
+// Listen for an explicit panel reconnect request. When the panel comes up late
+// or the extension reloads, it asks for a replay and this handler republishes
+// the latest cached scope events immediately.
 function ensureDevtoolsPanelListener() {
   if (devtoolsPanelListenerInstalled) {
     return;
@@ -109,6 +123,9 @@ function ensureDevtoolsPanelListener() {
   devtoolsPanelListenerInstalled = true;
 }
 
+// Normalize renderer `scope` events into the devtools schema, cache the latest
+// payload by source name, then expose it through both the window cache and the
+// optional postMessage stream.
 function forwardScopeEventToDevtools(event: unknown) {
   const payload = event as {
     source?: string;
