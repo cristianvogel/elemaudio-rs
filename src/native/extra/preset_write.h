@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include "../../vendor/elementary/runtime/elem/GraphNode.h"
 #include "preset_ram_resource.h"
@@ -53,6 +54,11 @@ namespace elem
 
                 frameLength_ = static_cast<size_t>(raw);
                 staging_.assign(frameLength_, Sample(0));
+                hasFrameLength_ = true;
+                auto rc = bindResourceIfReady(resources);
+                if (rc != ReturnCode::Ok()) {
+                    return rc;
+                }
             } else if (key == "slots") {
                 if (!val.isNumber()) {
                     return ReturnCode::InvalidPropertyType();
@@ -64,24 +70,29 @@ namespace elem
                 }
 
                 slots_ = static_cast<size_t>(raw);
+                hasSlots_ = true;
+                auto rc = bindResourceIfReady(resources);
+                if (rc != ReturnCode::Ok()) {
+                    return rc;
+                }
+            } else if (key == "writecounter") {
+                if (!val.isNumber()) {
+                    return ReturnCode::InvalidPropertyType();
+                }
+
+                auto const raw = static_cast<int64_t>((js::Number) val);
+                writeCounterTarget_.store(raw, std::memory_order_relaxed);
             } else if (key == "path") {
                 if (!val.isString()) {
                     return ReturnCode::InvalidPropertyType();
                 }
 
-                auto const path = static_cast<js::String>(val);
-                auto const localSlots = slots_;
-                auto const localFrameLength = frameLength_;
-                auto resource = resources.getTapResource(path, [localSlots, localFrameLength]() {
-                    return std::make_shared<PresetRAMResource>(localSlots, localFrameLength);
-                });
-
-                auto presetRam = std::dynamic_pointer_cast<PresetRAMResource>(resource);
-                if (!presetRam || presetRam->slots() != slots_ || presetRam->frameLength() != frameLength_) {
-                    return ReturnCode::InvalidPropertyValue();
+                path_ = static_cast<js::String>(val);
+                hasPath_ = true;
+                auto rc = bindResourceIfReady(resources);
+                if (rc != ReturnCode::Ok()) {
+                    return rc;
                 }
-
-                ram_ = std::move(presetRam);
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
@@ -92,6 +103,8 @@ namespace elem
             std::fill(staging_.begin(), staging_.end(), Sample(0));
             hasCompleteFrame_ = false;
             latchedSlot_ = 0;
+            armedWrite_ = false;
+            currentWriteCounter_ = writeCounterTarget_.load(std::memory_order_relaxed);
         }
 
         void process(BlockContext<FloatType> const& ctx) override
@@ -125,8 +138,15 @@ namespace elem
                 auto const frameOffset = positiveMod(t, frameLength);
 
                 if (frameOffset == 0) {
-                    if (hasCompleteFrame_) {
+                    auto const targetCounter = writeCounterTarget_.load(std::memory_order_relaxed);
+                    if (targetCounter != currentWriteCounter_) {
+                        currentWriteCounter_ = targetCounter;
+                        armedWrite_ = true;
+                    }
+
+                    if (hasCompleteFrame_ && armedWrite_) {
                         writeStagingToRAM();
+                        armedWrite_ = false;
                     }
                     latchedSlot_ = clampSlot(slotSignal[i]);
                     hasCompleteFrame_ = false;
@@ -147,6 +167,27 @@ namespace elem
         }
 
     private:
+        int bindResourceIfReady(SharedResourceMap& resources)
+        {
+            if (!hasPath_ || !hasFrameLength_ || !hasSlots_) {
+                return ReturnCode::Ok();
+            }
+
+            auto const localSlots = slots_;
+            auto const localFrameLength = frameLength_;
+            auto resource = resources.getTapResource(path_, [localSlots, localFrameLength]() {
+                return std::make_shared<PresetRAMResource>(localSlots, localFrameLength);
+            });
+
+            auto presetRam = std::dynamic_pointer_cast<PresetRAMResource>(resource);
+            if (!presetRam || presetRam->slots() != slots_ || presetRam->frameLength() != frameLength_) {
+                return ReturnCode::InvalidPropertyValue();
+            }
+
+            ram_ = std::move(presetRam);
+            return ReturnCode::Ok();
+        }
+
         static int64_t positiveMod(int64_t value, int64_t modulus)
         {
             auto const rem = value % modulus;
@@ -188,11 +229,18 @@ namespace elem
 
         size_t frameLength_ = 1;
         size_t slots_ = 1;
+        std::string path_;
+        bool hasPath_ = false;
+        bool hasFrameLength_ = false;
+        bool hasSlots_ = false;
         std::shared_ptr<PresetRAMResource> ram_;
         std::vector<Sample> staging_ = std::vector<Sample>(1, Sample(0));
         std::vector<float> temp_;
         size_t latchedSlot_ = 0;
         bool hasCompleteFrame_ = false;
+        std::atomic<int64_t> writeCounterTarget_{0};
+        int64_t currentWriteCounter_ = 0;
+        bool armedWrite_ = false;
     };
 
 } // namespace elem

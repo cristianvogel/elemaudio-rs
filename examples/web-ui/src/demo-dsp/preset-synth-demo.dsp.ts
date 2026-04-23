@@ -22,62 +22,65 @@ import {el} from "@elem-rs/core";
 export const FRAME_LENGTH = 8;
 export const NUM_SLOTS = 4;
 export const BANK_PATH = "preset-synth:bank";
-export const EDIT_FRAME_SCOPE_EVENT = "preset-synth:editFrameScope";
-export const ACTIVE_FRAME_SCOPE_EVENT = "preset-synth:activeFrameScope";
+export const EDIT_FRAME_SCOPE_EVENT = "preset-synth:editScope";
+export const ACTIVE_FRAME_SCOPE_EVENT = "preset-synth:activeScope";
+export const FREQ_SCOPE_EVENT = "preset-synth:freqHz";
+export const CUTOFF_SCOPE_EVENT = "preset-synth:cutoffHz";
+export const VOICE_SCOPE_EVENT = "preset-synth:voice";
 
 export const LANE = {
-  FREQ: 0,
-  CUTOFF: 1,
-  Q: 2,
-  ATTACK: 3,
-  DECAY: 4,
-  SUSTAIN: 5,
-  RELEASE: 6,
-  GAIN: 7,
+    FREQ: 0,
+    CUTOFF: 1,
+    Q: 2,
+    ATTACK: 3,
+    DECAY: 4,
+    SUSTAIN: 5,
+    RELEASE: 6,
+    GAIN: 7
 } as const;
 
 export const BANK_METADATA = {
-  schema: "preset-synth-mvp",
-  version: 1,
-  lanes: [
-    { index: LANE.FREQ, name: "freqHz", min: 40, max: 2000, taper: "exp", unit: "Hz" },
-    { index: LANE.CUTOFF, name: "cutoffHz", min: 80, max: 16000, taper: "exp", unit: "Hz" },
-    { index: LANE.Q, name: "q", min: 0.1, max: 6, taper: "linear" },
-    { index: LANE.ATTACK, name: "attackS", min: 0.001, max: 2, taper: "exp", unit: "s" },
-    { index: LANE.DECAY, name: "decayS", min: 0.001, max: 2, taper: "exp", unit: "s" },
-    { index: LANE.SUSTAIN, name: "sustain", min: 0, max: 1, taper: "linear" },
-    { index: LANE.RELEASE, name: "releaseS", min: 0.01, max: 4, taper: "exp", unit: "s" },
-    { index: LANE.GAIN, name: "gain", min: 0, max: 1, taper: "linear" },
-  ],
-  slotNames: ["slot 0", "slot 1", "slot 2", "slot 3"],
+    schema: "preset-synth-mvp",
+    version: 1,
+    lanes: [
+        {index: LANE.FREQ, name: "freqHz", min: 40, max: 2000, taper: "exp", unit: "Hz"},
+        {index: LANE.CUTOFF, name: "cutoffHz", min: 80, max: 16000, taper: "exp", unit: "Hz"},
+        {index: LANE.Q, name: "q", min: 0.1, max: 6, taper: "linear"},
+        {index: LANE.ATTACK, name: "attackS", min: 0.001, max: 2, taper: "exp", unit: "s"},
+        {index: LANE.DECAY, name: "decayS", min: 0.001, max: 2, taper: "exp", unit: "s"},
+        {index: LANE.SUSTAIN, name: "sustain", min: 0, max: 1, taper: "linear"},
+        {index: LANE.RELEASE, name: "releaseS", min: 0.01, max: 4, taper: "exp", unit: "s"},
+        {index: LANE.GAIN, name: "gain", min: 0, max: 1, taper: "linear"}
+    ],
+    slotNames: ["slot 0", "slot 1", "slot 2", "slot 3"]
 } as const;
 
 export const BANK_PROPS = {
-  path: BANK_PATH,
-  framelength: FRAME_LENGTH,
-  slots: NUM_SLOTS,
-  metadata: BANK_METADATA,
+    path: BANK_PATH,
+    framelength: FRAME_LENGTH,
+    slots: NUM_SLOTS,
+    metadata: BANK_METADATA
 };
 
 export interface PresetSynthParams {
-  /** Normalized 8-lane edit buffer the UI is currently editing. */
-  editFrame: number[];
-  /** Which slot the write path targets. */
-  writeSlot: number;
-  /** Morph source slot. */
-  slotA: number;
-  /** Morph destination slot. */
-  slotB: number;
-  /** Morph mix in [0, 1]. */
-  morphMix: number;
-  /** Monotonic counter that increments when the user clicks "Save". */
-  writeCounter: number;
-  /** Musical base frequency in Hz (before preset frequency modulation). */
-  baseFreq: number;
-  /** Master output level in 0..1. */
-  masterLevel: number;
-  /** Whether audio is stopped. */
-  isStopped?: boolean;
+    /** Normalized 8-lane edit buffer the UI is currently editing. */
+    editFrame: number[];
+    /** Which slot the write path targets. */
+    writeSlot: number;
+    /** Morph source slot. */
+    slotA: number;
+    /** Morph destination slot. */
+    slotB: number;
+    /** Morph mix in [0, 1]. */
+    morphMix: number;
+    /** Monotonic counter that increments when the user clicks "Save". */
+    writeCounter: number;
+    /** Musical base frequency in Hz (before preset frequency modulation). */
+    baseFreq: number;
+    /** Master output level in 0..1. */
+    masterLevel: number;
+    /** Whether audio is stopped. */
+    isStopped?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,19 +88,19 @@ export interface PresetSynthParams {
 // ---------------------------------------------------------------------------
 
 function denormExp(norm: NodeRepr_t, min: number, max: number): NodeRepr_t {
-  // value = min * (max / min)^norm
-  // Using el.const for numeric literals to ensure correct node resolution
-  return el.mul(el.const({ value: min }), el.pow(el.const({ value: max / min }), norm));
+    // value = min * (max / min)^norm
+    // Using el.const for numeric literals to ensure correct node resolution
+    return el.mul(el.const({value: min}), el.pow(el.const({value: max / min}), norm));
 }
 
 function denormLin(norm: NodeRepr_t, min: number, max: number): NodeRepr_t {
-  return el.add(el.const({ value: min }), el.mul(el.const({ value: max - min }), norm));
+    return el.add(el.const({value: min}), el.mul(el.const({value: max - min}), norm));
 }
 
 function lanePhase(laneIndex: number): NodeRepr_t {
-  // Each lane sits at `lane / (framelength - 1)` as a normalized phase.
-  const phase = laneIndex / (FRAME_LENGTH - 1);
-  return el.const({ value: phase });
+    // Each lane sits at `lane / (framelength - 1)` as a normalized phase.
+    const phase = laneIndex / (FRAME_LENGTH - 1);
+    return el.const({value: phase});
 }
 
 // ---------------------------------------------------------------------------
@@ -105,31 +108,53 @@ function lanePhase(laneIndex: number): NodeRepr_t {
 // ---------------------------------------------------------------------------
 
 function buildEditFrame(editFrame: number[]): NodeRepr_t {
-  // Walk lane indices 0..FRAME_LENGTH-1 once per frame using absolute sample
-  // time. `el.time()` returns the runtime sample counter and `el.mod(..., L)`
-  // cycles 0..L-1 exactly in lockstep with the native preset writer, which
-  // drives its own frame boundaries from the same `ctx.userData` sample time.
-  const laneIndex = el.mod(el.time(), FRAME_LENGTH);
+    // Walk lane indices 0..FRAME_LENGTH-1 once per frame using absolute sample
+    // time. `el.time()` returns the runtime sample counter and `el.mod(..., L)`
+    // cycles 0..L-1 exactly in lockstep with the native preset writer, which
+    // drives its own frame boundaries from the same `ctx.userData` sample time.
+    const laneIndex = el.mod(el.time(), FRAME_LENGTH);
 
-  // Build a nested select that emits editFrame[floor(laneIndex)].
-  //
-  // Each lane value is carried on a keyed const so slider moves update the
-  // const value in place during re-render instead of creating new anonymous
-  // nodes each time. That keeps the captured frame in sync with the UI at
-  // interactive rates.
-  let value: NodeRepr_t = el.const({
-    key: `preset-synth:edit:${FRAME_LENGTH - 1}`,
-    value: editFrame[FRAME_LENGTH - 1] ?? 0,
-  });
-  for (let lane = FRAME_LENGTH - 2; lane >= 0; lane -= 1) {
-    value = el.select(
-      el.le(laneIndex, el.const({ value: lane + 0.5 })),
-      el.const({ key: `preset-synth:edit:${lane}`, value: editFrame[lane] ?? 0 }),
-      value,
-    );
-  }
+    // Build a nested select that emits editFrame[floor(laneIndex)].
+    //
+    // Each lane value is carried on a keyed const so slider moves update the
+    // const value in place during re-render instead of creating new anonymous
+    // nodes each time. That keeps the captured frame in sync with the UI at
+    // interactive rates.
+    let value: NodeRepr_t = el.const({
+        key: `preset-synth:edit:${FRAME_LENGTH - 1}`,
+        value: editFrame[FRAME_LENGTH - 1] ?? 0
+    });
+    for (let lane = FRAME_LENGTH - 2; lane >= 0; lane -= 1) {
+        value = el.select(
+            el.le(laneIndex, el.const({value: lane + 0.5})),
+            el.const({key: `preset-synth:edit:${lane}`, value: editFrame[lane] ?? 0}),
+            value
+        );
+    }
 
-  return value;
+    return value;
+}
+
+function buildLiveLane(editFrame: number[], laneIndex: number, laneKey: string): NodeRepr_t {
+    return el.const({
+        key: `preset-synth:live:${laneKey}`,
+        value: editFrame[laneIndex] ?? 0
+    });
+}
+
+function buildLaneFrame(values: NodeRepr_t[]): NodeRepr_t {
+    const laneIndex = el.mod(el.time(), FRAME_LENGTH);
+
+    let value = values[FRAME_LENGTH - 1] ?? el.const({value: 0});
+    for (let lane = FRAME_LENGTH - 2; lane >= 0; lane -= 1) {
+        value = el.select(
+            el.le(laneIndex, el.const({value: lane + 0.5})),
+            values[lane] ?? el.const({value: 0}),
+            value
+        );
+    }
+
+    return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,140 +162,148 @@ function buildEditFrame(editFrame: number[]): NodeRepr_t {
 // ---------------------------------------------------------------------------
 
 export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
-  if (p.isStopped) {
-    return [el.const({ value: 0 }), el.const({ value: 0 })];
-  }
+    if (p.isStopped) {
+        return [el.const({value: 0}), el.const({value: 0})];
+    }
 
-  // 1. Edit frame -> preset writer. writeSlot and writeCounter are
-  //    smoothed constants. When writeCounter changes, the UI has staged a
-  //    save; the writer latches the slot and commits the current frame on
-  //    the next frame boundary.
-  const editFrame = buildEditFrame(p.editFrame);
-  const writeSlotSignal = el.const({
-    key: "preset-synth:writeSlot",
-    value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.writeSlot))),
-  });
+    // 1. Edit frame -> preset writer. writeSlot and writeCounter are
+    //    smoothed constants. When writeCounter changes, the UI has staged a
+    //    save; the writer latches the slot and commits the current frame on
+    //    the next frame boundary.
+    const editFrame = buildEditFrame(p.editFrame);
+    const writeSlotSignal = el.const({
+        key: "preset-synth:writeSlot",
+        value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.writeSlot)))
+    });
 
-  const writer = el.extra.presetWrite(
-    { ...BANK_PROPS, key: "preset-synth:writer" },
-    writeSlotSignal,
-    editFrame,
-  );
-
-  // Tap the edit-frame signal with a frameScope so the UI can visualise
-  // exactly the frame that the writer is currently capturing.
-  const editFrameScope = el.extra.frameScope(
-    {
-      key: "preset-synth:editScope",
-      framelength: FRAME_LENGTH,
-      name: EDIT_FRAME_SCOPE_EVENT,
-    },
-    editFrame,
-  );
-
-  // 2. Morph read for each lane. Per-lane phases are constants pointing at
-  //    the sample offset for that lane; the reader linearly interpolates
-  //    inside a slot, so using the exact lane phase returns that lane's
-  //    stored value.
-  const slotASignal = el.const({
-    key: "preset-synth:slotA",
-    value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotA))),
-  });
-  const slotBSignal = el.const({
-    key: "preset-synth:slotB",
-    value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotB))),
-  });
-  const morphMix = el.sm(
-    el.const({ key: "preset-synth:morphMix", value: Math.max(0, Math.min(1, p.morphMix)) }),
-  );
-  
-  const smoothTime = el.tau2pole(0.02);
-
-  function readLane(laneIndex: number, laneKey: string): NodeRepr_t {
-    return el.smooth( smoothTime,
-      el.extra.presetMorph(
-        { ...BANK_PROPS, key: `preset-synth:morph:${laneKey}` },
-        slotASignal,
-        slotBSignal,
-        morphMix,
-        lanePhase(laneIndex),
-      ),
+    // Tap the edit-frame signal with a frameScope so the UI can visualise
+    // exactly the frame that the writer is currently capturing.
+    const editFrameScope = el.extra.frameScope(
+        {
+            key: "preset-synth:editScope",
+            framelength: FRAME_LENGTH,
+            name: EDIT_FRAME_SCOPE_EVENT
+        },
+        editFrame
     );
-  }
 
-  const freqNorm = readLane(LANE.FREQ, "freq");
-  const cutoffNorm = readLane(LANE.CUTOFF, "cutoff");
-  const qNorm = readLane(LANE.Q, "q");
-  const attackNorm = readLane(LANE.ATTACK, "attack");
-  const decayNorm = readLane(LANE.DECAY, "decay");
-  const sustainNorm = readLane(LANE.SUSTAIN, "sustain");
-  const releaseNorm = readLane(LANE.RELEASE, "release");
-  const gainNorm = readLane(LANE.GAIN, "gain");
+    const writer = el.extra.presetWrite(
+        {...BANK_PROPS, key: "preset-synth:writer"},
+        writeSlotSignal,
+        editFrame
+    );
 
-  // 3. Denormalise lanes into real DSP parameters.
-  const freqScale = denormExp(freqNorm, 40, 2000);
-  const cutoffHz = denormExp(cutoffNorm, 80, 16000);
-  const q = denormLin(qNorm, 0.1, 6);
-  const attackS = denormExp(attackNorm, 0.001, 2);
-  const decayS = denormExp(decayNorm, 0.001, 2);
-  const sustain = denormLin(sustainNorm, 0, 1);
-  const releaseS = denormExp(releaseNorm, 0.01, 4);
-  const presetGain = denormLin(gainNorm, 0, 1);
+    // 2. Morph read for each lane. These lane values feed both the audio path
+    //    and the live scope so the UI reflects the current audible state.
+    const slotASignal = el.const({
+        key: "preset-synth:slotA",
+        value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotA)))
+    });
+    const slotBSignal = el.const({
+        key: "preset-synth:slotB",
+        value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotB)))
+    });
+    const morphMix = el.sm(
+        el.const({key: "preset-synth:morphMix", value: Math.max(0, Math.min(1, p.morphMix))})
+    );
 
-  // 4. Musical synth: saw oscillator through a resonant lowpass,
-  //    shaped by an ADSR driven by a slow 1 Hz 50% duty-cycle gate so the
-  //    envelope actually reaches sustain and parameter edits are audible
-  //    continuously. The "Hold note" button also sets the user gate high.
-  const baseHz = el.const({ key: "preset-synth:baseHz", value: p.baseFreq });
-  const oscHz = el.mul(baseHz, freqScale, el.const({ value: 1 / 220 })); // `freqScale` (40..2000) normalised against 220 Hz reference
 
-  const gateNode = el.add(el.square(1), 1);
 
-  const osc = el.saw(oscHz);
-  const filtered = el.lowpass(cutoffHz, q, osc);
+    function readLane(laneIndex: number, laneKey: string): NodeRepr_t {
+        return el.extra.presetMorph(
+                {...BANK_PROPS, key: `preset-synth:morph:${laneKey}`},
+                slotASignal,
+                slotBSignal,
+                morphMix,
+                lanePhase(laneIndex)
+        )
+    }
 
-  // Use el.ge(gateNode, 1) to convert the [0, 2] square wave to a [0, 1] gate.
-  // el.ge is the correct helper for "greater than or equal to".
-  const envelope = el.adsr(attackS, decayS, sustain, releaseS, el.ge(gateNode, 1));
+    function liveLane(laneIndex: number, laneKey: string): NodeRepr_t {
+        return buildLiveLane(p.editFrame, laneIndex, laneKey);
+    }
 
-  const voice = el.mul(filtered, envelope, presetGain);
+    function mixLiveAndPreset(live: NodeRepr_t, preset: NodeRepr_t): NodeRepr_t {
+        return el.add(live, el.mul(morphMix, el.sub(preset, live)));
+    }
 
-  const masterLevel = el.sm(
-    el.const({ key: "preset-synth:masterLevel", value: Math.max(0, Math.min(1, p.masterLevel)) }),
-  );
+    const freqNorm = mixLiveAndPreset(liveLane(LANE.FREQ, "freq"), readLane(LANE.FREQ, "freq"));
+    const cutoffNorm = mixLiveAndPreset(liveLane(LANE.CUTOFF, "cutoff"), readLane(LANE.CUTOFF, "cutoff"));
+    const qNorm = mixLiveAndPreset(liveLane(LANE.Q, "q"), readLane(LANE.Q, "q"));
+    const attackNorm = mixLiveAndPreset(liveLane(LANE.ATTACK, "attack"), readLane(LANE.ATTACK, "attack"));
+    const decayNorm = mixLiveAndPreset(liveLane(LANE.DECAY, "decay"), readLane(LANE.DECAY, "decay"));
+    const sustainNorm = mixLiveAndPreset(liveLane(LANE.SUSTAIN, "sustain"), readLane(LANE.SUSTAIN, "sustain"));
+    const releaseNorm = mixLiveAndPreset(liveLane(LANE.RELEASE, "release"), readLane(LANE.RELEASE, "release"));
+    const gainNorm = mixLiveAndPreset(liveLane(LANE.GAIN, "gain"), readLane(LANE.GAIN, "gain"));
 
-  // Sweep every lane of the current morph result once per frame, so the
-  // active-frame scope sees the same lane ordering as the edit-frame scope.
-  // `el.mod(el.time(), FL) / (FL - 1)` produces a 0..1 phase that hits
-  // lane centres for frame offsets 0..FL-1.
-  const activeFramePhase = el.div(
-    el.mod(el.time(), FRAME_LENGTH),
-    el.const({ value: FRAME_LENGTH - 1 }),
-  );
-  const activeFrameSignal = el.extra.presetMorph(
-    { ...BANK_PROPS, key: "preset-synth:activeScopeRead" },
-    slotASignal,
-    slotBSignal,
-    morphMix,
-    activeFramePhase,
-  );
-  const activeFrameScope = el.extra.frameScope(
-    {
-      key: "preset-synth:activeScope",
-      framelength: FRAME_LENGTH,
-      name: ACTIVE_FRAME_SCOPE_EVENT,
-    },
-    activeFrameSignal,
-  );
+    // 3. Denormalise lanes into real DSP parameters.
+    const freqScale = denormExp(freqNorm, 40, 2000);
+    const cutoffHz = denormExp(cutoffNorm, 80, 16000);
+    const q = denormLin(qNorm, 0.1, 6);
+    const attackS = denormExp(attackNorm, 0.001, 2);
+    const decayS = denormExp(decayNorm, 0.001, 2);
+    const sustain = denormLin(sustainNorm, 0, 1);
+    const releaseS = denormExp(releaseNorm, 0.01, 4);
+    const presetGain = denormLin(gainNorm, 0, 1);
 
-  // Keep the writer and both scopes alive in the graph without audible
-  // signal, same pattern as `frameWriteRAM` demos. The UI reads the scope
-  // events to redraw the preset bars whenever a frame is committed.
-  const silentTaps = el.mul(
-    el.const({ value: 0 }),
-    el.add(writer, editFrameScope, activeFrameScope),
-  );
-  const mono = el.mul(voice, masterLevel);
+    const activeFrame = buildLaneFrame([
+        freqNorm,
+        cutoffNorm,
+        qNorm,
+        attackNorm,
+        decayNorm,
+        sustainNorm,
+        releaseNorm,
+        gainNorm,
+    ]);
 
-  return [mono, el.add(silentTaps, mono)];
+    const activeFrameScope = el.extra.frameScope(
+        {
+            key: "preset-synth:activeScope",
+            framelength: FRAME_LENGTH,
+            name: ACTIVE_FRAME_SCOPE_EVENT
+        },
+        activeFrame
+    );
+
+    // 4. Musical synth: saw oscillator through a resonant lowpass,
+    //    shaped by an ADSR driven by a slow 1 Hz 50% duty-cycle gate so the
+    //    envelope actually reaches sustain and parameter edits are audible
+    //    continuously. The "Hold note" button also sets the user gate high.
+    const baseHz = el.const({key: "preset-synth:baseHz", value: p.baseFreq});
+    const oscHz = el.mul(baseHz, freqScale, el.const({value: 1 / 220})); // `freqScale` (40..2000) normalised against 220 Hz reference
+
+    const gateNode = el.add(el.square(el.add(1, el.mul(100, el.latch(el.train(2), el.pinknoise())))), 1);
+
+    const osc = el.saw(oscHz);
+    const filtered = el.lowpass(cutoffHz, q, osc);
+
+    // Use el.ge(gateNode, 1) to convert the [0, 2] square wave to a [0, 1] gate.
+    // el.ge is the correct helper for "greater than or equal to".
+    const envelope = el.adsr(attackS, decayS, sustain, releaseS, el.ge(gateNode, 1));
+
+    const voice = el.mul(filtered, envelope, presetGain);
+
+    const freqScope = el.scope({name: FREQ_SCOPE_EVENT}, freqScale);
+    const cutoffScope = el.scope({name: CUTOFF_SCOPE_EVENT}, cutoffHz);
+    const voiceScope = el.scope({name: VOICE_SCOPE_EVENT}, voice);
+
+    const masterLevel = el.sm(
+        el.const({key: "preset-synth:masterLevel", value: Math.max(0, Math.min(1, p.masterLevel))})
+    );
+
+    // Keep the scope alive in the graph without audible signal, matching the
+    // known-good frameScope retention pattern.
+    const silentTaps = el.add(
+        0,
+        el.mul(0, writer),
+        el.mul(0, editFrameScope),
+        el.mul(0, activeFrameScope),
+        el.mul(0, freqScope),
+        el.mul(0, cutoffScope),
+        el.mul(0, voiceScope)
+    );
+    const mono = el.mul(voice, masterLevel);
+
+    return [el.add(silentTaps, mono), mono];
 }

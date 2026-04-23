@@ -52,12 +52,13 @@ const layout = `
   <div class="panel">
     <h1>elemaudio-rs</h1>
     <h3>preset synth demo</h3>
-    <p>
-      A subtractive synth whose parameters live inside a native preset RAM
-      bank. <code>el.extra.presetWrite</code> commits the current edit frame
-      into the selected slot on the next frame boundary.
-      <code>el.extra.presetMorph</code> blends two slots at sample rate.
-    </p>
+      <p>
+        A subtractive synth whose parameters live inside a native preset RAM
+        bank. The sliders update the synth live; <code>el.extra.presetWrite</code>
+        commits the current edit frame into the selected slot on the next frame
+        boundary.
+        <code>el.extra.presetMorph</code> blends two slots at sample rate.
+      </p>
 
     <div class="controls">
       <div class="button-row">
@@ -158,6 +159,7 @@ const layout = `
 // ---- state -----------------------------------------------------------------
 
 const editFrame = DEFAULT_FRAMES[0].slice();
+const savedFrames = DEFAULT_FRAMES.map((frame) => frame.slice());
 let writeSlot = 0;
 let slotA = 0;
 let slotB = 1;
@@ -170,7 +172,7 @@ let isStopped = false;
 
 let lastEditFrameSample: number[] = new Array(FRAME_LENGTH).fill(0);
 let lastActiveFrameSample: number[] = new Array(FRAME_LENGTH).fill(0);
-let rendererReady = false;
+let bankSeeded = false;
 
 // ---- bindings (filled after initDemo) --------------------------------------
 
@@ -222,6 +224,13 @@ function params(): PresetSynthParams {
     masterLevel,
     isStopped,
   };
+}
+
+function cloneIntoEditFrame(frame: number[]) {
+  for (let i = 0; i < FRAME_LENGTH; i += 1) {
+    editFrame[i] = frame[i] ?? 0;
+  }
+  syncSlidersFromEditFrame();
 }
 
 function updateReadouts() {
@@ -279,7 +288,6 @@ function handleScopeEvent(event: unknown) {
   } else {
     return;
   }
-
   scheduleScopeDraw();
 }
 
@@ -288,6 +296,15 @@ const { mustQuery: q, renderCurrentGraph } = initDemo({
   buildGraph: () => dspBuildGraph(params()),
   updateReadouts,
   onScopeEvent: handleScopeEvent,
+  onAudioReady: () => {
+    // Seed the preset bank once the worklet is live. A short timeout lets the
+    // harness complete its initial render before the explicit save passes run.
+    window.setTimeout(() => {
+      if (!bankSeeded) {
+        void seedBank();
+      }
+    }, 50);
+  },
   persistKey: "no-persist",
 });
 
@@ -317,11 +334,12 @@ const scopeCanvas = q<HTMLCanvasElement>("#preset-scope");
 let scopeDrawScheduled = false;
 
 function scheduleScopeDraw() {
+
   if (scopeDrawScheduled) return;
   scopeDrawScheduled = true;
   requestAnimationFrame(() => {
+      drawScope();
     scopeDrawScheduled = false;
-    drawScope();
   });
 }
 
@@ -397,7 +415,7 @@ function clamp01(v: number): number {
 }
 
 window.addEventListener("resize", scheduleScopeDraw);
-scheduleScopeDraw();
+
 
 slotBSelect.value = String(slotB);
 
@@ -407,7 +425,9 @@ laneControls = LANES.map((lane) => {
   const defaultNorm = editFrame[lane.index] ?? 0.5;
   slider.value = String(defaultNorm);
 
-  const taper: "linear" | "exp" | "quantize" =
+
+    const taper: "linear" | "exp" | "quantize" =
+        // @ts-ignore
     lane.taper === "exp" || lane.taper === "quantize" ? lane.taper : "linear";
 
   const control: LaneControl = {
@@ -425,6 +445,7 @@ laneControls = LANES.map((lane) => {
     editFrame[lane.index] = Number(slider.value);
     updateReadouts();
     void renderCurrentGraph();
+      scheduleScopeDraw();
   });
 
   slider.addEventListener("dblclick", (event) => {
@@ -478,29 +499,21 @@ masterLevelSlider.addEventListener("input", () => {
 
 saveButton.addEventListener("click", async () => {
   syncEditFrameFromSliders();
+  savedFrames[writeSlot] = editFrame.slice();
   writeCounter += 1;
   presetStatus.textContent = `Saved edit frame into slot ${writeSlot} (write #${writeCounter})`;
-  if (isStopped) {
-    await renderCurrentGraph();
-  } else {
-    void renderCurrentGraph();
-  }
+  drawScope();
+  await renderCurrentGraph();
 });
 
 loadButton.addEventListener("click", async () => {
-  const defaults = DEFAULT_FRAMES[writeSlot];
-  if (defaults) {
-    for (let i = 0; i < editFrame.length; i += 1) {
-      editFrame[i] = defaults[i] ?? 0;
-    }
-    syncSlidersFromEditFrame();
+  const saved = savedFrames[writeSlot];
+  if (saved) {
+    cloneIntoEditFrame(saved);
     updateReadouts();
-    presetStatus.textContent = `Loaded preset defaults for slot ${writeSlot} into edit frame`;
-    if (isStopped) {
-      await renderCurrentGraph();
-    } else {
-      void renderCurrentGraph();
-    }
+    presetStatus.textContent = `Loaded saved slot ${writeSlot} into the edit frame`;
+    drawScope();
+    await renderCurrentGraph();
   }
 });
 
@@ -514,36 +527,38 @@ startButton.addEventListener("click", async () => {
   // harness ensures audio and then calls renderCurrentGraph
 });
 
-// On first load, seed all four slots by writing their defaults so morphing
-// between slots is immediately meaningful. Each call increments writeCounter
-// to force the graph to rebuild, so the native writer sees the new frame.
+// Seed all four slots by writing their defaults so morphing between slots is
+// immediately meaningful. Each pass increments writeCounter, which arms the
+// native writer for exactly one frame commit.
 const seedBank = async () => {
-  // Wait until renderer is initialized
-  while (!rendererReady) {
-    await new Promise(resolve => setTimeout(resolve, 100));
+  if (bankSeeded) {
+    return;
   }
 
   for (let slot = 0; slot < NUM_SLOTS; slot += 1) {
     writeSlot = slot;
-    const defaults = DEFAULT_FRAMES[slot];
+    const defaults = savedFrames[slot];
     if (!defaults) continue;
-    for (let i = 0; i < editFrame.length; i += 1) {
-      editFrame[i] = defaults[i] ?? 0;
-    }
+    cloneIntoEditFrame(defaults);
     writeCounter += 1;
     await renderCurrentGraph();
-    // Small delay to ensure the audio thread captures the frame
-    await new Promise(resolve => setTimeout(resolve, 20));
+    // Give the audio thread enough time to cross at least one frame boundary.
+    await new Promise(resolve => setTimeout(resolve, 40));
   }
 
   writeSlot = 0;
-  for (let i = 0; i < editFrame.length; i += 1) {
-    editFrame[i] = DEFAULT_FRAMES[0][i] ?? 0;
-  }
-  syncSlidersFromEditFrame();
+  cloneIntoEditFrame(savedFrames[0]);
   writeSlotSelect.value = "0";
   slotASelect.value = "0";
   slotBSelect.value = "1";
   updateReadouts();
+  bankSeeded = true;
   presetStatus.textContent = `Seeded ${NUM_SLOTS} slots with demo presets`;
 };
+
+// Draw the default edit frame immediately so the scope is not blank before
+// the first scope event arrives from the audio thread.
+lastEditFrameSample = editFrame.slice();
+lastActiveFrameSample = savedFrames[0].slice();
+
+scheduleScopeDraw();

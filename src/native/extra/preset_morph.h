@@ -49,6 +49,11 @@ namespace elem
                 }
 
                 frameLength_ = static_cast<size_t>(raw);
+                hasFrameLength_ = true;
+                auto rc = bindResourceIfReady(resources);
+                if (rc != ReturnCode::Ok()) {
+                    return rc;
+                }
             } else if (key == "slots") {
                 if (!val.isNumber()) {
                     return ReturnCode::InvalidPropertyType();
@@ -60,24 +65,22 @@ namespace elem
                 }
 
                 slots_ = static_cast<size_t>(raw);
+                hasSlots_ = true;
+                auto rc = bindResourceIfReady(resources);
+                if (rc != ReturnCode::Ok()) {
+                    return rc;
+                }
             } else if (key == "path") {
                 if (!val.isString()) {
                     return ReturnCode::InvalidPropertyType();
                 }
 
-                auto const path = static_cast<js::String>(val);
-                auto const localSlots = slots_;
-                auto const localFrameLength = frameLength_;
-                auto resource = resources.getTapResource(path, [localSlots, localFrameLength]() {
-                    return std::make_shared<PresetRAMResource>(localSlots, localFrameLength);
-                });
-
-                auto presetRam = std::dynamic_pointer_cast<PresetRAMResource>(resource);
-                if (!presetRam || presetRam->slots() != slots_ || presetRam->frameLength() != frameLength_) {
-                    return ReturnCode::InvalidPropertyValue();
+                path_ = static_cast<js::String>(val);
+                hasPath_ = true;
+                auto rc = bindResourceIfReady(resources);
+                if (rc != ReturnCode::Ok()) {
+                    return rc;
                 }
-
-                ram_ = std::move(presetRam);
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
@@ -157,6 +160,27 @@ namespace elem
         }
 
     private:
+        int bindResourceIfReady(SharedResourceMap& resources)
+        {
+            if (!hasPath_ || !hasFrameLength_ || !hasSlots_) {
+                return ReturnCode::Ok();
+            }
+
+            auto const localSlots = slots_;
+            auto const localFrameLength = frameLength_;
+            auto resource = resources.getTapResource(path_, [localSlots, localFrameLength]() {
+                return std::make_shared<PresetRAMResource>(localSlots, localFrameLength);
+            });
+
+            auto presetRam = std::dynamic_pointer_cast<PresetRAMResource>(resource);
+            if (!presetRam || presetRam->slots() != slots_ || presetRam->frameLength() != frameLength_) {
+                return ReturnCode::InvalidPropertyValue();
+            }
+
+            ram_ = std::move(presetRam);
+            return ReturnCode::Ok();
+        }
+
         size_t clampSlot(Sample value) const
         {
             if (!std::isfinite(static_cast<double>(value))) {
@@ -178,6 +202,10 @@ namespace elem
 
         size_t frameLength_ = 1;
         size_t slots_ = 1;
+        std::string path_;
+        bool hasPath_ = false;
+        bool hasFrameLength_ = false;
+        bool hasSlots_ = false;
         std::shared_ptr<PresetRAMResource> ram_;
     };
 

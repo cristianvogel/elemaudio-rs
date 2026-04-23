@@ -1,6 +1,6 @@
 export type ControlValue = string | boolean;
 
-type ControlLike = HTMLInputElement | HTMLSelectElement;
+export type ControlLike = HTMLInputElement | HTMLSelectElement;
 type ControlState = Record<string, ControlValue>;
 
 export interface ControlPresetManager {

@@ -11,12 +11,134 @@ import { el, type NodeRepr_t } from "@elem-rs/core";
 import WebRenderer from "../WebRenderer";
 import "../style.css";
 import {
+  ControlLike,
   applyControlState,
   attachPresetControls,
   controlStorageKey,
   createControlPresetManager,
   readControlValue,
 } from "./control-presets";
+
+const DEVTOOLS_BRIDGE_SOURCE = "elemaudiors-devscope";
+const DEVTOOLS_BRIDGE_TYPE = "elemaudio.debug";
+const DEVTOOLS_PANEL_READY_TYPE = "elemaudio.debug.panel-ready";
+
+declare global {
+  interface Window {
+    __ELEMAUDIO_DEBUG_CACHE__?: {
+      bridgeReady: boolean;
+      updatedAt: number;
+      eventsBySource: Record<string, DevtoolsScopeEvent>;
+    };
+  }
+}
+
+type DevtoolsScopeEvent = {
+  schema: "elemaudio.debug";
+  version: 1;
+  kind: "scope" | "lifecycle";
+  mode?: "stream" | "frame";
+  phase?: string;
+  sessionId: string;
+  graphId: string;
+  source: string;
+  timestampMs: number;
+  sampleRate?: number;
+  channelCount?: number;
+  channels?: unknown;
+};
+
+const devtoolsScopeCache = new Map<string, DevtoolsScopeEvent>();
+let devtoolsPanelListenerInstalled = false;
+
+function syncDevtoolsCacheToWindow() {
+  window.__ELEMAUDIO_DEBUG_CACHE__ = {
+    bridgeReady: true,
+    updatedAt: performance.now(),
+    eventsBySource: Object.fromEntries(devtoolsScopeCache.entries()),
+  };
+}
+
+function postDevtoolsEvent(event: DevtoolsScopeEvent) {
+  window.postMessage(
+    {
+      source: DEVTOOLS_BRIDGE_SOURCE,
+      type: DEVTOOLS_BRIDGE_TYPE,
+      event,
+    },
+    "*",
+  );
+}
+
+function ensureDevtoolsPanelListener() {
+  if (devtoolsPanelListenerInstalled) {
+    return;
+  }
+
+  window.addEventListener("message", (event: MessageEvent) => {
+    if (event.source !== window) {
+      return;
+    }
+
+    const payload = event.data as { source?: string; type?: string };
+    if (!payload || payload.source !== DEVTOOLS_BRIDGE_SOURCE || payload.type !== DEVTOOLS_PANEL_READY_TYPE) {
+      return;
+    }
+
+    postDevtoolsEvent({
+      schema: "elemaudio.debug",
+      version: 1,
+      kind: "lifecycle",
+      phase: "bridge-ready",
+      sessionId: location.pathname,
+      graphId: location.pathname,
+      source: "bridge",
+      timestampMs: performance.now(),
+    });
+
+    for (const cachedEvent of devtoolsScopeCache.values()) {
+      postDevtoolsEvent({
+        ...cachedEvent,
+        timestampMs: performance.now(),
+      });
+    }
+
+    syncDevtoolsCacheToWindow();
+  });
+
+  devtoolsPanelListenerInstalled = true;
+}
+
+function forwardScopeEventToDevtools(event: unknown) {
+  const payload = event as {
+    source?: string;
+    data?: unknown;
+    channels?: number;
+    sampleRate?: number;
+  };
+
+  if (!payload || typeof payload.source !== "string" || !Array.isArray(payload.data)) {
+    return;
+  }
+
+  const scopeEvent: DevtoolsScopeEvent = {
+    schema: "elemaudio.debug",
+    version: 1,
+    kind: "scope",
+    mode: "stream",
+    sessionId: location.pathname,
+    graphId: `${location.pathname}:${payload.source}`,
+    source: payload.source,
+    timestampMs: performance.now(),
+    sampleRate: payload.sampleRate,
+    channelCount: payload.channels,
+    channels: payload.data,
+  };
+
+  devtoolsScopeCache.set(payload.source, scopeEvent);
+  syncDevtoolsCacheToWindow();
+  postDevtoolsEvent(scopeEvent);
+}
 
 export type BuildGraph = () => NodeRepr_t[];
 
@@ -64,6 +186,9 @@ export function mustQuery<T extends Element>(root: HTMLElement, selector: string
  * Wires audio init, control listeners, and the start button.
  */
 export function initDemo(config: DemoConfig) {
+  ensureDevtoolsPanelListener();
+  syncDevtoolsCacheToWindow();
+
   const app = document.querySelector<HTMLDivElement>("#app");
   if (!app) throw new Error("Missing app root");
 
@@ -82,7 +207,7 @@ export function initDemo(config: DemoConfig) {
   const persistKey = config.persistKey ?? `elemaudio-rs:demo:${location.pathname}`;
   const persistenceEnabled = persistKey !== "no-persist";
   const presetManager = persistenceEnabled ? createControlPresetManager(`${persistKey}:presets`) : null;
-  const defaultValues = new Map<HTMLInputElement | HTMLSelectElement, string>();
+  const defaultValues = new Map<ControlLike, string>();
   const defaultChecks = new Map<HTMLInputElement, boolean>();
 
   function loadPersistedState(): Record<string, string | boolean> {
@@ -95,7 +220,7 @@ export function initDemo(config: DemoConfig) {
     presetManager.saveCurrentState(state);
   }
 
-  function persistControl(control: HTMLInputElement | HTMLSelectElement) {
+  function persistControl(control: ControlLike) {
     if (!persistenceEnabled) return;
     const key = controlStorageKey(control);
     if (!key) return;
@@ -104,7 +229,7 @@ export function initDemo(config: DemoConfig) {
     savePersistedState(state);
   }
 
-  function restoreControls(controls: Array<HTMLInputElement | HTMLSelectElement>) {
+  function restoreControls(controls: ControlLike[]) {
     if (!persistenceEnabled) return;
     const state = loadPersistedState();
     applyControlState(controls, state);
@@ -116,7 +241,10 @@ export function initDemo(config: DemoConfig) {
     renderer = new WebRenderer();
 
     if (config.onScopeEvent) {
-      renderer.on("scope", config.onScopeEvent);
+      renderer.on("scope", (event: unknown) => {
+        forwardScopeEventToDevtools(event);
+        config.onScopeEvent?.(event);
+      });
     }
 
     const worklet = await renderer.initialize(audioContext);
@@ -192,7 +320,7 @@ export function initDemo(config: DemoConfig) {
     }
   }
 
-  function wireControls(controls: Array<HTMLInputElement | HTMLSelectElement>) {
+  function wireControls(controls: ControlLike[]) {
     controls.forEach((control) => {
       if (control instanceof HTMLInputElement && control.type === "checkbox") {
         defaultChecks.set(control, control.defaultChecked);
@@ -205,7 +333,7 @@ export function initDemo(config: DemoConfig) {
 
     restoreControls(controls);
 
-    if (presetManager) {
+    if (presetManager && app) {
       attachPresetControls({
         controlsHost: app.querySelector<HTMLElement>(".controls") ?? app,
         controls,
@@ -265,6 +393,9 @@ export function initDemo(config: DemoConfig) {
     renderCurrentGraph,
     wireControls,
     updateReadouts: () => config.updateReadouts(),
-    mustQuery: <T extends Element>(sel: string) => mustQuery<T>(app, sel),
+    mustQuery: <T extends Element>(sel: string) => {
+      if (!app) throw new Error("App root is missing");
+      return mustQuery<T>(app, sel);
+    },
   };
 }
