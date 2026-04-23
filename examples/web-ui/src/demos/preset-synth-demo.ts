@@ -64,6 +64,7 @@ const layout = `
           </span>
         </div>
         <canvas id="preset-scope" class="preset-scope" width="640" height="160"></canvas>
+        <div class="resource-status">Drag the edit bars on the canvas to shape the live frame.</div>
       </div>
 
       <div class="row">
@@ -82,7 +83,7 @@ const layout = `
         <input id="master-level" type="range" min="0" max="1" value="0.5" step="0.01" />
       </div>
 
-      <div class="dial-strip" aria-label="Edit frame lanes">
+      <div class="dial-strip" aria-label="Edit frame lanes" style="display:none">
         ${LANES.map(
           (lane) => `
             <div class="dial">
@@ -169,6 +170,7 @@ let loadButton: HTMLButtonElement;
 let stopButton: HTMLButtonElement;
 let startButton: HTMLButtonElement;
 let presetStatus: HTMLDivElement;
+let activePointerId: number | null = null;
 
 function formatLaneValue(control: LaneControl, value: number): string {
   const denorm = denormalisePresetLane(
@@ -230,6 +232,13 @@ function syncSlidersFromEditFrame() {
   });
 }
 
+function refreshEditFrameView() {
+  syncSlidersFromEditFrame();
+  updateReadouts();
+  lastEditFrameSample = editFrame.slice();
+  drawScope();
+}
+
 // ---- initialise the demo through the shared harness ------------------------
 
 type ScopePayload = {
@@ -289,6 +298,8 @@ startButton = q<HTMLButtonElement>("#start");
 stopButton = q<HTMLButtonElement>("#stop");
 presetStatus = q<HTMLDivElement>("#preset-status");
 const scopeCanvas = q<HTMLCanvasElement>("#preset-scope");
+scopeCanvas.style.cursor = "crosshair";
+scopeCanvas.style.touchAction = "none";
 
 // ---- scope drawing --------------------------------------------------------
 
@@ -359,6 +370,66 @@ window.addEventListener("resize", () => {
   drawScope();
 });
 
+function updateEditFrameFromCanvas(clientX: number, clientY: number): boolean {
+  const rect = scopeCanvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
+
+  const padding = 8;
+  const usableWidth = rect.width - padding * 2;
+  const usableHeight = rect.height - padding * 2;
+  if (usableWidth <= 0 || usableHeight <= 0) {
+    return false;
+  }
+
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+  const laneWidth = usableWidth / FRAME_LENGTH;
+  const lane = Math.max(0, Math.min(FRAME_LENGTH - 1, Math.floor((localX - padding) / laneWidth)));
+  const norm = Math.max(0, Math.min(1, 1 - ((localY - padding) / usableHeight)));
+
+  if (!Number.isFinite(norm) || editFrame[lane] === norm) {
+    return false;
+  }
+
+  editFrame[lane] = norm;
+  refreshEditFrameView();
+  return true;
+}
+
+scopeCanvas.addEventListener("pointerdown", (event) => {
+  activePointerId = event.pointerId;
+  scopeCanvas.setPointerCapture(event.pointerId);
+  if (updateEditFrameFromCanvas(event.clientX, event.clientY)) {
+    void renderCurrentGraph();
+  }
+});
+
+scopeCanvas.addEventListener("pointermove", (event) => {
+  if (activePointerId !== event.pointerId) {
+    return;
+  }
+
+  if (updateEditFrameFromCanvas(event.clientX, event.clientY)) {
+    void renderCurrentGraph();
+  }
+});
+
+function endCanvasEdit(event: PointerEvent) {
+  if (activePointerId !== event.pointerId) {
+    return;
+  }
+
+  activePointerId = null;
+  if (scopeCanvas.hasPointerCapture(event.pointerId)) {
+    scopeCanvas.releasePointerCapture(event.pointerId);
+  }
+}
+
+scopeCanvas.addEventListener("pointerup", endCanvasEdit);
+scopeCanvas.addEventListener("pointercancel", endCanvasEdit);
+
 slotBSelect.value = String(slotB);
 
 laneControls = LANES.map((lane) => {
@@ -385,9 +456,7 @@ laneControls = LANES.map((lane) => {
 
   slider.addEventListener("input", () => {
     editFrame[lane.index] = Number(slider.value);
-    updateReadouts();
-    lastEditFrameSample = editFrame.slice();
-    drawScope();
+    refreshEditFrameView();
     void renderCurrentGraph();
   });
 
@@ -395,9 +464,7 @@ laneControls = LANES.map((lane) => {
     event.preventDefault();
     slider.value = String(control.defaultNorm);
     editFrame[lane.index] = control.defaultNorm;
-    updateReadouts();
-    lastEditFrameSample = editFrame.slice();
-    drawScope();
+    refreshEditFrameView();
     void renderCurrentGraph();
   });
 
@@ -449,10 +516,8 @@ loadButton.addEventListener("click", async () => {
   const saved = savedFrames[writeSlot];
   if (saved) {
     cloneIntoEditFrame(saved);
-    updateReadouts();
-    lastEditFrameSample = editFrame.slice();
+    refreshEditFrameView();
     presetStatus.textContent = `Loaded saved slot ${writeSlot} into the edit frame`;
-    drawScope();
     await renderCurrentGraph();
   } else {
     presetStatus.textContent = `Slot ${writeSlot} is empty`;
@@ -474,4 +539,5 @@ startButton.addEventListener("click", async () => {
 lastEditFrameSample = editFrame.slice();
 lastActiveFrameSample = new Array(FRAME_LENGTH).fill(0);
 
+syncSlidersFromEditFrame();
 drawScope();
