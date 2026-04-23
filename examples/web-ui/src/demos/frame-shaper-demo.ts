@@ -107,7 +107,6 @@ let currentFrame: number[] = [];
 
 const { mustQuery: q, wireControls, renderCurrentGraph } = initDemo({
   layout,
-  persistKey: "no-persist",
   buildGraph: () =>
     dspBuildGraph({
       offset: Number(offsetSlider.value),

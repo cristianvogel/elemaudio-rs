@@ -18,7 +18,11 @@ namespace elem
         using GraphNode<FloatType>::GraphNode;
 
         static constexpr size_t MAX_CHANNELS = 8;
-        static constexpr size_t FRAME_QUEUE_CAPACITY = 32;
+        // frameScope can produce many completed frames between main-thread event
+        // polls when frameLength is very short (for example 8 samples). Keep a
+        // larger power-of-two queue so short frame scopes survive the browser
+        // polling cadence instead of dropping every event.
+        static constexpr size_t FRAME_QUEUE_CAPACITY = 1024;
 
         struct FrameReadout {
             int64_t frameStart = 0;

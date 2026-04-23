@@ -286,7 +286,7 @@ function handleScopeEvent(event: unknown) {
   } else {
     return;
   }
-  scheduleScopeDraw();
+  drawScope();
 }
 
 const { mustQuery: q, renderCurrentGraph } = initDemo({
@@ -328,18 +328,6 @@ const scopeCanvas = q<HTMLCanvasElement>("#preset-scope");
 
 // ---- scope drawing --------------------------------------------------------
 
-let scopeDrawScheduled = false;
-
-function scheduleScopeDraw() {
-
-  if (scopeDrawScheduled) return;
-  scopeDrawScheduled = true;
-  requestAnimationFrame(() => {
-      drawScope();
-    scopeDrawScheduled = false;
-  });
-}
-
 function drawScope() {
   const ctx = scopeCanvas.getContext("2d");
   if (!ctx) return;
@@ -355,8 +343,8 @@ function drawScope() {
     scopeCanvas.height = height;
   }
 
-  ctx.save();
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   // Background + grid
   ctx.fillStyle = "#0b0f14";
@@ -378,10 +366,8 @@ function drawScope() {
 
   for (let lane = 0; lane < FRAME_LENGTH; lane += 1) {
     const laneX = padding + lane * laneWidth + laneWidth / 2;
-
-    //bug: both of these are not being updated??
-      const editVal = lastEditFrameSample[lane] ?? 0;
-      const activeVal = lastActiveFrameSample[lane] ?? 0;
+    const editVal = lastEditFrameSample[lane] ?? 0;
+    const activeVal = lastActiveFrameSample[lane] ?? 0;
 
     const editH = editVal * (cssHeight - padding * 2);
     const activeH = activeVal * (cssHeight - padding * 2);
@@ -402,12 +388,12 @@ function drawScope() {
     const label = laneMeta ? laneMeta.name : `L${lane}`;
     ctx.fillText(label, laneX, cssHeight - 2);
   }
-
-  ctx.restore();
 }
 
 
-window.addEventListener("resize", scheduleScopeDraw);
+window.addEventListener("resize", () => {
+  drawScope();
+});
 
 slotBSelect.value = String(slotB);
 
@@ -436,8 +422,10 @@ laneControls = LANES.map((lane) => {
   slider.addEventListener("input", () => {
     editFrame[lane.index] = Number(slider.value);
     updateReadouts();
+    lastEditFrameSample = editFrame.slice();
+    lastActiveFrameSample = editFrame.slice();
+    drawScope();
     void renderCurrentGraph();
-      scheduleScopeDraw();
   });
 
   slider.addEventListener("dblclick", (event) => {
@@ -445,6 +433,9 @@ laneControls = LANES.map((lane) => {
     slider.value = String(control.defaultNorm);
     editFrame[lane.index] = control.defaultNorm;
     updateReadouts();
+    lastEditFrameSample = editFrame.slice();
+    lastActiveFrameSample = editFrame.slice();
+    drawScope();
     void renderCurrentGraph();
   });
 
@@ -503,6 +494,8 @@ loadButton.addEventListener("click", async () => {
   if (saved) {
     cloneIntoEditFrame(saved);
     updateReadouts();
+    lastEditFrameSample = editFrame.slice();
+    lastActiveFrameSample = editFrame.slice();
     presetStatus.textContent = `Loaded saved slot ${writeSlot} into the edit frame`;
     drawScope();
     await renderCurrentGraph();
@@ -553,4 +546,4 @@ const seedBank = async () => {
 lastEditFrameSample = editFrame.slice();
 lastActiveFrameSample = savedFrames[0].slice();
 
-scheduleScopeDraw();
+drawScope();

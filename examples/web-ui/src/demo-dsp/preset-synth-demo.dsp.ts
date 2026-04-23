@@ -121,13 +121,13 @@ function buildEditFrame(editFrame: number[]): NodeRepr_t {
     // nodes each time. That keeps the captured frame in sync with the UI at
     // interactive rates.
     let value: NodeRepr_t = el.const({
-        key: `preset-synth:edit:${FRAME_LENGTH - 1}`,
+        key: `ps:lane-edit:${FRAME_LENGTH - 1}`,
         value: editFrame[FRAME_LENGTH - 1] ?? 0
     });
     for (let lane = FRAME_LENGTH - 2; lane >= 0; lane -= 1) {
         value = el.select(
             el.le(laneIndex, el.const({value: lane + 0.5})),
-            el.const({key: `preset-synth:edit:${lane}`, value: editFrame[lane] ?? 0}),
+            el.const({key: `ps:target-lane-edit:${lane}`, value: editFrame[lane] ?? 0}),
             value
         );
     }
@@ -157,43 +157,30 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     //    the next frame boundary.
     const editFrame = buildEditFrame(p.editFrame);
     const writeSlotSignal = el.const({
-        key: "preset-synth:writeSlot",
+        key: "ps:writeSlot",
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.writeSlot)))
     });
 
-    const editFrameScope = el.extra.frameScope(
-        {
-            key: "preset-synth:editScope",
-            framelength: FRAME_LENGTH,
-            name: EDIT_FRAME_SCOPE_EVENT
-        },
-        editFrame
-    );
 
-    const writer = el.extra.presetWrite(
-        {...BANK_PROPS, key: "preset-synth:writer", writecounter: p.writeCounter},
-        writeSlotSignal,
-        editFrame
-    );
 
     // 2. Morph read for each lane. These lane values feed the audible synth.
     const slotASignal = el.const({
-        key: "preset-synth:slotA",
+        key: "ps:slotA",
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotA)))
     });
     const slotBSignal = el.const({
-        key: "preset-synth:slotB",
+        key: "ps:slotB",
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotB)))
     });
     const morphMix = el.sm(
-        el.const({key: "preset-synth:morphMix", value: Math.max(0, Math.min(1, p.morphMix))})
+        el.const({key: "ps:morphMix", value: Math.max(0, Math.min(1, p.morphMix))})
     );
 
 
 
     function readLane(laneIndex: number, laneKey: string): NodeRepr_t {
         return el.extra.presetMorph(
-                {...BANK_PROPS, key: `preset-synth:morph:${laneKey}`},
+                {...BANK_PROPS, key: `ps:morph:${laneKey}`},
                 slotASignal,
                 slotBSignal,
                 morphMix,
@@ -232,12 +219,12 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     //    shaped by an ADSR driven by a slow 1 Hz 50% duty-cycle gate so the
     //    envelope actually reaches sustain and parameter edits are audible
     //    continuously. The "Hold note" button also sets the user gate high.
-    const baseHz = el.const({key: "preset-synth:baseHz", value: p.baseFreq});
+    const baseHz = el.const({key: "ps:baseHz", value: p.baseFreq});
     const oscHz = el.mul(baseHz, freqScale, el.const({value: 1 / 220})); // `freqScale` (40..2000) normalised against 220 Hz reference
 
     const gateNode = el.add(el.square(el.add(1, el.mul(100, el.latch(el.train(2), el.pinknoise())))), 1);
 
-    const osc = el.saw(oscHz);
+    const osc = el.add( el.mul(0.5, el.saw(oscHz)), el.mul(0.5, el.saw( el.add(oscHz, 11 )) ));
     const filtered = el.lowpass(cutoffHz, q, osc);
 
     // Use el.ge(gateNode, 1) to convert the [0, 2] square wave to a [0, 1] gate.
@@ -246,17 +233,33 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
 
     const voice = el.mul(filtered, envelope, presetGain);
 
-    const freqScope = el.scope({ name: FREQ_SCOPE_EVENT}, freqScale);
-    const cutoffScope = el.scope({name: CUTOFF_SCOPE_EVENT}, cutoffHz);
-    const voiceScope = el.scope({name: VOICE_SCOPE_EVENT}, voice);
+    const freqScope = el.extra.frameScope({ name: FREQ_SCOPE_EVENT, framelength: FRAME_LENGTH}, freqScale);
+    const cutoffScope = el.extra.frameScope({name: CUTOFF_SCOPE_EVENT, framelength: FRAME_LENGTH}, cutoffHz);
+    const voiceScope = el.extra.frameScope({name: VOICE_SCOPE_EVENT, framelength: FRAME_LENGTH}, voice);
 
     const masterLevel = el.sm(
-        el.const({key: "preset-synth:masterLevel", value: Math.max(0, Math.min(1, p.masterLevel))})
+        el.const({key: "ps:masterLevel", value: Math.max(0, Math.min(1, p.masterLevel))})
     );
 
     // Keep the writer and raw edit-frame scope alive in the graph without
     // audible signal. Start simple: devtools/canvas should show the exact
     // frame currently being edited.
+
+    const editFrameScope = el.extra.frameScope(
+        {
+            name: EDIT_FRAME_SCOPE_EVENT,
+            framelength: FRAME_LENGTH,
+        },
+        editFrame
+    );
+
+    const writer = el.extra.presetWrite(
+        {...BANK_PROPS, key: "ps:writer", writecounter: p.writeCounter},
+        writeSlotSignal,
+        editFrame
+    );
+
+
     const silentTaps =
         el.mul( 0,
         writer,
