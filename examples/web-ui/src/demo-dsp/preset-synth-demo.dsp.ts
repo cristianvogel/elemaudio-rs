@@ -256,8 +256,6 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
 
     const voice = el.mul(filtered, envelope, presetGain);
 
-    const freqScope = el.extra.frameScope({ name: FREQ_SCOPE_EVENT, framelength: FRAME_LENGTH}, freqScale);
-    const cutoffScope = el.extra.frameScope({name: CUTOFF_SCOPE_EVENT, framelength: FRAME_LENGTH}, cutoffHz);
     const voiceScope = el.extra.frameScope({name: VOICE_SCOPE_EVENT, framelength: FRAME_LENGTH}, voice);
 
     const masterLevel = el.sm(
@@ -296,8 +294,6 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
         writer,
         editFrameScope,
         activeFrameScope,
-        freqScope,
-        cutoffScope,
         voiceScope
     );
     const mono = el.mul(voice, masterLevel);
