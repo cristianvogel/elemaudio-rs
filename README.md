@@ -1,4 +1,4 @@
-# elemaudio-rs
+# elemaudiors
 
 Rust-native bindings for [Elementary Audio](https://www.elementary.audio/), with a
 matching JS/TS authoring surface published as `@elem-rs/core` and a set of
@@ -8,7 +8,7 @@ For detailed documentation about the core DSP blocks and for programming audio
 with Elementary Audio, see the official site by Nick Thompson:
 https://www.elementary.audio/
 
-Elementary Audio and elemaudio-rs both include DSP code by Geraint Luff,
+Elementary Audio and elemaudiors both include DSP code by Geraint Luff,
 Copyright 2022+ Signalsmith Audio Ltd, under the MIT License.
 
 > 👀 See also the sister project
@@ -50,7 +50,7 @@ Rust-native authoring layer and extending DSP with Rust-native node kinds.
 ## Layout
 
 ```
-elemaudio-rs/
+elemaudiors/
 ├── src/
 │   ├── authoring/            # Rust graph authoring surface
 │   │   ├── el.rs             # core el::* helpers
@@ -339,7 +339,7 @@ the base demos run without the resource server.
 ## Docs
 
 Rust API docs publish on GitHub Pages:
-https://cristianvogel.github.io/elemaudio-rs/
+https://cristianvogel.github.io/elemaudiors/
 
 "How we added" development logs under `docs/`:
 
