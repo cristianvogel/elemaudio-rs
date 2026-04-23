@@ -68,8 +68,6 @@ export interface PresetSynthParams {
     editFrame: number[];
     /** Which slot the write path targets. */
     writeSlot: number;
-    /** Morph source slot. */
-    slotA: number;
     /** Morph destination slot. */
     slotB: number;
     /** Morph mix in [0, 1]. */
@@ -155,6 +153,7 @@ function buildLaneFrame(values: NodeRepr_t[], frameKey: string): NodeRepr_t {
         );
     }
 
+
     return value;
 }
 
@@ -172,6 +171,7 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     //    save; the writer latches the slot and commits the current frame on
     //    the next frame boundary.
     const editFrame = buildEditFrame(p.editFrame);
+
     const writeSlotSignal = el.const({
         key: "ps:writeSlot",
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.writeSlot)))
@@ -180,10 +180,6 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
 
 
     // 2. Morph read for each lane. These lane values feed the audible synth.
-    const slotASignal = el.const({
-        key: "ps:slotA",
-        value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotA)))
-    });
     const slotBSignal = el.const({
         key: "ps:slotB",
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotB)))
@@ -195,11 +191,9 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
 
 
     function readLane(laneIndex: number, laneKey: string): NodeRepr_t {
-        return el.extra.presetMorph(
-                {...BANK_PROPS, key: `ps:morph:${laneKey}`},
-                slotASignal,
+        return el.extra.presetRead(
+                {...BANK_PROPS, key: `ps:read:${laneKey}`},
                 slotBSignal,
-                morphMix,
                 lanePhase(laneIndex)
         )
     }
@@ -222,14 +216,14 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     const gainNorm = mixLiveAndPreset(liveLane(LANE.GAIN, "gain"), readLane(LANE.GAIN, "gain"));
 
     const activeFrame = buildLaneFrame([
-        readLane(LANE.FREQ, "freq-frame"),
-        readLane(LANE.CUTOFF, "cutoff-frame"),
-        readLane(LANE.Q, "q-frame"),
-        readLane(LANE.ATTACK, "attack-frame"),
-        readLane(LANE.DECAY, "decay-frame"),
-        readLane(LANE.SUSTAIN, "sustain-frame"),
-        readLane(LANE.RELEASE, "release-frame"),
-        readLane(LANE.GAIN, "gain-frame"),
+        freqNorm,
+        cutoffNorm,
+        qNorm,
+        attackNorm,
+        decayNorm,
+        sustainNorm,
+        releaseNorm,
+        gainNorm,
     ], "ps:active-frame");
 
     // 3. Denormalise lanes into real DSP parameters.
@@ -247,11 +241,13 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     //    envelope actually reaches sustain and parameter edits are audible
     //    continuously. The "Hold note" button also sets the user gate high.
     const baseHz = el.const({key: "ps:baseHz", value: p.baseFreq});
+
     const oscHz = el.mul(baseHz, freqScale, el.const({value: 1 / 220})); // `freqScale` (40..2000) normalised against 220 Hz reference
 
-    const gateNode = el.add(el.square(el.add(1, el.mul(100, el.latch(el.train(2), el.pinknoise())))), 1);
+    const gateNode = el.add(el.square(5), 1);
 
-    const osc = el.add( el.mul(0.5, el.saw(oscHz)), el.mul(0.5, el.saw( el.add(oscHz, 11 )) ));
+    const osc = el.add( el.mul(0.5, el.blepsaw(oscHz)), el.mul(0.5, el.blepsaw( el.add(oscHz, 11 )) ));
+
     const filtered = el.lowpass(cutoffHz, q, osc);
 
     // Use el.ge(gateNode, 1) to convert the [0, 2] square wave to a [0, 1] gate.

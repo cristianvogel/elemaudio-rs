@@ -35,17 +35,7 @@ interface LaneControl {
   defaultNorm: number;
 }
 
-// Per-slot default presets give users something musical to compare on load.
-const DEFAULT_FRAMES: number[][] = [
-  // slot 0: low bass, short pluck
-  [0.15, 0.22, 0.4, 0.02, 0.3, 0.3, 0.3, 0.8],
-  // slot 1: mid lead, bright
-  [0.55, 0.75, 0.55, 0.1, 0.5, 0.55, 0.45, 0.7],
-  // slot 2: pad, slow
-  [0.35, 0.45, 0.35, 0.7, 0.6, 0.75, 0.85, 0.6],
-  // slot 3: fat mid, ducking filter
-  [0.45, 0.6, 0.75, 0.05, 0.7, 0.4, 0.55, 0.9],
-];
+const INITIAL_EDIT_FRAME = [0.25, 0.35, 0.4, 0.03, 0.3, 0.5, 0.35, 0.75];
 
 const layout = `
   <div class="panel">
@@ -122,18 +112,8 @@ const layout = `
       </div>
 
       <div class="row toggle-row">
-        <label class="toggle-label" for="slot-a">
-          <span>Morph slot A</span>
-          <span id="slot-a-value">0</span>
-        </label>
-        <select id="slot-a" class="toggle-select">
-          ${Array.from({ length: NUM_SLOTS }, (_, index) => `<option value="${index}">slot ${index}</option>`).join("")}
-        </select>
-      </div>
-
-      <div class="row toggle-row">
         <label class="toggle-label" for="slot-b">
-          <span>Morph slot B</span>
+          <span>Morph target slot</span>
           <span id="slot-b-value">1</span>
         </label>
         <select id="slot-b" class="toggle-select">
@@ -157,10 +137,9 @@ const layout = `
 
 // ---- state -----------------------------------------------------------------
 
-const editFrame = DEFAULT_FRAMES[0].slice();
-const savedFrames = DEFAULT_FRAMES.map((frame) => frame.slice());
+const editFrame = INITIAL_EDIT_FRAME.slice();
+const savedFrames: Array<number[] | null> = Array.from({ length: NUM_SLOTS }, () => null);
 let writeSlot = 0;
-let slotA = 0;
 let slotB = 1;
 let morphMix = 0;
 let writeCounter = 0;
@@ -171,15 +150,12 @@ let isStopped = false;
 
 let lastEditFrameSample: number[] = new Array(FRAME_LENGTH).fill(0);
 let lastActiveFrameSample: number[] = new Array(FRAME_LENGTH).fill(0);
-let bankSeeded = false;
 
 // ---- bindings (filled after initDemo) --------------------------------------
 
 let laneControls: LaneControl[] = [];
 let writeSlotSelect: HTMLSelectElement;
 let writeSlotValue: HTMLSpanElement;
-let slotASelect: HTMLSelectElement;
-let slotAValue: HTMLSpanElement;
 let slotBSelect: HTMLSelectElement;
 let slotBValue: HTMLSpanElement;
 let morphMixSlider: HTMLInputElement;
@@ -215,7 +191,6 @@ function params(): PresetSynthParams {
   return {
     editFrame: editFrame.slice(),
     writeSlot,
-    slotA,
     slotB,
     morphMix,
     writeCounter,
@@ -237,7 +212,6 @@ function updateReadouts() {
     control.readout.textContent = formatLaneValue(control, Number(control.slider.value));
   });
   writeSlotValue.textContent = String(writeSlot);
-  slotAValue.textContent = String(slotA);
   slotBValue.textContent = String(slotB);
   morphMixValue.textContent = `${Math.round(morphMix * 100)}%`;
   baseFreqValue.textContent = `${baseFreq.toFixed(0)} Hz`;
@@ -295,23 +269,12 @@ const { mustQuery: q, renderCurrentGraph } = initDemo({
   buildGraph: () => dspBuildGraph(params()),
   updateReadouts,
   onScopeEvent: handleScopeEvent,
-  onAudioReady: () => {
-    // Seed the preset bank once the worklet is live. A short timeout lets the
-    // harness complete its initial render before the explicit save passes run.
-    window.setTimeout(() => {
-      if (!bankSeeded) {
-        void seedBank();
-      }
-    }, 50);
-  }
 });
 
 // ---- wire controls ---------------------------------------------------------
 
 writeSlotSelect = q<HTMLSelectElement>("#write-slot");
 writeSlotValue = q<HTMLSpanElement>("#write-slot-value");
-slotASelect = q<HTMLSelectElement>("#slot-a");
-slotAValue = q<HTMLSpanElement>("#slot-a-value");
 slotBSelect = q<HTMLSelectElement>("#slot-b");
 slotBValue = q<HTMLSpanElement>("#slot-b-value");
 morphMixSlider = q<HTMLInputElement>("#morph-mix");
@@ -447,12 +410,6 @@ writeSlotSelect.addEventListener("change", () => {
   void renderCurrentGraph();
 });
 
-slotASelect.addEventListener("change", () => {
-  slotA = Number(slotASelect.value);
-  updateReadouts();
-  void renderCurrentGraph();
-});
-
 slotBSelect.addEventListener("change", () => {
   slotB = Number(slotBSelect.value);
   updateReadouts();
@@ -497,6 +454,8 @@ loadButton.addEventListener("click", async () => {
     presetStatus.textContent = `Loaded saved slot ${writeSlot} into the edit frame`;
     drawScope();
     await renderCurrentGraph();
+  } else {
+    presetStatus.textContent = `Slot ${writeSlot} is empty`;
   }
 });
 
@@ -510,38 +469,9 @@ startButton.addEventListener("click", async () => {
   // harness ensures audio and then calls renderCurrentGraph
 });
 
-// Seed all four slots by writing their defaults so morphing between slots is
-// immediately meaningful. Each pass increments writeCounter, which arms the
-// native writer for exactly one frame commit.
-const seedBank = async () => {
-  if (bankSeeded) {
-    return;
-  }
-
-  for (let slot = 0; slot < NUM_SLOTS; slot += 1) {
-    writeSlot = slot;
-    const defaults = savedFrames[slot];
-    if (!defaults) continue;
-    cloneIntoEditFrame(defaults);
-    writeCounter += 1;
-    await renderCurrentGraph();
-    // Give the audio thread enough time to cross at least one frame boundary.
-    await new Promise(resolve => setTimeout(resolve, 40));
-  }
-
-  writeSlot = 0;
-  cloneIntoEditFrame(savedFrames[0]);
-  writeSlotSelect.value = "0";
-  slotASelect.value = "0";
-  slotBSelect.value = "1";
-  updateReadouts();
-  bankSeeded = true;
-  presetStatus.textContent = `Seeded ${NUM_SLOTS} slots with demo presets`;
-};
-
 // Draw the default edit frame immediately so the scope is not blank before
 // the first scope event arrives from the audio thread.
 lastEditFrameSample = editFrame.slice();
-lastActiveFrameSample = savedFrames[0].slice();
+lastActiveFrameSample = new Array(FRAME_LENGTH).fill(0);
 
 drawScope();
