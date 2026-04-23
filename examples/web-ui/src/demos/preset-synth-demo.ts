@@ -8,7 +8,6 @@
 
 import { el } from "@elem-rs/core";
 import {
-  ACTIVE_FRAME_SCOPE_EVENT,
   BANK_METADATA,
   EDIT_FRAME_SCOPE_EVENT,
   FRAME_LENGTH,
@@ -265,10 +264,8 @@ type ScopePayload = {
 };
 
 function handleScopeEvent(event: unknown) {
-  console.log("[preset-synth] handleScopeEvent called with:", event);
   const payload = event as ScopePayload;
   if (!payload || typeof payload.source !== "string" || !Array.isArray(payload.data)) {
-    console.log("[preset-synth] payload check failed:", payload);
     return;
   }
 
@@ -285,7 +282,6 @@ function handleScopeEvent(event: unknown) {
 
   if (payload.source === EDIT_FRAME_SCOPE_EVENT) {
     lastEditFrameSample = frame;
-  } else if (payload.source === ACTIVE_FRAME_SCOPE_EVENT) {
     lastActiveFrameSample = frame;
   } else {
     return;
@@ -306,8 +302,7 @@ const { mustQuery: q, renderCurrentGraph } = initDemo({
         void seedBank();
       }
     }, 50);
-  },
-  persistKey: "no-persist",
+  }
 });
 
 // ---- wire controls ---------------------------------------------------------
@@ -411,15 +406,8 @@ function drawScope() {
   ctx.restore();
 }
 
-function clamp01(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  if (v < 0) return 0;
-  if (v > 1) return 1;
-  return v;
-}
 
 window.addEventListener("resize", scheduleScopeDraw);
-
 
 slotBSelect.value = String(slotB);
 

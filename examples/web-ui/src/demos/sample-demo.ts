@@ -4,13 +4,6 @@ import sampleUrl from "../../../demo-resources/115bpm_808_Beat_mono.wav?url";
 import irUrl from "../../../demo-resources/DEEPNESS.wav?url";
 import { buildGraph as dspBuildGraph } from "../demo-dsp/sample-demo.dsp";
 import WebRenderer from "../WebRenderer";
-import {
-  applyControlState,
-  attachPresetControls,
-  controlStorageKey,
-  createControlPresetManager,
-  readControlValue,
-} from "./control-presets";
 import "../style.css";
 
 const bundledSamplePath = "demo-resources/115bpm_808_Beat_mono.wav";
@@ -126,16 +119,6 @@ const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
 const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
 const status = mustQuery<HTMLDivElement>("#status");
-const controlsHost = mustQuery<HTMLDivElement>(".controls");
-const persistKey = `elemaudiors:demo:${location.pathname}:presets`;
-const presetManager = createControlPresetManager(persistKey);
-const presetControls = [
-  rateSlider,
-  blendSlider,
-  chopperThresholdSlider,
-  freqShiftHzSlider,
-  freqShiftFeedbackSlider,
-] as const;
 
 updateIrToggleLabel();
 
@@ -170,28 +153,6 @@ function updateIrToggleLabel() {
 
   toggleIrButton.disabled = irChannelPaths.length < 4;
   toggleIrButton.textContent = activeIrPairStart === 0 ? "Use IR pair 1/2" : "Use IR pair 3/4";
-}
-
-function persistCurrentControls() {
-  const state: Record<string, string | boolean> = {};
-
-  presetControls.forEach((control) => {
-    const key = controlStorageKey(control);
-    if (!key) return;
-    state[key] = readControlValue(control);
-  });
-
-  state["freqshift-zoom-mode"] = freqShiftFiveHzScale;
-  presetManager.saveCurrentState(state);
-}
-
-function restoreCurrentControls() {
-  const state = presetManager.loadCurrentState();
-  applyControlState([...presetControls], state);
-
-  if (typeof state["freqshift-zoom-mode"] === "boolean") {
-    freqShiftFiveHzScale = state["freqshift-zoom-mode"];
-  }
 }
 
 async function updateBlend() {
@@ -351,9 +312,7 @@ function buildGraph(rate: number): NodeRepr_t[] {
   });
 }
 
-restoreCurrentControls();
 configureFreqShiftSlider(false);
-persistCurrentControls();
 
 async function ensureAudio() {
   if (audioContext && renderer) {
@@ -380,32 +339,6 @@ async function renderCurrentGraph() {
 
   await renderer.render(...buildGraph(rate));
 }
-
-attachPresetControls({
-  controlsHost,
-  controls: [...presetControls],
-  storageKey: persistKey,
-  updateReadouts: () => {
-    configureFreqShiftSlider(false);
-    rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
-    blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
-    chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
-    freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
-    freqShiftFeedbackValue.textContent = `${Number(freqShiftFeedbackSlider.value)}%`;
-  },
-  rerender: async () => {
-    persistCurrentControls();
-    await renderCurrentGraph();
-  },
-  isAudioRunning: () => audioContext?.state === "running" && renderer !== null,
-  readExtraState: () => ({ "freqshift-zoom-mode": freqShiftFiveHzScale }),
-  applyExtraState: (state) => {
-    if (typeof state["freqshift-zoom-mode"] === "boolean") {
-      freqShiftFiveHzScale = state["freqshift-zoom-mode"];
-      configureFreqShiftSlider(false);
-    }
-  },
-});
 
 startButton.addEventListener("click", async () => {
   isStopped = false;

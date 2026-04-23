@@ -10,15 +10,9 @@
 import { el, type NodeRepr_t } from "@elem-rs/core";
 import WebRenderer from "../WebRenderer";
 import "../style.css";
-import {
-  ControlLike,
-  applyControlState,
-  attachPresetControls,
-  controlStorageKey,
-  createControlPresetManager,
-  readControlValue,
-} from "./control-presets";
 import { installDevtoolsBridge, wireRendererScopeEvents } from "./devtools/bridge";
+
+type ControlLike = HTMLInputElement | HTMLSelectElement;
 
 export type BuildGraph = () => NodeRepr_t[];
 
@@ -44,11 +38,6 @@ export interface DemoConfig {
   resetChecks?: Map<HTMLInputElement, boolean>;
   /** Optional callback invoked once after audio context and renderer are initialized. */
   onAudioReady?: (renderer: WebRenderer) => Promise<void> | void;
-  /**
-   * Optional persistence key. When omitted, derived from pathname
-   * so each demo page gets its own localStorage bucket automatically.
-   */
-  persistKey?: string;
 }
 
 /**
@@ -83,36 +72,8 @@ export function initDemo(config: DemoConfig) {
 
   let audioContext: AudioContext | null = null;
   let renderer: WebRenderer | null = null;
-  const persistKey = config.persistKey ?? `elemaudiors:demo:${location.pathname}`;
-  const persistenceEnabled = persistKey !== "no-persist";
-  const presetManager = persistenceEnabled ? createControlPresetManager(`${persistKey}:presets`) : null;
   const defaultValues = new Map<ControlLike, string>();
   const defaultChecks = new Map<HTMLInputElement, boolean>();
-
-  function loadPersistedState(): Record<string, string | boolean> {
-    if (!presetManager) return {};
-    return presetManager.loadCurrentState();
-  }
-
-  function savePersistedState(state: Record<string, string | boolean>) {
-    if (!presetManager) return;
-    presetManager.saveCurrentState(state);
-  }
-
-  function persistControl(control: ControlLike) {
-    if (!persistenceEnabled) return;
-    const key = controlStorageKey(control);
-    if (!key) return;
-    const state = loadPersistedState();
-    state[key] = readControlValue(control);
-    savePersistedState(state);
-  }
-
-  function restoreControls(controls: ControlLike[]) {
-    if (!persistenceEnabled) return;
-    const state = loadPersistedState();
-    applyControlState(controls, state);
-  }
 
   async function ensureAudio() {
     if (audioContext && renderer) return;
@@ -201,7 +162,6 @@ export function initDemo(config: DemoConfig) {
     }
 
     config.updateReadouts();
-    persistControl(control);
 
     if (renderer && audioContext?.state === "running") {
       void renderCurrentGraph();
@@ -219,22 +179,8 @@ export function initDemo(config: DemoConfig) {
       defaultValues.set(control, initialValue);
     });
 
-    restoreControls(controls);
-
-    if (presetManager && app) {
-      attachPresetControls({
-        controlsHost: app.querySelector<HTMLElement>(".controls") ?? app,
-        controls,
-        storageKey: `${persistKey}:presets`,
-        updateReadouts: config.updateReadouts,
-        rerender: renderCurrentGraph,
-        isAudioRunning: () => audioContext?.state === "running" && renderer !== null,
-      });
-    }
-
     controls.forEach((control) => {
       const onChange = () => {
-        persistControl(control);
         config.updateReadouts();
         if (renderer && audioContext?.state === "running") {
           void renderCurrentGraph();

@@ -24,7 +24,6 @@ export const FRAME_LENGTH = 8;
 export const NUM_SLOTS = 4;
 export const BANK_PATH = "preset-synth:bank";
 export const EDIT_FRAME_SCOPE_EVENT = "preset-synth:editScope";
-export const ACTIVE_FRAME_SCOPE_EVENT = "preset-synth:activeScope";
 export const FREQ_SCOPE_EVENT = "preset-synth:freqHz";
 export const CUTOFF_SCOPE_EVENT = "preset-synth:cutoffHz";
 export const VOICE_SCOPE_EVENT = "preset-synth:voice";
@@ -143,21 +142,6 @@ function buildLiveLane(editFrame: number[], laneIndex: number, laneKey: string):
     });
 }
 
-function buildLaneFrame(values: NodeRepr_t[]): NodeRepr_t {
-    const laneIndex = el.mod(el.time(), FRAME_LENGTH);
-
-    let value = values[FRAME_LENGTH - 1] ?? el.const({value: 0});
-    for (let lane = FRAME_LENGTH - 2; lane >= 0; lane -= 1) {
-        value = el.select(
-            el.le(laneIndex, el.const({value: lane + 0.5})),
-            values[lane] ?? el.const({value: 0}),
-            value
-        );
-    }
-
-    return value;
-}
-
 // ---------------------------------------------------------------------------
 // main graph
 // ---------------------------------------------------------------------------
@@ -177,24 +161,22 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.writeSlot)))
     });
 
-    // Tap a test signal with frameScope to verify the node fires at all
     const editFrameScope = el.extra.frameScope(
         {
             key: "preset-synth:editScope",
             framelength: FRAME_LENGTH,
             name: EDIT_FRAME_SCOPE_EVENT
         },
-        el.pinknoise()
+        editFrame
     );
 
     const writer = el.extra.presetWrite(
-        {...BANK_PROPS, key: "preset-synth:writer"},
+        {...BANK_PROPS, key: "preset-synth:writer", writecounter: p.writeCounter},
         writeSlotSignal,
         editFrame
     );
 
-    // 2. Morph read for each lane. These lane values feed both the audio path
-    //    and the live scope so the UI reflects the current audible state.
+    // 2. Morph read for each lane. These lane values feed the audible synth.
     const slotASignal = el.const({
         key: "preset-synth:slotA",
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.slotA)))
@@ -246,26 +228,6 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     const releaseS = denormExp(releaseNorm, 0.01, 4);
     const presetGain = denormLin(gainNorm, 0, 1);
 
-    const activeFrame = buildLaneFrame([
-        freqNorm,
-        cutoffNorm,
-        qNorm,
-        attackNorm,
-        decayNorm,
-        sustainNorm,
-        releaseNorm,
-        gainNorm,
-    ]);
-
-    const activeFrameScope = el.extra.frameScope(
-        {
-            key: "preset-synth:activeScope",
-            framelength: FRAME_LENGTH,
-            name: ACTIVE_FRAME_SCOPE_EVENT
-        },
-        activeFrame
-    );
-
     // 4. Musical synth: saw oscillator through a resonant lowpass,
     //    shaped by an ADSR driven by a slow 1 Hz 50% duty-cycle gate so the
     //    envelope actually reaches sustain and parameter edits are audible
@@ -292,8 +254,9 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
         el.const({key: "preset-synth:masterLevel", value: Math.max(0, Math.min(1, p.masterLevel))})
     );
 
-    // Keep the scope alive in the graph without audible signal, matching the
-    // known-good frameScope retention pattern.
+    // Keep the writer and raw edit-frame scope alive in the graph without
+    // audible signal. Start simple: devtools/canvas should show the exact
+    // frame currently being edited.
     const silentTaps =
         el.mul( 0,
         writer,
@@ -304,8 +267,7 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     );
     const mono = el.mul(voice, masterLevel);
 
-    // Temporarily route editFrameScope directly to test if it fires
-    return [el.add(silentTaps, editFrameScope, mono), mono];
+    return [el.add(silentTaps, mono), mono];
 }
 /**
  * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
