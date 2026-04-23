@@ -17,6 +17,10 @@ export default class WebRenderer extends EventEmitter {
   private _timer: number | null = null;
 
   public context: AudioContext | null = null;
+  
+  public isReady(): boolean {
+    return this._renderer !== null;
+  }
 
   private _makeRenderError(
     phase: string,

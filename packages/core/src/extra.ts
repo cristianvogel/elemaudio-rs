@@ -1660,7 +1660,7 @@ export interface PresetBankMetadata extends Record<string, unknown> {
   /** Declared lanes for this bank (by index). */
   lanes?: readonly PresetLaneMetadata[];
   /** Optional human-friendly slot names, parallel to slot indices. */
-  slotNames?: string[];
+  slotNames?: readonly string[];
 }
 
 /** Props shared by preset bank nodes. */

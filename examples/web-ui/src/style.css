@@ -562,3 +562,61 @@ button:disabled {
         background-position: 100% 50%;
     }
 }
+
+.preset-scope-wrap {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.preset-scope-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: #9fb0c3;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.preset-scope-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: normal;
+    margin-right: 12px;
+    color: #9fb0c3;
+}
+
+.preset-scope-legend::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: rgba(110, 168, 254, 0.45);
+}
+
+.preset-scope-legend.active::before {
+    background: rgba(139, 92, 246, 0.85);
+}
+
+.preset-scope {
+    width: 100%;
+    height: 160px;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #0b0f14;
+}
+
+#scope-legend {
+    display: inline-flex;
+    gap: 12px;
+}

@@ -128,17 +128,28 @@ export function initDemo(config: DemoConfig) {
   }
 
   async function renderCurrentGraph() {
-    if (!renderer || !audioContext) return;
+    if (!renderer || !audioContext || !renderer.isReady()) return;
     await audioContext.resume();
 
-    if (config.renderOptions) {
-      const result = await renderer.renderWithOptions(config.renderOptions, ...config.buildGraph());
-      config.updateReadouts();
-      status.textContent = JSON.stringify(result);
-    } else {
-      const result = await renderer.render(...config.buildGraph());
-      config.updateReadouts();
-      status.textContent = JSON.stringify(result);
+    try {
+      if (config.renderOptions) {
+        const result = await renderer.renderWithOptions(config.renderOptions, ...config.buildGraph());
+        config.updateReadouts();
+        status.textContent = JSON.stringify(result);
+      } else {
+        const result = await renderer.render(...config.buildGraph());
+        config.updateReadouts();
+        status.textContent = JSON.stringify(result);
+      }
+    } catch (error) {
+      // Render rejections (for example unknown node types) would otherwise
+      // be swallowed as unhandled promise rejections on `void` calls from
+      // input listeners. Surface them in the demo status bar so the user
+      // can see what went wrong.
+      const message = error instanceof Error ? error.message : JSON.stringify(error);
+      status.textContent = `Render failed: ${message}`;
+      // eslint-disable-next-line no-console
+      console.error("renderCurrentGraph failed", error);
     }
   }
 

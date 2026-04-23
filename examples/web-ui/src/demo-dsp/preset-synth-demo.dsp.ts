@@ -22,6 +22,8 @@ import {el} from "@elem-rs/core";
 export const FRAME_LENGTH = 8;
 export const NUM_SLOTS = 4;
 export const BANK_PATH = "preset-synth:bank";
+export const EDIT_FRAME_SCOPE_EVENT = "preset-synth:editFrameScope";
+export const ACTIVE_FRAME_SCOPE_EVENT = "preset-synth:activeFrameScope";
 
 export const LANE = {
   FREQ: 0,
@@ -70,8 +72,6 @@ export interface PresetSynthParams {
   morphMix: number;
   /** Monotonic counter that increments when the user clicks "Save". */
   writeCounter: number;
-  /** Gate used to trigger the ADSR envelope. */
-  gate: number;
   /** Musical base frequency in Hz (before preset frequency modulation). */
   baseFreq: number;
   /** Master output level in 0..1. */
@@ -86,11 +86,12 @@ export interface PresetSynthParams {
 
 function denormExp(norm: NodeRepr_t, min: number, max: number): NodeRepr_t {
   // value = min * (max / min)^norm
-  return el.mul(min, el.pow(max / min, norm));
+  // Using el.const for numeric literals to ensure correct node resolution
+  return el.mul(el.const({ value: min }), el.pow(el.const({ value: max / min }), norm));
 }
 
 function denormLin(norm: NodeRepr_t, min: number, max: number): NodeRepr_t {
-  return el.add(min, el.mul(max - min, norm));
+  return el.add(el.const({ value: min }), el.mul(el.const({ value: max - min }), norm));
 }
 
 function lanePhase(laneIndex: number): NodeRepr_t {
@@ -156,6 +157,17 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     editFrame,
   );
 
+  // Tap the edit-frame signal with a frameScope so the UI can visualise
+  // exactly the frame that the writer is currently capturing.
+  const editFrameScope = el.extra.frameScope(
+    {
+      key: "preset-synth:editScope",
+      framelength: FRAME_LENGTH,
+      name: EDIT_FRAME_SCOPE_EVENT,
+    },
+    editFrame,
+  );
+
   // 2. Morph read for each lane. Per-lane phases are constants pointing at
   //    the sample offset for that lane; the reader linearly interpolates
   //    inside a slot, so using the exact lane phase returns that lane's
@@ -171,9 +183,11 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
   const morphMix = el.sm(
     el.const({ key: "preset-synth:morphMix", value: Math.max(0, Math.min(1, p.morphMix)) }),
   );
+  
+  const smoothTime = el.tau2pole(0.02);
 
   function readLane(laneIndex: number, laneKey: string): NodeRepr_t {
-    return el.sm(
+    return el.smooth( smoothTime,
       el.extra.presetMorph(
         { ...BANK_PROPS, key: `preset-synth:morph:${laneKey}` },
         slotASignal,
@@ -208,14 +222,16 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
   //    envelope actually reaches sustain and parameter edits are audible
   //    continuously. The "Hold note" button also sets the user gate high.
   const baseHz = el.const({ key: "preset-synth:baseHz", value: p.baseFreq });
-  const oscHz = el.mul(baseHz, freqScale, 1 / 220); // `freqScale` (40..2000) normalised against 220 Hz reference
+  const oscHz = el.mul(baseHz, freqScale, el.const({ value: 1 / 220 })); // `freqScale` (40..2000) normalised against 220 Hz reference
 
-    const gateNode = el.square(1);
+  const gateNode = el.add(el.square(1), 1);
 
   const osc = el.saw(oscHz);
   const filtered = el.lowpass(cutoffHz, q, osc);
 
-  const envelope = el.adsr(attackS, decayS, sustain, releaseS, gateNode);
+  // Use el.ge(gateNode, 1) to convert the [0, 2] square wave to a [0, 1] gate.
+  // el.ge is the correct helper for "greater than or equal to".
+  const envelope = el.adsr(attackS, decayS, sustain, releaseS, el.ge(gateNode, 1));
 
   const voice = el.mul(filtered, envelope, presetGain);
 
@@ -223,12 +239,38 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     el.const({ key: "preset-synth:masterLevel", value: Math.max(0, Math.min(1, p.masterLevel)) }),
   );
 
-  // Keep the writer alive in the graph without audible signal, same pattern
-  // as `frameWriteRAM` demos. `writeCounter` is unused on the audio side
-  // directly — the UI writes the edit frame contents continuously, and each
-  // slot change re-triggers frame capture at the next boundary.
-  const silentWriterTap = el.mul(writer, 0);
+  // Sweep every lane of the current morph result once per frame, so the
+  // active-frame scope sees the same lane ordering as the edit-frame scope.
+  // `el.mod(el.time(), FL) / (FL - 1)` produces a 0..1 phase that hits
+  // lane centres for frame offsets 0..FL-1.
+  const activeFramePhase = el.div(
+    el.mod(el.time(), FRAME_LENGTH),
+    el.const({ value: FRAME_LENGTH - 1 }),
+  );
+  const activeFrameSignal = el.extra.presetMorph(
+    { ...BANK_PROPS, key: "preset-synth:activeScopeRead" },
+    slotASignal,
+    slotBSignal,
+    morphMix,
+    activeFramePhase,
+  );
+  const activeFrameScope = el.extra.frameScope(
+    {
+      key: "preset-synth:activeScope",
+      framelength: FRAME_LENGTH,
+      name: ACTIVE_FRAME_SCOPE_EVENT,
+    },
+    activeFrameSignal,
+  );
+
+  // Keep the writer and both scopes alive in the graph without audible
+  // signal, same pattern as `frameWriteRAM` demos. The UI reads the scope
+  // events to redraw the preset bars whenever a frame is committed.
+  const silentTaps = el.mul(
+    el.const({ value: 0 }),
+    el.add(writer, editFrameScope, activeFrameScope),
+  );
   const mono = el.mul(voice, masterLevel);
 
-  return [mono, el.add(silentWriterTap, mono)];
+  return [mono, el.add(silentTaps, mono)];
 }

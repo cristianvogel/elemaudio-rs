@@ -8,7 +8,10 @@
 
 import { el } from "@elem-rs/core";
 import {
+  ACTIVE_FRAME_SCOPE_EVENT,
   BANK_METADATA,
+  EDIT_FRAME_SCOPE_EVENT,
+  FRAME_LENGTH,
   NUM_SLOTS,
   type PresetSynthParams,
   buildGraph as dspBuildGraph,
@@ -60,7 +63,17 @@ const layout = `
       <div class="button-row">
         <button id="start" class="state-button">Start audio</button>
         <button id="stop" class="state-button">Stop audio</button>
+      </div>
 
+      <div class="preset-scope-wrap">
+        <div class="preset-scope-title">
+          <span>Preset frame scope</span>
+          <span id="scope-legend">
+            <span class="preset-scope-legend edit">edit</span>
+            <span class="preset-scope-legend active">morph</span>
+          </span>
+        </div>
+        <canvas id="preset-scope" class="preset-scope" width="640" height="160"></canvas>
       </div>
 
       <div class="row">
@@ -155,6 +168,10 @@ let baseFreq = 220;
 let masterLevel = 0.5;
 let isStopped = false;
 
+let lastEditFrameSample: number[] = new Array(FRAME_LENGTH).fill(0);
+let lastActiveFrameSample: number[] = new Array(FRAME_LENGTH).fill(0);
+let rendererReady = false;
+
 // ---- bindings (filled after initDemo) --------------------------------------
 
 let laneControls: LaneControl[] = [];
@@ -172,8 +189,8 @@ let masterLevelSlider: HTMLInputElement;
 let masterLevelValue: HTMLSpanElement;
 let saveButton: HTMLButtonElement;
 let loadButton: HTMLButtonElement;
-let gateButton: HTMLButtonElement;
 let stopButton: HTMLButtonElement;
+let startButton: HTMLButtonElement;
 let presetStatus: HTMLDivElement;
 
 function formatLaneValue(control: LaneControl, value: number): string {
@@ -201,7 +218,6 @@ function params(): PresetSynthParams {
     slotB,
     morphMix,
     writeCounter,
-    gate,
     baseFreq,
     masterLevel,
     isStopped,
@@ -234,10 +250,44 @@ function syncSlidersFromEditFrame() {
 
 // ---- initialise the demo through the shared harness ------------------------
 
+type ScopePayload = {
+  source?: string;
+  data?: number[][];
+};
+
+function handleScopeEvent(event: unknown) {
+  const payload = event as ScopePayload;
+  if (!payload || typeof payload.source !== "string" || !Array.isArray(payload.data)) {
+    return;
+  }
+
+  const channel = payload.data[0];
+  if (!Array.isArray(channel) || channel.length === 0) {
+    return;
+  }
+
+  const frame = channel.slice(0, FRAME_LENGTH);
+  // Pad short frames so the renderer always has FRAME_LENGTH entries.
+  while (frame.length < FRAME_LENGTH) {
+    frame.push(0);
+  }
+
+  if (payload.source === EDIT_FRAME_SCOPE_EVENT) {
+    lastEditFrameSample = frame;
+  } else if (payload.source === ACTIVE_FRAME_SCOPE_EVENT) {
+    lastActiveFrameSample = frame;
+  } else {
+    return;
+  }
+
+  scheduleScopeDraw();
+}
+
 const { mustQuery: q, renderCurrentGraph } = initDemo({
   layout,
   buildGraph: () => dspBuildGraph(params()),
   updateReadouts,
+  onScopeEvent: handleScopeEvent,
   persistKey: "no-persist",
 });
 
@@ -257,8 +307,97 @@ masterLevelSlider = q<HTMLInputElement>("#master-level");
 masterLevelValue = q<HTMLSpanElement>("#master-level-value");
 saveButton = q<HTMLButtonElement>("#save-preset");
 loadButton = q<HTMLButtonElement>("#load-preset");
+startButton = q<HTMLButtonElement>("#start");
 stopButton = q<HTMLButtonElement>("#stop");
 presetStatus = q<HTMLDivElement>("#preset-status");
+const scopeCanvas = q<HTMLCanvasElement>("#preset-scope");
+
+// ---- scope drawing --------------------------------------------------------
+
+let scopeDrawScheduled = false;
+
+function scheduleScopeDraw() {
+  if (scopeDrawScheduled) return;
+  scopeDrawScheduled = true;
+  requestAnimationFrame(() => {
+    scopeDrawScheduled = false;
+    drawScope();
+  });
+}
+
+function drawScope() {
+  const ctx = scopeCanvas.getContext("2d");
+  if (!ctx) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = scopeCanvas.clientWidth || scopeCanvas.width;
+  const cssHeight = scopeCanvas.clientHeight || scopeCanvas.height;
+  const width = Math.max(1, Math.round(cssWidth * dpr));
+  const height = Math.max(1, Math.round(cssHeight * dpr));
+
+  if (scopeCanvas.width !== width || scopeCanvas.height !== height) {
+    scopeCanvas.width = width;
+    scopeCanvas.height = height;
+  }
+
+  ctx.save();
+  ctx.scale(dpr, dpr);
+
+  // Background + grid
+  ctx.fillStyle = "#0b0f14";
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+  ctx.lineWidth = 1;
+  for (let y = 0; y <= 4; y += 1) {
+    const yy = (y / 4) * cssHeight;
+    ctx.beginPath();
+    ctx.moveTo(0, yy);
+    ctx.lineTo(cssWidth, yy);
+    ctx.stroke();
+  }
+
+  const padding = 8;
+  const laneWidth = (cssWidth - padding * 2) / FRAME_LENGTH;
+  const barInnerGap = Math.max(2, laneWidth * 0.1);
+  const halfBarWidth = Math.max(4, laneWidth * 0.35);
+
+  for (let lane = 0; lane < FRAME_LENGTH; lane += 1) {
+    const laneX = padding + lane * laneWidth + laneWidth / 2;
+    const editVal = clamp01(lastEditFrameSample[lane] ?? 0);
+    const activeVal = clamp01(lastActiveFrameSample[lane] ?? 0);
+
+    const editH = editVal * (cssHeight - padding * 2);
+    const activeH = activeVal * (cssHeight - padding * 2);
+
+    // Edit (ghosted left half of the lane)
+    ctx.fillStyle = "rgba(110, 168, 254, 0.45)";
+    ctx.fillRect(laneX - halfBarWidth, cssHeight - padding - editH, halfBarWidth - barInnerGap / 2, editH);
+
+    // Active / morph (solid right half)
+    ctx.fillStyle = "rgba(139, 92, 246, 0.85)";
+    ctx.fillRect(laneX + barInnerGap / 2, cssHeight - padding - activeH, halfBarWidth - barInnerGap / 2, activeH);
+
+    // Lane label
+    ctx.fillStyle = "#9fb0c3";
+    ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.textAlign = "center";
+    const laneMeta = BANK_METADATA.lanes[lane];
+    const label = laneMeta ? laneMeta.name : `L${lane}`;
+    ctx.fillText(label, laneX, cssHeight - 2);
+  }
+
+  ctx.restore();
+}
+
+function clamp01(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return v;
+}
+
+window.addEventListener("resize", scheduleScopeDraw);
+scheduleScopeDraw();
 
 slotBSelect.value = String(slotB);
 
@@ -276,7 +415,6 @@ laneControls = LANES.map((lane) => {
     slider,
     readout,
     name: lane.name,
-    unit: lane.unit,
     min: lane.min ?? 0,
     max: lane.max ?? 1,
     taper,
@@ -337,19 +475,16 @@ masterLevelSlider.addEventListener("input", () => {
 });
 
 
-const releaseGate = () => {
-  if (gate !== 0) {
-    gate = 0;
-    void renderCurrentGraph();
-  }
-};
-
 
 saveButton.addEventListener("click", async () => {
   syncEditFrameFromSliders();
   writeCounter += 1;
   presetStatus.textContent = `Saved edit frame into slot ${writeSlot} (write #${writeCounter})`;
-  await renderCurrentGraph();
+  if (isStopped) {
+    await renderCurrentGraph();
+  } else {
+    void renderCurrentGraph();
+  }
 });
 
 loadButton.addEventListener("click", async () => {
@@ -361,24 +496,33 @@ loadButton.addEventListener("click", async () => {
     syncSlidersFromEditFrame();
     updateReadouts();
     presetStatus.textContent = `Loaded preset defaults for slot ${writeSlot} into edit frame`;
-    await renderCurrentGraph();
+    if (isStopped) {
+      await renderCurrentGraph();
+    } else {
+      void renderCurrentGraph();
+    }
   }
 });
 
 stopButton.addEventListener("click", async () => {
   isStopped = true;
-  await renderCurrentGraph();
+  // Use stopAudio from harness if we want a clean fade,
 });
 
-const startButton = q<HTMLButtonElement>("#start");
-startButton.addEventListener("click", () => {
+startButton.addEventListener("click", async () => {
   isStopped = false;
+  // harness ensures audio and then calls renderCurrentGraph
 });
 
 // On first load, seed all four slots by writing their defaults so morphing
 // between slots is immediately meaningful. Each call increments writeCounter
 // to force the graph to rebuild, so the native writer sees the new frame.
-(async () => {
+const seedBank = async () => {
+  // Wait until renderer is initialized
+  while (!rendererReady) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
   for (let slot = 0; slot < NUM_SLOTS; slot += 1) {
     writeSlot = slot;
     const defaults = DEFAULT_FRAMES[slot];
@@ -387,6 +531,9 @@ startButton.addEventListener("click", () => {
       editFrame[i] = defaults[i] ?? 0;
     }
     writeCounter += 1;
+    await renderCurrentGraph();
+    // Small delay to ensure the audio thread captures the frame
+    await new Promise(resolve => setTimeout(resolve, 20));
   }
 
   writeSlot = 0;
@@ -399,4 +546,4 @@ startButton.addEventListener("click", () => {
   slotBSelect.value = "1";
   updateReadouts();
   presetStatus.textContent = `Seeded ${NUM_SLOTS} slots with demo presets`;
-})();
+};
