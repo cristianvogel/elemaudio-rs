@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs modal resonator bank demo — UI shell.
+ * elemaudiors modal resonator bank demo — UI shell.
  *
  * DSP lives in `../demo-dsp/resonator-bank-demo.dsp.ts`. This file wires
  * the control panel, reads slider values, and renders the graph.
@@ -29,7 +29,7 @@ const layout = `
     </div>
   </div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>modal stiff-string resonator bank</h3>
     <p>
       A modal bank built from stiff-string maths. Each partial is a

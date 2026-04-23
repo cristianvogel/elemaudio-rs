@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs ramp00 one-shot demo
+ * elemaudiors ramp00 one-shot demo
  *
  * Shows the sample-accurate behavior of `el.extra.ramp00` and the effect
  * of its `blocking` prop. A stochastic trigger source (latched random gate)
@@ -24,7 +24,7 @@ const layout = `
   <elemaudio-oscilloscope id="scope" zoom="16"></elemaudio-oscilloscope>
   <div class="scope-title"><p>ramp00 output (no audio)</p></div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>ramp00 &mdash; sample-rate one-shot with blocked retrigger</h3>
     <p>
       A stochastic trigger source <code>el.ge(el.latch(el.train(rate), el.rand()), threshold)</code>

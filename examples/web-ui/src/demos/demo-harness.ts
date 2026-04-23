@@ -1,5 +1,5 @@
 /**
- * Shared demo harness for elemaudio-rs web-ui demos.
+ * Shared demo harness for elemaudiors web-ui demos.
  *
  * Extracts the repeated boilerplate so each demo only defines:
  *  - layout HTML
@@ -32,6 +32,17 @@ declare global {
       bridgeReady: boolean;
       updatedAt: number;
       eventsBySource: Record<string, DevtoolsScopeEvent>;
+      /**
+       * Clears held tracked min/max for one source so the next block
+       * re-seeds it. Passing no argument resets every source.
+       */
+      resetRange: (source?: string) => void;
+      /**
+       * Forces held tracked min/max to the given clamped range for one
+       * source. Passing no source clamps every source. Used by the panel
+       * when the user pins a source to Audio [-1..1] mode.
+       */
+      clampRange: (min: number, max: number, source?: string) => void;
     };
   }
 }
@@ -45,25 +56,100 @@ type DevtoolsScopeEvent = {
   sessionId: string;
   graphId: string;
   source: string;
-  timestampMs: number;
+  seq?: number;
   sampleRate?: number;
   channelCount?: number;
   channels?: unknown;
+  /** Lowest sample value ever observed on this source since session start. */
+  trackedMin?: number;
+  /** Highest sample value ever observed on this source since session start. */
+  trackedMax?: number;
+  /** Lowest sample value in the most recent block. */
+  blockMin?: number;
+  /** Highest sample value in the most recent block. */
+  blockMax?: number;
 };
 
 // Cache one latest event per named scope source. The panel only needs the most
 // recent block/frame for sparkline rendering and reconnect replay.
 const devtoolsScopeCache = new Map<string, DevtoolsScopeEvent>();
+// Per-source held min/max across the lifetime of the session. The panel reads
+// these directly from each event, so range logic lives next to the raw
+// samples and is immune to panel-side deduplication or polling cadence.
+const devtoolsScopeRanges = new Map<string, { min: number; max: number }>();
+// Per-source monotonic event counter used by the panel for dedup.
+const devtoolsScopeSeq = new Map<string, number>();
+// Sources whose tracked range is pinned by the panel. While pinned, the
+// producer stops folding block extremes into the held range so the clamp
+// survives future audio blocks. Re-entering adaptive mode in the panel
+// unpins the source via resetRange().
+const devtoolsScopePinned = new Set<string>();
 let devtoolsPanelListenerInstalled = false;
 
 // Keep a JSON-safe mirror on window for the devtools panel. This is the most
 // reliable bridge in this dev-only setup because the panel can read it directly
 // from the inspected page without depending on extension message routing.
+function resetDevtoolsRange(source?: string) {
+  if (typeof source === "string" && source.length > 0) {
+    devtoolsScopeRanges.delete(source);
+    devtoolsScopePinned.delete(source);
+    const cached = devtoolsScopeCache.get(source);
+    if (cached) {
+      devtoolsScopeCache.set(source, {
+        ...cached,
+        trackedMin: undefined,
+        trackedMax: undefined,
+      });
+    }
+    return;
+  }
+
+  devtoolsScopeRanges.clear();
+  devtoolsScopePinned.clear();
+  for (const [key, cached] of devtoolsScopeCache.entries()) {
+    devtoolsScopeCache.set(key, {
+      ...cached,
+      trackedMin: undefined,
+      trackedMax: undefined,
+    });
+  }
+}
+
+function clampDevtoolsRange(min: number, max: number, source?: string) {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+    return;
+  }
+
+  const applyToSource = (key: string) => {
+    devtoolsScopeRanges.set(key, { min, max });
+    devtoolsScopePinned.add(key);
+    const cached = devtoolsScopeCache.get(key);
+    if (cached) {
+      devtoolsScopeCache.set(key, {
+        ...cached,
+        trackedMin: min,
+        trackedMax: max,
+      });
+    }
+  };
+
+  if (typeof source === "string" && source.length > 0) {
+    applyToSource(source);
+    return;
+  }
+
+  for (const key of devtoolsScopeCache.keys()) {
+    applyToSource(key);
+  }
+}
+
 function syncDevtoolsCacheToWindow() {
   window.__ELEMAUDIO_DEBUG_CACHE__ = {
     bridgeReady: true,
     updatedAt: performance.now(),
     eventsBySource: Object.fromEntries(devtoolsScopeCache.entries()),
+    resetRange: resetDevtoolsRange,
+    clampRange: clampDevtoolsRange,
   };
 }
 
@@ -107,14 +193,10 @@ function ensureDevtoolsPanelListener() {
       sessionId: location.pathname,
       graphId: location.pathname,
       source: "bridge",
-      timestampMs: performance.now(),
     });
 
     for (const cachedEvent of devtoolsScopeCache.values()) {
-      postDevtoolsEvent({
-        ...cachedEvent,
-        timestampMs: performance.now(),
-      });
+      postDevtoolsEvent(cachedEvent);
     }
 
     syncDevtoolsCacheToWindow();
@@ -138,6 +220,65 @@ function forwardScopeEventToDevtools(event: unknown) {
     return;
   }
 
+  // Scan channel[0] once for this block's extremes. Doing it at the producer
+  // keeps tracked min/max tied to actual rendered audio, immune to panel
+  // polling cadence or dedup quirks.
+  const firstChannel = payload.data[0];
+  let blockMin = Number.POSITIVE_INFINITY;
+  let blockMax = Number.NEGATIVE_INFINITY;
+  if (Array.isArray(firstChannel)) {
+    for (let i = 0; i < firstChannel.length; i += 1) {
+      const v = Number(firstChannel[i]);
+      if (!Number.isFinite(v)) continue;
+      if (v < blockMin) blockMin = v;
+      if (v > blockMax) blockMax = v;
+    }
+  } else if (firstChannel && typeof firstChannel === "object") {
+    for (const raw of Object.values(firstChannel as Record<string, unknown>)) {
+      const v = Number(raw);
+      if (!Number.isFinite(v)) continue;
+      if (v < blockMin) blockMin = v;
+      if (v > blockMax) blockMax = v;
+    }
+  }
+
+  // Fold this block's extremes into the session-wide held range for this
+  // source. The held range is clamped so that it never collapses inside the
+  // normalized audio window [-1, 1]: a signal that happens to peak at 0.4
+  // should still plot against the full audio window, not a compressed one.
+  // It only expands outward when the signal actually exceeds [-1, 1].
+  //
+  // When a source is pinned by the panel (Audio mode), the fold is skipped
+  // entirely so the clamp survives out-of-range blocks.
+  const pinned = devtoolsScopePinned.has(payload.source);
+  const held = devtoolsScopeRanges.get(payload.source);
+  let nextMin: number | undefined;
+  let nextMax: number | undefined;
+  if (pinned && held) {
+    nextMin = held.min;
+    nextMax = held.max;
+  } else {
+    const candidateMin = Number.isFinite(blockMin)
+      ? held
+        ? Math.min(held.min, blockMin)
+        : blockMin
+      : held?.min;
+    const candidateMax = Number.isFinite(blockMax)
+      ? held
+        ? Math.max(held.max, blockMax)
+        : blockMax
+      : held?.max;
+    nextMin = candidateMin !== undefined ? Math.min(candidateMin, -1) : undefined;
+    nextMax = candidateMax !== undefined ? Math.max(candidateMax, 1) : undefined;
+    if (nextMin !== undefined && nextMax !== undefined) {
+      devtoolsScopeRanges.set(payload.source, { min: nextMin, max: nextMax });
+    }
+  }
+
+  const prevSeq = devtoolsScopeSeq.get(payload.source) ?? 0;
+  const nextSeq = prevSeq + 1;
+  devtoolsScopeSeq.set(payload.source, nextSeq);
+
   const scopeEvent: DevtoolsScopeEvent = {
     schema: "elemaudio.debug",
     version: 1,
@@ -146,10 +287,14 @@ function forwardScopeEventToDevtools(event: unknown) {
     sessionId: location.pathname,
     graphId: `${location.pathname}:${payload.source}`,
     source: payload.source,
-    timestampMs: performance.now(),
+    seq: nextSeq,
     sampleRate: payload.sampleRate,
     channelCount: payload.channels,
     channels: payload.data,
+    trackedMin: nextMin,
+    trackedMax: nextMax,
+    blockMin: Number.isFinite(blockMin) ? blockMin : undefined,
+    blockMax: Number.isFinite(blockMax) ? blockMax : undefined,
   };
 
   devtoolsScopeCache.set(payload.source, scopeEvent);
@@ -221,7 +366,7 @@ export function initDemo(config: DemoConfig) {
 
   let audioContext: AudioContext | null = null;
   let renderer: WebRenderer | null = null;
-  const persistKey = config.persistKey ?? `elemaudio-rs:demo:${location.pathname}`;
+  const persistKey = config.persistKey ?? `elemaudiors:demo:${location.pathname}`;
   const persistenceEnabled = persistKey !== "no-persist";
   const presetManager = persistenceEnabled ? createControlPresetManager(`${persistKey}:presets`) : null;
   const defaultValues = new Map<ControlLike, string>();

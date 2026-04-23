@@ -26,7 +26,7 @@ const layout = `
     </div>
   </div>
   <div class="panel">
-    <h2>elemaudio-rs</h2><h3>
+    <h2>elemaudiors</h2><h3>
     Frame Wavetable Synth</h3>
     <p style="font-size: smaller; line-height: 1.1em">
       This demo writes a live <code>frameShaper</code> into RAM with

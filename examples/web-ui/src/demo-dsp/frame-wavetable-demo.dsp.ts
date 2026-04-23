@@ -1,3 +1,4 @@
+
 import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
 
@@ -177,3 +178,10 @@ export function buildGraph(p: FrameWavetableDemoParams): NodeRepr_t[] {
     const right = el.dcblock( el.add(...voices.map((voice) => voice[1])));
     return [left, right];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

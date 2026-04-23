@@ -30,7 +30,7 @@ const layout = `
     </div>
   </div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>Frame Random Walks</h3>
     <p>
       This demo uses <code>el.extra.frameRandomWalks(...)</code> under

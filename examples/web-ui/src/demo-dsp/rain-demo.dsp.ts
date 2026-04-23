@@ -1,3 +1,4 @@
+
 /**
  * Rain signal utility demo — scope-only DSP graph.
  *
@@ -54,3 +55,10 @@ export function buildGraph(p: RainParams): NodeRepr_t[] {
 
   return [left, right];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

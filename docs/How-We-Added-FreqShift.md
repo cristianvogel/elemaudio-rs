@@ -1,58 +1,44 @@
-# How We Extended Elementary-rs with SignalSmith FreqShift
+# How We Added `freqshift`
 
-Date: 2026-04-06
+Date: 2026-04-23
 
 ## Goal
 
-Add a first-party `el::extra::freqshift` helper backed by Signalsmith Audio's Hilbert-based frequency shifter, while keeping repo-owned code outside `src/vendor/`.
+Add a repo-owned `el::extra::freqshift` / `el.extra.freqshift` helper that works in Rust and TS, with browser support tied to the browser WASM registration.
 
-## Steps
+## Current API
 
-1. Define the helper surface in Rust.
-   - Added `el::extra::freqshift(...)` in `src/graph.rs`.
-   - Exported `extra` from `src/lib.rs`.
+### Rust
 
-2. Define the helper surface in JS/TS.
-   - Added `packages/core/src/extra.ts`.
-   - Re-exported it from `packages/core/src/index.ts` as `el.extra`.
+```rust
+extra::freqshift(props, shift_hz, feedback, x)
+```
 
-3. Keep first-party DSP code outside `vendor/`.
-   - Moved the native implementation into `src/native/extra/freqshift.h`.
-   - Stored third-party DSP support headers in `src/native/third_party/`.
+### TS
 
-4. Implement the native processor.
-   - Added a `FreqShiftNode` native runtime node.
-   - The node returns two outputs in fixed order: lower sideband, then upper sideband.
+```ts
+el.extra.freqshift(props, shiftHz, feedback, x)
+```
 
-5. Register the node in the native bridge.
-   - Added `freqshift` registration in `src/ffi/elementary_bridge.cpp`.
-   - Added `src/native` to the C++ include path in `build.rs`.
+## Shape
 
-6. Register the node in the browser WASM runtime.
-   - Added `freqshift` registration in `src/vendor/elementary/wasm/Main.cpp`.
-   - Added `src/native` to the WASM CMake include path.
+- returns two roots: lower sideband first, upper sideband second
+- child order is `shiftHz`, `feedback`, `x`
+- props currently support `reflect` and `fbSource`
+- `feedback` is a signal child, not a prop
+- `shiftHz` is audio-rate
 
-7. Rebuild the browser runtime.
-   - Use `./scripts/rebuild-web-wasm.sh` to regenerate the browser WASM bundle.
-   - Use `./scripts/rebuild-web-ui.sh` to rebuild the browser example after that.
+## Browser rule
 
-8. Document the browser constraints.
-   - `AGENTS.md` now states that browser-visible extras must be registered in the WASM runtime and rebuilt.
-   - `README.md` now notes the Emscripten requirement and the pinned `3.1.52` version.
+If the helper should work in `examples/web-ui`, it must be registered in both:
 
-9. Verify the integration.
-   - `cargo test --test test-el-helpers`
-   - `npm --prefix examples/web-ui run build`
+- `src/ffi/elementary_bridge.cpp`
+- `src/vendor/elementary/wasm/Main.cpp`
 
-## Key Rule
+After that, rebuild the browser WASM bundle.
 
-If an `el::extra::*` helper should work in `examples/web-ui`, it must exist in both:
+## Notes
 
-- the JS/TS authoring package
-- the browser WASM runtime registration
-
-A JS helper alone is not enough.
-
-## Result
-
-`el::extra::freqshift` is now a repo-owned extension that can be used from Rust and JS authoring surfaces, with browser support tied to a rebuilt WASM runtime. It is a split-sideband device; if a mixed result is wanted, authors should blend the lower and upper outputs explicitly in DSP code.
+- the native node is repo-owned and lives outside `src/vendor/`
+- the panel and web demos only work if the browser runtime knows the node kind
+- `mix` is not part of the current helper contract

@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs rain signal utility demo.
+ * elemaudiors rain signal utility demo.
  *
  * Shows sparse impulses from `el.extra.rain` and their characteristics.
  * No audio output — only a scope visualization. The graph is still rendered
@@ -15,7 +15,7 @@ const layout = `
   <elemaudio-oscilloscope id="scope" zoom="16"></elemaudio-oscilloscope>
   <div class="scope-title"><p>Rain impulses (no audio)</p></div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>rain — sparse impulse generator</h3>
     <p>
       Visualize sparse impulses from <code>el.extra.rain</code>.

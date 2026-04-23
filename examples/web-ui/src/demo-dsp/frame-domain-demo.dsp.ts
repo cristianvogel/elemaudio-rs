@@ -1,3 +1,12 @@
+
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */
+
 import type { NodeRepr_t } from "@elem-rs/core";
 import { el } from "@elem-rs/core";
 
@@ -38,3 +47,10 @@ export function buildGraph(p: FrameDomainDemoParams): NodeRepr_t[] {
   const kept = el.add(0, el.mul(0, frameScope));
   return [kept, el.const({ value: 0 })];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

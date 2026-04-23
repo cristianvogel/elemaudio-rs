@@ -1,3 +1,4 @@
+
 import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
 import {FRAME_LENGTH} from "./frame-domain-demo.dsp";
@@ -56,3 +57,10 @@ export function buildGraph(p: FramePolySignalDemoParams): NodeRepr_t[] {
     const right = ( el.mul(el.db2gain(-30), oscPair[1]));
     return [ el.add(  el.mul(0, frameScope) ,left), right];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

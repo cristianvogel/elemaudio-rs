@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs web-ui demo template
+ * elemaudiors web-ui demo template
  *
  * HOW TO USE
  * ----------
@@ -77,7 +77,7 @@ const layout = `
   <!-- <elemaudio-oscilloscope id="scope"></elemaudio-oscilloscope> -->
   <!-- <div class="scope-title"><p>Scope label</p></div> -->
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>${DEMO_TITLE}</h3>
     <p>${DEMO_DESCRIPTION}</p>
     <div class="controls">

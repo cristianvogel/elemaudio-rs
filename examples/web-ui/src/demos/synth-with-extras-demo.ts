@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs synth + extras demo
+ * elemaudiors synth + extras demo
  *
  * Arp synth with crunch distortion, stride delay, and stereo limiter.
  */

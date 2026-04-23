@@ -1,3 +1,4 @@
+
 /**
  * Preset-synth DSP demo graph.
  *
@@ -184,7 +185,7 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
             framelength: FRAME_LENGTH,
             name: EDIT_FRAME_SCOPE_EVENT
         },
-        editFrame
+        el.noise()
     );
 
     const writer = el.extra.presetWrite(
@@ -284,7 +285,7 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
 
     const voice = el.mul(filtered, envelope, presetGain);
 
-    const freqScope = el.scope({name: FREQ_SCOPE_EVENT}, freqScale);
+    const freqScope = el.scope({ name: FREQ_SCOPE_EVENT}, freqScale);
     const cutoffScope = el.scope({name: CUTOFF_SCOPE_EVENT}, cutoffHz);
     const voiceScope = el.scope({name: VOICE_SCOPE_EVENT}, voice);
 
@@ -294,16 +295,23 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
 
     // Keep the scope alive in the graph without audible signal, matching the
     // known-good frameScope retention pattern.
-    const silentTaps = el.add(
-        0,
-        el.mul(0, writer),
-        el.mul(0, editFrameScope),
-        el.mul(0, activeFrameScope),
-        el.mul(0, freqScope),
-        el.mul(0, cutoffScope),
-        el.mul(0, voiceScope)
+    const silentTaps =
+        el.mul( 0,
+        writer,
+        editFrameScope,
+        activeFrameScope,
+        freqScope,
+        cutoffScope,
+        voiceScope
     );
     const mono = el.mul(voice, masterLevel);
 
     return [el.add(silentTaps, mono), mono];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

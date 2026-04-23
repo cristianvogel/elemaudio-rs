@@ -51,7 +51,7 @@ function mustQuery<T extends Element>(selector: string): T {
 if (!resourceFeatureEnabled) {
   app.innerHTML = `
     <div class="panel">
-      <h1>elemaudio-rs resource manager demo</h1>
+      <h1>elemaudiors resource manager demo</h1>
       <p>This demo is disabled in the base build. Re-run the app with the resource feature enabled to use Rust-managed resources.</p>
     </div>
   `;
@@ -64,7 +64,7 @@ app.innerHTML = `
     <div class="sample-timeline-label" id="sample-timeline-label">No sample loaded</div>
   </div>
   <div class="panel">
-    <h1>elemaudio-rs resource manager demo</h1>
+    <h1>elemaudiors resource manager demo</h1>
     <p>Uploads browser files into the Rust resource manager, then mirrors the selected Rust resource into the browser VFS for playback.</p>
     <p>
       Playback retriggers exactly at the asset's natural period using
@@ -352,7 +352,7 @@ function buildGraph(): NodeRepr_t[] {
   // UI at block-rate (~94 Hz @ buffer=512/sr=48k). The UI reads `max` as
   // the cursor position — the phasor is monotonic per loop so `max` is
   // the end-of-block value, which is what we want for a cursor.
-  const position = el.phasor(loopRate, el.const({ value: 0 }));
+  const position = el.phasor(loopRate);
   const metered = el.meter({ key: "rm:position", name: POSITION_METER }, position);
 
   // Keep the meter alive in the dependency graph without audibly mixing

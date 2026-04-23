@@ -1,3 +1,4 @@
+
 /**
  * ramp00 one-shot + blocked-retrigger DSP graph.
  *
@@ -82,3 +83,10 @@ export function buildGraph(p: Ramp00DemoParams): NodeRepr_t[] {
   const silent = el.mul(0, scopeInsert);
   return [silent, silent];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

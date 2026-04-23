@@ -1,4 +1,20 @@
 /**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */
+
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */
+
+/**
  * Sample playback DSP graph — sample + freq shift + convolution with dry/wet.
  */
 
@@ -75,3 +91,10 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
          el.select(blendNode, rightWet, shiftUp)
     ];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

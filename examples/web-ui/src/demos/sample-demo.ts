@@ -127,7 +127,7 @@ const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
 const status = mustQuery<HTMLDivElement>("#status");
 const controlsHost = mustQuery<HTMLDivElement>(".controls");
-const persistKey = `elemaudio-rs:demo:${location.pathname}:presets`;
+const persistKey = `elemaudiors:demo:${location.pathname}:presets`;
 const presetManager = createControlPresetManager(persistKey);
 const presetControls = [
   rateSlider,

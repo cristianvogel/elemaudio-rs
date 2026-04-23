@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs vocoder demo
+ * elemaudiors vocoder demo
  *
  * STFT channel vocoder with three oscilloscope channels:
  *   - Carrier (mc-test.wav)
@@ -47,7 +47,7 @@ const layout = `
 </div>
 
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>${DEMO_TITLE}</h3>
     <p>${DEMO_DESCRIPTION}</p>
     <div class="controls">

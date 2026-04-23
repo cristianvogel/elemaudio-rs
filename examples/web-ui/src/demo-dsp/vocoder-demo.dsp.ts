@@ -1,3 +1,4 @@
+
 /**
  * Vocoder DSP graph — STFT multichannel vocoder
  *
@@ -128,3 +129,10 @@ export function buildGraph(p: VocoderParams): NodeRepr_t[] {
   const outRight = el.mul(0.5, rightSelector);
   return [outLeft, outRight];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

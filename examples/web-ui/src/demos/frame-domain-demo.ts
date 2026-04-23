@@ -26,7 +26,7 @@ const layout = `
     </div>
   </div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>Frame Shaper Demo 01</h3>
     <p>
       This demo uses <code>el.extra.framePhasor(...)</code> under

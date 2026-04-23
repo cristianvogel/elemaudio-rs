@@ -30,7 +30,7 @@ const layout = `
     </div>
   </div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>Frame MultiLFO</h3>
     <p>
       This demo uses <code>framePolySignal</code>, a WireFrames PolySignal that takes one source waveform

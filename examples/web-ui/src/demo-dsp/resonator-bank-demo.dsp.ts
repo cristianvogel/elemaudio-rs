@@ -1,3 +1,4 @@
+
 /**
  * Modal stiff-string resonator bank demo — TS reference implementation.
  *
@@ -387,3 +388,10 @@ export function buildGraph(p: ResonatorBankParams): NodeRepr_t[] {
     const r = outR;
     return [l, r];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

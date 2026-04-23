@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs preset synth demo
+ * elemaudiors preset synth demo
  *
  * Exercises `el.extra.presetWrite`, `el.extra.presetRead`, and
  * `el.extra.presetMorph` end-to-end by driving a small subtractive synth
@@ -50,7 +50,7 @@ const DEFAULT_FRAMES: number[][] = [
 
 const layout = `
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>preset synth demo</h3>
       <p>
         A subtractive synth whose parameters live inside a native preset RAM
@@ -381,8 +381,10 @@ function drawScope() {
 
   for (let lane = 0; lane < FRAME_LENGTH; lane += 1) {
     const laneX = padding + lane * laneWidth + laneWidth / 2;
-    const editVal = clamp01(lastEditFrameSample[lane] ?? 0);
-    const activeVal = clamp01(lastActiveFrameSample[lane] ?? 0);
+
+    //bug: both of these are not being updated??
+      const editVal = lastEditFrameSample[lane] ?? 0;
+      const activeVal = lastActiveFrameSample[lane] ?? 0;
 
     const editH = editVal * (cssHeight - padding * 2);
     const activeH = activeVal * (cssHeight - padding * 2);
