@@ -8,12 +8,12 @@
 
 import { el } from "@elem-rs/core";
 import {
-  BANK_METADATA,
-  EDIT_FRAME_SCOPE_EVENT,
-  FRAME_LENGTH,
-  NUM_SLOTS,
-  type PresetSynthParams,
-  buildGraph as dspBuildGraph,
+    BANK_METADATA,
+    EDIT_FRAME_SCOPE_EVENT,
+    FRAME_LENGTH,
+    NUM_SLOTS,
+    type PresetSynthParams,
+    buildGraph as dspBuildGraph, ACTIVE_FRAME_SCOPE_EVENT
 } from "../demo-dsp/preset-synth-demo.dsp";
 import { initDemo } from "./demo-harness";
 
@@ -282,6 +282,7 @@ function handleScopeEvent(event: unknown) {
 
   if (payload.source === EDIT_FRAME_SCOPE_EVENT) {
     lastEditFrameSample = frame;
+  } else if (payload.source === ACTIVE_FRAME_SCOPE_EVENT) {
     lastActiveFrameSample = frame;
   } else {
     return;
@@ -423,7 +424,6 @@ laneControls = LANES.map((lane) => {
     editFrame[lane.index] = Number(slider.value);
     updateReadouts();
     lastEditFrameSample = editFrame.slice();
-    lastActiveFrameSample = editFrame.slice();
     drawScope();
     void renderCurrentGraph();
   });
@@ -434,7 +434,6 @@ laneControls = LANES.map((lane) => {
     editFrame[lane.index] = control.defaultNorm;
     updateReadouts();
     lastEditFrameSample = editFrame.slice();
-    lastActiveFrameSample = editFrame.slice();
     drawScope();
     void renderCurrentGraph();
   });
@@ -495,7 +494,6 @@ loadButton.addEventListener("click", async () => {
     cloneIntoEditFrame(saved);
     updateReadouts();
     lastEditFrameSample = editFrame.slice();
-    lastActiveFrameSample = editFrame.slice();
     presetStatus.textContent = `Loaded saved slot ${writeSlot} into the edit frame`;
     drawScope();
     await renderCurrentGraph();

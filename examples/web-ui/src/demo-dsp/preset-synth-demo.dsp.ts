@@ -24,6 +24,7 @@ export const FRAME_LENGTH = 8;
 export const NUM_SLOTS = 4;
 export const BANK_PATH = "preset-synth:bank";
 export const EDIT_FRAME_SCOPE_EVENT = "preset-synth:editScope";
+export const ACTIVE_FRAME_SCOPE_EVENT = "preset-synth:activeScope";
 export const FREQ_SCOPE_EVENT = "preset-synth:freqHz";
 export const CUTOFF_SCOPE_EVENT = "preset-synth:cutoffHz";
 export const VOICE_SCOPE_EVENT = "preset-synth:voice";
@@ -142,6 +143,21 @@ function buildLiveLane(editFrame: number[], laneIndex: number, laneKey: string):
     });
 }
 
+function buildLaneFrame(values: NodeRepr_t[], frameKey: string): NodeRepr_t {
+    const laneIndex = el.mod(el.time(), FRAME_LENGTH);
+
+    let value = values[FRAME_LENGTH - 1] ?? el.const({value: 0});
+    for (let lane = FRAME_LENGTH - 2; lane >= 0; lane -= 1) {
+        value = el.select(
+            el.le(laneIndex, el.const({value: lane + 0.5})),
+            values[lane] ?? el.const({key: `${frameKey}:lane:${lane}`, value: 0}),
+            value
+        );
+    }
+
+    return value;
+}
+
 // ---------------------------------------------------------------------------
 // main graph
 // ---------------------------------------------------------------------------
@@ -205,6 +221,17 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
     const releaseNorm = mixLiveAndPreset(liveLane(LANE.RELEASE, "release"), readLane(LANE.RELEASE, "release"));
     const gainNorm = mixLiveAndPreset(liveLane(LANE.GAIN, "gain"), readLane(LANE.GAIN, "gain"));
 
+    const activeFrame = buildLaneFrame([
+        readLane(LANE.FREQ, "freq-frame"),
+        readLane(LANE.CUTOFF, "cutoff-frame"),
+        readLane(LANE.Q, "q-frame"),
+        readLane(LANE.ATTACK, "attack-frame"),
+        readLane(LANE.DECAY, "decay-frame"),
+        readLane(LANE.SUSTAIN, "sustain-frame"),
+        readLane(LANE.RELEASE, "release-frame"),
+        readLane(LANE.GAIN, "gain-frame"),
+    ], "ps:active-frame");
+
     // 3. Denormalise lanes into real DSP parameters.
     const freqScale = denormExp(freqNorm, 40, 2000);
     const cutoffHz = denormExp(cutoffNorm, 80, 16000);
@@ -253,6 +280,14 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
         editFrame
     );
 
+    const activeFrameScope = el.extra.frameScope(
+        {
+            name: ACTIVE_FRAME_SCOPE_EVENT,
+            framelength: FRAME_LENGTH,
+        },
+        activeFrame
+    );
+
     const writer = el.extra.presetWrite(
         {...BANK_PROPS, key: "ps:writer", writecounter: p.writeCounter},
         writeSlotSignal,
@@ -264,6 +299,7 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
         el.mul( 0,
         writer,
         editFrameScope,
+        activeFrameScope,
         freqScope,
         cutoffScope,
         voiceScope
