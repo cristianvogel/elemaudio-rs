@@ -1042,7 +1042,7 @@ export interface FrameScopeProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
   /** Event source name forwarded through scope events. */
-  name?: string;
+  name: string;
   /** Fixed frame length in samples. Must be a positive even integer. */
   framelength: number;
 }

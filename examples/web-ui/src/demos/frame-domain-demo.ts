@@ -151,8 +151,10 @@ type ScopePayload = {
 };
 
 function onScopeEvent(event: unknown) {
+  console.log("[frame-domain] onScopeEvent fired with source:", (event as any)?.source);
   const payload = event as ScopePayload;
   if (payload?.source !== FRAME_SCOPE_EVENT || !Array.isArray(payload.data)) {
+    console.log("[frame-domain] payload check failed, expected:", FRAME_SCOPE_EVENT);
     return;
   }
 

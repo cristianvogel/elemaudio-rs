@@ -44,8 +44,8 @@ export function buildGraph(p: FrameDomainDemoParams): NodeRepr_t[] {
     framePhasor,
   );
 
-  const kept = el.add(0, el.mul(0, frameScope));
-  return [kept, el.const({ value: 0 })];
+  const silentScopeNode = el.add(0, el.mul(0, frameScope));
+  return [  silentScopeNode, el.const({ value: 0 })];
 }
 /**
  * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)

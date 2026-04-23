@@ -265,8 +265,10 @@ type ScopePayload = {
 };
 
 function handleScopeEvent(event: unknown) {
+  console.log("[preset-synth] handleScopeEvent called with:", event);
   const payload = event as ScopePayload;
   if (!payload || typeof payload.source !== "string" || !Array.isArray(payload.data)) {
+    console.log("[preset-synth] payload check failed:", payload);
     return;
   }
 

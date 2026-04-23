@@ -177,15 +177,14 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
         value: Math.max(0, Math.min(NUM_SLOTS - 1, Math.floor(p.writeSlot)))
     });
 
-    // Tap the edit-frame signal with a frameScope so the UI can visualise
-    // exactly the frame that the writer is currently capturing.
+    // Tap a test signal with frameScope to verify the node fires at all
     const editFrameScope = el.extra.frameScope(
         {
             key: "preset-synth:editScope",
             framelength: FRAME_LENGTH,
             name: EDIT_FRAME_SCOPE_EVENT
         },
-        el.noise()
+        el.pinknoise()
     );
 
     const writer = el.extra.presetWrite(
@@ -299,14 +298,14 @@ export function buildGraph(p: PresetSynthParams): NodeRepr_t[] {
         el.mul( 0,
         writer,
         editFrameScope,
-        activeFrameScope,
         freqScope,
         cutoffScope,
         voiceScope
     );
     const mono = el.mul(voice, masterLevel);
 
-    return [el.add(silentTaps, mono), mono];
+    // Temporarily route editFrameScope directly to test if it fires
+    return [el.add(silentTaps, editFrameScope, mono), mono];
 }
 /**
  * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)

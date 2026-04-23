@@ -402,12 +402,10 @@ export function initDemo(config: DemoConfig) {
     audioContext = new AudioContext();
     renderer = new WebRenderer();
 
-    if (config.onScopeEvent) {
-      renderer.on("scope", (event: unknown) => {
-        forwardScopeEventToDevtools(event);
-        config.onScopeEvent?.(event);
-      });
-    }
+    renderer.on("scope", (event: unknown) => {
+      forwardScopeEventToDevtools(event);
+      config.onScopeEvent?.(event);
+    });
 
     const worklet = await renderer.initialize(audioContext);
     worklet.connect(audioContext.destination);
