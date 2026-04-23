@@ -68,6 +68,9 @@
 #include "../../../../native/extra/ramp00.h"
 #include "../../../../native/extra/threshold.h"
 #include "../../../../native/extra/sample.h"
+#include "../../../../native/extra/preset_write.h"
+#include "../../../../native/extra/preset_read.h"
+#include "../../../../native/extra/preset_morph.h"
 #include "../../../../native/extra/sample_count.h"
 #include "../../../../native/extra/rain.h"
 #include "../../../../native/extra/sample_count.h"
@@ -223,6 +226,19 @@ public:
 
         runtime->registerNodeType("extra.sample", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::ExtraSampleNode<double>>(id, fs, bs);
+        });
+
+        // PresetWrite / PresetRead / PresetMorph: multi-slot preset RAM bank.
+        runtime->registerNodeType("presetWrite", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetWriteNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("presetRead", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetReadNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("presetMorph", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetMorphNode<double>>(id, fs, bs);
         });
 
         // SampleCountNode: emits the length (in samples) of a VFS-resident

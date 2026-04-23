@@ -43,6 +43,10 @@
 #include <extra/ramp00.h>
 #include <extra/threshold.h>
 #include <extra/sample.h>
+// PresetWrite / PresetRead / PresetMorph: multi-slot preset RAM bank primitives.
+#include <extra/preset_write.h>
+#include <extra/preset_read.h>
+#include <extra/preset_morph.h>
 // SampleCountNode: emits the exact length (in samples) of a VFS-resident
 // audio resource as a constant-valued signal. Zero children.
 // Property: path (string, required) — VFS key of the resource.
@@ -182,6 +186,20 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("extra.sample", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::ExtraSampleNode<double>>(id, fs, bs);
+        });
+
+        // "presetWrite" / "presetRead" / "presetMorph" — multi-slot preset RAM bank.
+        // Props: path (string, required), framelength (positive int), slots (positive int).
+        handle->runtime->registerNodeType("presetWrite", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetWriteNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("presetRead", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetReadNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("presetMorph", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetMorphNode<double>>(id, fs, bs);
         });
 
         // "sampleCount" — SampleCountNode.

@@ -11,7 +11,7 @@ export interface SampleParams {
     blend: number;
     chopperThreshold: number;
     freqShiftHz: number;
-    sideBandMix: number;
+    feedback: number;
     leftIrPath: string;
     rightIrPath: string;
     isStopped?: boolean;
@@ -33,7 +33,6 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
 
     const chopperThreshold = el.const({key: "sample:chopper-threshold", value: p.chopperThreshold});
     const freqShiftHz = el.const({key: "sample:freqshift-hz", value: p.freqShiftHz});
-    const sideBandMix = el.const({key: "sample:sideband-mix", value: p.sideBandMix});
 
     function thresh(x: NodeRepr_t): NodeRepr_t {
         return el.extra.threshold({key: "threshold", hysteresis: 0.01, latch: true},
@@ -50,10 +49,23 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const choppedLeft = el.mul( el.env( ar.atk, ar.rel,  thresh(leftSource)), el.add(leftSource));
     const choppedRight = el.mul( el.env( ar.atk, ar.rel,  thresh(leftSource)), el.add( rightSource));
 
-    const leftBands = el.extra.freqshift({ key: "fshift_Left", reflect: 1 }, freqShiftHz, choppedLeft);
-    const rightBands = el.extra.freqshift({ key: "fshift_Right", reflect: 1 }, el.mul(1.618, freqShiftHz), choppedRight);
-    const shiftDown = el.add(el.mul(el.sub(1, sideBandMix), leftBands[0]), el.mul(sideBandMix, leftBands[1]));
-    const shiftUp = el.add(el.mul(el.sub(1, sideBandMix), rightBands[1]), el.mul(sideBandMix, rightBands[0]));
+    const feedback = el.sm(el.const({key: "sample:freqshift-feedback", value: p.feedback}));
+
+    const leftBands = el.extra.freqshift(
+        { key: "fshift_Left", reflect: 1, fbSource: "lower" },
+        freqShiftHz,
+        feedback,
+        choppedLeft
+    );
+    const rightBands = el.extra.freqshift(
+        { key: "fshift_Right", reflect: 1, fbSource: "upper" },
+        el.mul(1.618, freqShiftHz),
+        feedback,
+        choppedRight
+    );
+
+    const shiftDown = leftBands[0];
+    const shiftUp = rightBands[1];
 
     const leftWet = el.convolve({key: "ir-left", path: p.leftIrPath}, el.mul(1.0e-3, shiftDown));
     const rightWet = el.convolve({key: "ir-right", path: p.rightIrPath}, el.mul(1.0e-3, shiftUp));

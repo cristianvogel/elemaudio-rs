@@ -54,6 +54,7 @@ export default defineConfig({
         vocoder: resolve(__dirname, "vocoder.html"),
         resource: resolve(__dirname, "resource-manager.html"),
         resonatorBank: resolve(__dirname, "resonator-bank.html"),
+        presetSynth: resolve(__dirname, "preset-synth.html"),
       },
     },
   },

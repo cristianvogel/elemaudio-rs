@@ -821,8 +821,9 @@ fn covers_mc_helpers() {
 #[test]
 fn covers_extra_helpers() {
     let freqshift_nodes = extra::freqshift(
-        serde_json::json!({"reflect": 2}),
+        serde_json::json!({"reflect": 2, "fbSource": "upper"}),
         ElemNode::from(node(250.0)),
+        ElemNode::from(0.6),
         ElemNode::from(node(1.0)),
     );
 
@@ -830,8 +831,8 @@ fn covers_extra_helpers() {
     assert_nodes(
         &freqshift_nodes,
         "freqshift",
-        serde_json::json!({"reflect": 2}),
-        2,
+        serde_json::json!({"reflect": 2, "fbSource": "upper"}),
+        3,
     );
 
     let crunch_nodes = extra::crunch(
@@ -1175,6 +1176,47 @@ fn covers_extra_helpers() {
         serde_json::json!({"seed": 1234, "jitter": 0.25}),
         2,
     );
+
+    // preset bank helpers: props pass through verbatim; child shapes match
+    // the `(slot, x)`, `(slot, phase)`, and `(slotA, slotB, mix, phase)`
+    // contracts. Metadata travels alongside props and does not modify the
+    // audio children.
+    let preset_props = serde_json::json!({
+        "path": "bank:mvp",
+        "framelength": 16,
+        "slots": 4,
+        "metadata": {
+            "schema": "synth-mvp",
+            "version": 1,
+            "lanes": [
+                { "index": 0, "name": "freqHz", "min": 40.0, "max": 2000.0, "taper": "exp" },
+                { "index": 1, "name": "cutoffHz", "min": 80.0, "max": 16000.0, "taper": "exp" }
+            ]
+        }
+    });
+
+    let preset_write_node = extra::preset_write(
+        preset_props.clone(),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.25)),
+    );
+    assert_node(&preset_write_node, "presetWrite", preset_props.clone(), 2);
+
+    let preset_read_node = extra::preset_read(
+        preset_props.clone(),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(&preset_read_node, "presetRead", preset_props.clone(), 2);
+
+    let preset_morph_node = extra::preset_morph(
+        preset_props.clone(),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.5)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(&preset_morph_node, "presetMorph", preset_props, 4);
 }
 
 #[test]

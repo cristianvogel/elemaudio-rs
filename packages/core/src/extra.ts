@@ -14,6 +14,9 @@ import type { ElemNode, NodeRepr_t } from "./vendor";
  */
 export type FreqShiftReflectMode = 0 | 1 | 2 | 3;
 
+/** Selects which split band feeds the optional internal feedback loop. */
+export type FreqShiftFeedbackSource = "lower" | "upper";
+
 /**
  * Props for `el.extra.freqshift(...)`.
  */
@@ -22,6 +25,8 @@ export interface FreqShiftProps extends Record<string, unknown> {
   key?: string;
   /** Negative-frequency handling mode. */
   reflect?: FreqShiftReflectMode;
+  /** Which semantic output band feeds the internal feedback loop. Default: `"lower"`. */
+  fbSource?: FreqShiftFeedbackSource;
 }
 
 /**
@@ -151,16 +156,22 @@ export interface VariSlopeSvfProps extends Record<string, unknown> {
  *
  * Returns two outputs in fixed order: lower sideband, then upper sideband.
  *
+ * Props:
+ * - `reflect`: negative shift handling mode (default: `0`)
+ * - `fbSource`: which output band feeds the internal feedback loop (default: `"lower"`)
+ *
  * Child order:
  * - `shiftHz`: audio-rate shift amount in Hz
+ * - `feedback`: audio-rate feedback amount (clamped per-sample to [0, 0.999])
  * - `x`: audio input
  */
 export function freqshift(
   props: FreqShiftProps,
   shiftHz: ElemNode,
+  feedback: ElemNode,
   x: ElemNode,
 ): Array<NodeRepr_t> {
-  return unpack(createNode("freqshift", props, [resolve(shiftHz), resolve(x)]), 2);
+  return unpack(createNode("freqshift", props, [resolve(shiftHz), resolve(feedback), resolve(x)]), 2);
 }
 
 /**
@@ -1613,4 +1624,136 @@ export function rain(
   release: ElemNode,
 ): NodeRepr_t {
   return createNode("rain", props, [resolve(density), resolve(release)]);
+}
+
+// ---------------------------------------------------------------------------
+// preset bank (MVP)
+// ---------------------------------------------------------------------------
+
+/** Taper family used to denormalise a preset lane on read. */
+export type PresetLaneTaper = "linear" | "exp" | "quantize";
+
+/** Declarative description of one preset lane inside a bank. */
+export interface PresetLaneMetadata {
+  /** Lane index inside the frame (0..framelength-1). */
+  index: number;
+  /** Human-readable lane name, e.g. "cutoffHz". */
+  name: string;
+  /** Optional minimum value after denormalisation. */
+  min?: number;
+  /** Optional maximum value after denormalisation. */
+  max?: number;
+  /** Optional taper/curve family applied during denormalisation. */
+  taper?: PresetLaneTaper;
+  /** Optional default normalized value used when authoring presets. */
+  default?: number;
+  /** Optional unit label, informational only. */
+  unit?: string;
+}
+
+/** Static descriptor attached to a preset bank. Not consulted at audio rate. */
+export interface PresetBankMetadata extends Record<string, unknown> {
+  /** Optional schema tag, useful for forward/backward compatibility. */
+  schema?: string;
+  /** Optional schema version. */
+  version?: number;
+  /** Declared lanes for this bank (by index). */
+  lanes?: readonly PresetLaneMetadata[];
+  /** Optional human-friendly slot names, parallel to slot indices. */
+  slotNames?: string[];
+}
+
+/** Props shared by preset bank nodes. */
+export interface PresetBankProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Shared bank identifier. All nodes referring to the same bank share RAM. */
+  path: string;
+  /** Positive integer frame size in samples. One frame = one preset. */
+  framelength: number;
+  /** Positive integer number of presets stored in the bank. */
+  slots: number;
+  /** Optional descriptor object for lanes, tapers, slot names, etc. */
+  metadata?: PresetBankMetadata;
+}
+
+/**
+ * Multi-slot preset RAM writer (MVP).
+ *
+ * Captures one full frame of `x` and commits it into the chosen slot of a
+ * runtime-owned preset bank on the next frame boundary. `slot` is latched at
+ * frame boundaries and clamped to `[0, slots - 1]`.
+ */
+export function presetWrite(
+  props: PresetBankProps,
+  slot: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  return createNode("presetWrite", props, [resolve(slot), resolve(x)]);
+}
+
+/**
+ * Multi-slot preset RAM reader (MVP).
+ *
+ * Reads one preset slot as a mono lookup table with linear interpolation by a
+ * normalized `phase` in `[0, 1]`. `slot` is clamped to `[0, slots - 1]`.
+ */
+export function presetRead(
+  props: PresetBankProps,
+  slot: ElemNode,
+  phase: ElemNode,
+): NodeRepr_t {
+  return createNode("presetRead", props, [resolve(slot), resolve(phase)]);
+}
+
+/**
+ * Multi-slot preset RAM morph (MVP).
+ *
+ * Reads two preset slots with the same normalized phase and linearly
+ * crossfades between them by `mix` (clamped to `[0, 1]`). `mix = 0` picks
+ * `slotA`, `mix = 1` picks `slotB`, so this same node also covers hard
+ * slot selection.
+ */
+export function presetMorph(
+  props: PresetBankProps,
+  slotA: ElemNode,
+  slotB: ElemNode,
+  mix: ElemNode,
+  phase: ElemNode,
+): NodeRepr_t {
+  return createNode("presetMorph", props, [
+    resolve(slotA),
+    resolve(slotB),
+    resolve(mix),
+    resolve(phase),
+  ]);
+}
+
+/**
+ * Host-side helper: denormalise a `[0, 1]` value to a real parameter value
+ * using a lane's declared `min`/`max`/`taper`. Intended for UI-side decoding
+ * of preset metadata. Not called on the audio thread.
+ */
+export function denormalisePresetLane(
+  lane: PresetLaneMetadata,
+  value: number,
+): number {
+  const min = typeof lane.min === "number" ? lane.min : 0;
+  const max = typeof lane.max === "number" ? lane.max : 1;
+  const clamped = Math.max(0, Math.min(1, value));
+
+  if (lane.taper === "exp") {
+    if (min <= 0 || max <= 0) {
+      return min + clamped * (max - min);
+    }
+    return min * Math.pow(max / min, clamped);
+  }
+
+  if (lane.taper === "quantize") {
+    const steps = Math.max(1, Math.round(max - min));
+    const quantized = Math.round(clamped * steps);
+    return min + quantized;
+  }
+
+  return min + clamped * (max - min);
 }

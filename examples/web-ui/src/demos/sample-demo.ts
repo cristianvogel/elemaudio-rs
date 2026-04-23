@@ -81,16 +81,11 @@ app.innerHTML = `
           <input id="freq-shift-hz" type="range" min="-600" max="600" value="110" step="0.001" />
         </div>
         <div class="dial">
-          <label for="sideband-mix">
-            <span>Sideband Mix</span>
-            <span id="sideband-mix-value">L 100 / U 0</span>
+          <label for="freqshift-feedback">
+            <span>Feedback</span>
+            <span id="freqshift-feedback-value">0%</span>
           </label>
-          <input id="sideband-mix" type="range" min="0" max="1" value="0" step="0.01" list="sideband-mix-marks" />
-          <datalist id="sideband-mix-marks">
-            <option value="0" label="Lower"></option>
-            <option value="0.5" label="50/50"></option>
-            <option value="1" label="Upper"></option>
-          </datalist>
+          <input id="freqshift-feedback" type="range" min="0" max="95" value="0" step="1" />
         </div>
       </div>
       <div class="row">
@@ -120,13 +115,13 @@ const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
 const freqShiftHzSlider = mustQuery<HTMLInputElement>("#freq-shift-hz");
-const sideBandMixSlider = mustQuery<HTMLInputElement>("#sideband-mix");
+const freqShiftFeedbackSlider = mustQuery<HTMLInputElement>("#freqshift-feedback");
 const sampleFileInput = mustQuery<HTMLInputElement>("#sample-file");
 const rateValue = mustQuery<HTMLSpanElement>("#rate-value");
 const blendValue = mustQuery<HTMLSpanElement>("#blend-value");
 const chopperThresholdValue = mustQuery<HTMLSpanElement>("#chopper-threshold-value");
 const freqShiftHzValue = mustQuery<HTMLSpanElement>("#freq-shift-hz-value");
-const sideBandMixValue = mustQuery<HTMLSpanElement>("#sideband-mix-value");
+const freqShiftFeedbackValue = mustQuery<HTMLSpanElement>("#freqshift-feedback-value");
 const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
 const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
@@ -139,7 +134,7 @@ const presetControls = [
   blendSlider,
   chopperThresholdSlider,
   freqShiftHzSlider,
-  sideBandMixSlider,
+  freqShiftFeedbackSlider,
 ] as const;
 
 updateIrToggleLabel();
@@ -255,11 +250,8 @@ function configureFreqShiftSlider(rescaleCurrentHz = true) {
   }
 }
 
-async function updateSideBandMix() {
-  const value = Number(sideBandMixSlider.value);
-  const lower = Math.round((1 - value) * 100);
-  const upper = Math.round(value * 100);
-  sideBandMixValue.textContent = `L ${lower} / U ${upper}`;
+async function updateFreqShiftFeedback() {
+  freqShiftFeedbackValue.textContent = `${Number(freqShiftFeedbackSlider.value)}%`;
 
   if (renderer && audioContext?.state === "running") {
     await renderCurrentGraph();
@@ -352,7 +344,7 @@ function buildGraph(rate: number): NodeRepr_t[] {
     blend: Number(blendSlider.value) / 100,
     chopperThreshold: Number(chopperThresholdSlider.value),
     freqShiftHz: getFreqShiftHz(),
-    sideBandMix: Number(sideBandMixSlider.value),
+    feedback: Number(freqShiftFeedbackSlider.value) / 100,
     leftIrPath,
     rightIrPath,
     isStopped,
@@ -399,10 +391,7 @@ attachPresetControls({
     blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
     chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
     freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
-    const sideBandValue = Number(sideBandMixSlider.value);
-    const lower = Math.round((1 - sideBandValue) * 100);
-    const upper = Math.round(sideBandValue * 100);
-    sideBandMixValue.textContent = `L ${lower} / U ${upper}`;
+    freqShiftFeedbackValue.textContent = `${Number(freqShiftFeedbackSlider.value)}%`;
   },
   rerender: async () => {
     persistCurrentControls();
@@ -530,13 +519,13 @@ freqShiftZoomButton.addEventListener("click", () => {
   void updateFreqShiftHz();
 });
 
-sideBandMixSlider.addEventListener("input", () => {
+freqShiftFeedbackSlider.addEventListener("input", () => {
   persistCurrentControls();
-  void updateSideBandMix();
+  void updateFreqShiftFeedback();
 });
 
 rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
 blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
 chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
 freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
-void updateSideBandMix();
+void updateFreqShiftFeedback();

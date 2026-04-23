@@ -52,20 +52,23 @@ fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value
 ///
 /// Props:
 /// - `reflect`: integer mode for negative shift handling
+/// - `fbSource`: `"lower"` or `"upper"` to select the feedback band
 ///
 /// Child order:
 /// - `shift_hz`: audio-rate shift amount in Hz
+/// - `feedback`: audio-rate feedback amount (clamped per-sample to `[0, 0.999]`)
 /// - `x`: audio input
 pub fn freqshift(
     props: serde_json::Value,
     shift_hz: impl Into<ElemNode>,
+    feedback: impl Into<ElemNode>,
     x: impl Into<ElemNode>,
 ) -> Vec<Node> {
     unpack(
         Node::new(
             "freqshift",
             props,
-            vec![resolve(shift_hz), resolve(x)],
+            vec![resolve(shift_hz), resolve(feedback), resolve(x)],
         ),
         2,
     )
@@ -1676,4 +1679,65 @@ pub fn rain(
     release: impl Into<ElemNode>,
 ) -> Node {
     Node::new("rain", props, vec![resolve(density), resolve(release)])
+}
+
+/// Multi-slot preset RAM writer (MVP).
+///
+/// Treats one preset as a fixed-length numeric frame and writes it into a
+/// chosen slot of a runtime-owned preset RAM bank addressed by `path`. The
+/// writer latches `slot` at every frame boundary and commits the captured
+/// frame on the next frame boundary, similar to `frame_write_ram`.
+///
+/// Props:
+/// - `path`: shared bank identifier; readers and writers with the same path
+///   share the same `slots * framelength` mono RAM buffer
+/// - `framelength`: positive integer frame size in samples (one frame = one preset)
+/// - `slots`: positive integer number of presets stored in the bank
+/// - `metadata` (optional): static descriptor object for lane schema, ranges,
+///   tapers, slot names, etc. Not consulted by the audio thread.
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `slot`: preset slot index, clamped to `[0, slots - 1]`
+/// - `x`: frame-domain signal captured as one full frame per slot
+pub fn preset_write(
+    props: serde_json::Value,
+    slot: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    Node::new("presetWrite", props, vec![resolve(slot), resolve(x)])
+}
+
+/// Multi-slot preset RAM reader (MVP).
+///
+/// Reads one preset slot as a mono lookup table with linear interpolation by a
+/// normalized `phase` in `[0, 1]`. `slot` is clamped to `[0, slots - 1]` and is
+/// sampled per-sample — the reader is intended for parameter morphing and
+/// scene selection, not audio loop playback.
+pub fn preset_read(
+    props: serde_json::Value,
+    slot: impl Into<ElemNode>,
+    phase: impl Into<ElemNode>,
+) -> Node {
+    Node::new("presetRead", props, vec![resolve(slot), resolve(phase)])
+}
+
+/// Multi-slot preset RAM morph (MVP).
+///
+/// Reads two preset slots with the same normalized phase and linearly
+/// crossfades between them by `mix` (clamped to `[0, 1]`). `mix = 0` picks
+/// `slot_a`, `mix = 1` picks `slot_b`, so this single node also covers hard
+/// slot selection without a separate select helper.
+pub fn preset_morph(
+    props: serde_json::Value,
+    slot_a: impl Into<ElemNode>,
+    slot_b: impl Into<ElemNode>,
+    mix: impl Into<ElemNode>,
+    phase: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "presetMorph",
+        props,
+        vec![resolve(slot_a), resolve(slot_b), resolve(mix), resolve(phase)],
+    )
 }
