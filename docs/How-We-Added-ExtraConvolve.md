@@ -24,7 +24,7 @@ el.extra.convolve(props, x)
 
 - returns one root
 - child order is `x`
-- props support `path`, optional `irAttenuationDb`, and optional `normalize`
+- props support `path`, optional normalized `start`, optional normalized `end`, optional `irAttenuationDb`, and optional `normalize`
 
 ## Runtime behavior
 
@@ -32,6 +32,9 @@ This node forwards the full shared IR buffer to the underlying two-stage FFT con
 
 Optional runtime controls:
 
+- `start`: selects the normalized IR start position
+- `end`: selects the normalized IR end position
+- if `end < start`, the selected IR region is reversed before initializing the convolver
 - `irAttenuationDb`: attenuates the wet output by the given positive dB amount
 - `normalize`: applies realtime input normalization based on a gain estimate derived from the loaded IR
 

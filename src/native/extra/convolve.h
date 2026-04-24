@@ -57,6 +57,34 @@ namespace elem
                 return rebuildConvolver(resources);
             }
 
+            if (key == "start") {
+                if (!val.isNumber()) {
+                    return elem::ReturnCode::InvalidPropertyType();
+                }
+
+                auto const parsed = static_cast<double>((js::Number) val);
+                if (!std::isfinite(parsed) || parsed < 0.0) {
+                    return elem::ReturnCode::InvalidPropertyValue();
+                }
+
+                start.store(parsed, std::memory_order_relaxed);
+                return rebuildConvolver(resources);
+            }
+
+            if (key == "end") {
+                if (!val.isNumber()) {
+                    return elem::ReturnCode::InvalidPropertyType();
+                }
+
+                auto const parsed = static_cast<double>((js::Number) val);
+                if (!std::isfinite(parsed) || parsed < 0.0) {
+                    return elem::ReturnCode::InvalidPropertyValue();
+                }
+
+                end.store(parsed, std::memory_order_relaxed);
+                return rebuildConvolver(resources);
+            }
+
             if (key == "irAttenuationDb") {
                 if (!val.isNumber()) {
                     return elem::ReturnCode::InvalidPropertyType();
@@ -166,11 +194,13 @@ namespace elem
             }
 
             auto bufferView = resource->getChannelData(0);
-            runawayGainCoeff.store(computeRunawayGainCoeff(bufferView.data(), bufferView.size()), std::memory_order_relaxed);
+            auto slicedIr = prepareIr(bufferView);
+
+            runawayGainCoeff.store(computeRunawayGainCoeff(slicedIr.data(), slicedIr.size()), std::memory_order_relaxed);
 
             auto co = std::make_shared<fftconvolver::TwoStageFFTConvolver>();
             co->reset();
-            co->init(512, 4096, bufferView.data(), bufferView.size());
+            co->init(512, 4096, slicedIr.data(), slicedIr.size());
             convolverQueue.push(std::move(co));
             return elem::ReturnCode::Ok();
         }
@@ -189,7 +219,8 @@ namespace elem
             }
 
             auto bufferView = resource->getChannelData(0);
-            runawayGainCoeff.store(computeRunawayGainCoeff(bufferView.data(), bufferView.size()), std::memory_order_relaxed);
+            auto slicedIr = prepareIr(bufferView);
+            runawayGainCoeff.store(computeRunawayGainCoeff(slicedIr.data(), slicedIr.size()), std::memory_order_relaxed);
         }
 
         double computeRunawayGainCoeff(float const* ir, size_t len) const
@@ -229,7 +260,40 @@ namespace elem
             return std::isfinite(result) ? result : 0.0;
         }
 
+        std::vector<float> prepareIr(BufferView<float> const& bufferView) const
+        {
+            auto const irLen = bufferView.size();
+            std::vector<float> prepared;
+
+            if (irLen == 0) {
+                prepared.push_back(0.0f);
+                return prepared;
+            }
+
+            auto const startNorm = std::clamp(start.load(std::memory_order_relaxed), 0.0, 1.0);
+            auto const endNorm = std::clamp(end.load(std::memory_order_relaxed), 0.0, 1.0);
+            auto const startIndex = std::min(static_cast<size_t>(startNorm * static_cast<double>(irLen)), irLen);
+            auto const endIndex = std::min(static_cast<size_t>(endNorm * static_cast<double>(irLen)), irLen);
+
+            auto const lo = std::min(startIndex, endIndex);
+            auto const hi = std::max(startIndex, endIndex);
+
+            if (lo < hi) {
+                prepared.assign(bufferView.data() + lo, bufferView.data() + hi);
+            } else {
+                prepared.push_back(bufferView.data()[std::min(lo, irLen - 1)]);
+            }
+
+            if (endIndex < startIndex) {
+                std::reverse(prepared.begin(), prepared.end());
+            }
+
+            return prepared;
+        }
+
         std::string path;
+        std::atomic<double> start{0.0};
+        std::atomic<double> end{1.0};
         std::atomic<double> irAttenuationGain{1.0};
         std::atomic<bool> normalizeEnabled{false};
         std::atomic<double> runawayGainCoeff{1.0};

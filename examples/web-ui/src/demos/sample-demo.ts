@@ -56,6 +56,22 @@ app.innerHTML = `
           </label>
           <input id="blend" type="range" min="0" max="100" value="50" step="1" />
         </div>
+        
+        <div class="dial">
+        <label for="start-offset">
+        <span>IR Start</span>
+        </label>
+        <input id="start-offset" type="range" min="0" max="100" value="0" step="1" />
+        <span id="start-offset-value">0</span>
+        </div>
+         <div class="dial">
+        <label for="ir-end">
+        <span>IR End</span>
+        </label>
+        <input id="ir-end" type="range" min="0" max="100" value="100" step="1" />
+        <span id="ir-end-value">100</span>
+        </div>
+        
         <div class="dial">
           <label for="chopper-threshold">
             <span>Chopper</span>
@@ -102,8 +118,12 @@ app.innerHTML = `
 
 const startButton = mustQuery<HTMLButtonElement>("#start");
 const stopButton = mustQuery<HTMLButtonElement>("#stop");
-const reloadButton = mustQuery<HTMLButtonElement>("#reload");
+const reloadButton = mustQuery<HTMLButtonElement>("#reload"); // not using
 const freqShiftZoomButton = mustQuery<HTMLButtonElement>("#freqshift-zoom");
+const irStart = mustQuery<HTMLInputElement>("#start-offset");
+const irStartValue = mustQuery<HTMLSpanElement>("#start-offset-value");
+const irEnd = mustQuery<HTMLInputElement>("#ir-end");
+const irEndValue = mustQuery<HTMLSpanElement>("#ir-end-value");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
@@ -162,6 +182,20 @@ async function updateBlend() {
   if (renderer && audioContext?.state === "running") {
     await renderCurrentGraph();
   }
+}
+
+async function updateIrStart() {
+    irStartValue.textContent = `${(Number(irStart.value).toFixed(0)) }%`;
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
+}
+
+async function updateIrEnd() {
+    irEndValue.textContent = `${ (Number(irEnd.value).toFixed(0)) }%`;
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
 }
 
 async function updateChopperThreshold() {
@@ -309,6 +343,8 @@ function buildGraph(rate: number): NodeRepr_t[] {
     leftIrPath,
     rightIrPath,
     isStopped,
+      irStart: Number(irStart.value) / 100,
+      irEnd: Number(irEnd.value) / 100,
   });
 }
 
@@ -422,18 +458,23 @@ sampleFileInput.addEventListener("change", async () => {
 });
 
 rateSlider.addEventListener("input", () => {
-
   rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
-
   if (renderer && audioContext?.state === "running") {
     void renderCurrentGraph();
   }
 });
 
 blendSlider.addEventListener("input", () => {
-
   void updateBlend();
 });
+
+irStart.addEventListener("input", () => {
+    void updateIrStart();
+})
+
+irEnd.addEventListener("input", () => {
+    void updateIrEnd();
+})
 
 chopperThresholdSlider.addEventListener("input", () => {
 

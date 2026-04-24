@@ -78,6 +78,8 @@ pub fn freqshift(
 ///
 /// Props:
 /// - `path`: shared resource id for the impulse response
+/// - `start`: optional normalized IR start position in `[0, 1]`
+/// - `end`: optional normalized IR end position in `[0, 1]`
 /// - `irAttenuationDb`: optional wet-output attenuation in dB
 /// - `normalize`: optional realtime input normalization toggle
 ///

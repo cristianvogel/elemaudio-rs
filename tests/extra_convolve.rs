@@ -100,3 +100,56 @@ fn extra_convolve_normalize_reduces_runaway_gain_prediction() {
     assert!(plain_last > 1.9, "plain output should approach the IR sum, got {plain_last}");
     assert!(normalized_last < plain_last, "normalized output should be reduced, got plain={plain_last}, normalized={normalized_last}");
 }
+
+#[test]
+fn extra_convolve_start_and_end_select_ir_region_only() {
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let runtime = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()
+        .expect("runtime");
+
+    let ir = vec![1.0_f32, 2.0_f32, 3.0_f32];
+    runtime.add_shared_resource_f32("ir", &ir).expect("resource");
+
+    let graph = Graph::new().render(extra::convolve(
+        json!({"path": "ir", "start": 1.0 / 3.0, "end": 1.0}),
+        elemaudio_rs::el::const_(1.0),
+    ));
+
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+
+    let last = settle_last_sample(&runtime, buffer_size, 20);
+    assert!((last - 5.0).abs() < 1e-4, "selected IR region should skip the first third of the IR, got {last}");
+}
+
+#[test]
+fn extra_convolve_reverses_ir_when_end_is_before_start() {
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let ir = vec![1.0_f32, 2.0_f32, 3.0_f32];
+
+    let runtime_reverse = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()
+        .expect("runtime reverse");
+
+    runtime_reverse.add_shared_resource_f32("ir", &ir).expect("resource reverse");
+
+    let graph = Graph::new().render(extra::convolve(
+        json!({"path": "ir", "start": 1.0, "end": 1.0 / 3.0}),
+        elemaudio_rs::el::const_(1.0),
+    ));
+
+    let mounted = graph.mount().expect("mount");
+    runtime_reverse.apply_instructions(mounted.batch()).expect("apply");
+
+    warm_past_root_fade(&runtime_reverse, sample_rate, buffer_size);
+    let reverse_last = settle_last_sample(&runtime_reverse, buffer_size, 20);
+    assert!((reverse_last - 5.0).abs() < 1e-4, "reversed IR should preserve region energy sum, got {reverse_last}");
+}

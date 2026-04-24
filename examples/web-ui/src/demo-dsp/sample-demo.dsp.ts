@@ -30,6 +30,8 @@ export interface SampleParams {
     feedback: number;
     leftIrPath: string;
     rightIrPath: string;
+    irStart: number;
+    irEnd: number;
     isStopped?: boolean;
 }
 
@@ -50,10 +52,11 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const rightSource =sample[1];
 
     const chopperThreshold = el.const({key: "sample:chopper-threshold", value: p.chopperThreshold});
+
     const freqShiftHz = el.const({key: "sample:freqshift-hz", value: p.freqShiftHz});
 
     function thresh(x: NodeRepr_t): NodeRepr_t {
-        return el.extra.threshold({key: "threshold", hysteresis: 0.01, latch: true},
+        return el.extra.threshold({ hysteresis: 0.01, latch: true},
             el.mul( chopperThreshold, (1/3)),
             el.train(8),
             el.abs(x));
@@ -85,8 +88,25 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const shiftDown = leftBands[0];
     const shiftUp = rightBands[1];
 
-    const leftWet =  el.extra.convolve({ path: p.leftIrPath, normalize: false, irAttenuationDb: 20}, shiftDown);
-    const rightWet = el.extra.convolve({ path: p.rightIrPath, normalize: false, irAttenuationDb: 20}, shiftUp);
+    const leftWet =  el.extra.convolve({
+            key: "sample:left-wet",
+            path: p.leftIrPath,
+            normalize: false,
+            irAttenuationDb: 20,
+            start: p.irStart,
+            end: p.irEnd,
+        },
+        shiftDown);
+
+    const rightWet = el.extra.convolve({
+            key: "sample:right-wet",
+            path: p.rightIrPath,
+            normalize: false,
+            irAttenuationDb: 20,
+            start: p.irStart,
+            end: p.irEnd,
+        },
+        shiftUp);
 
     return [
          el.select(blendNode, leftWet, shiftDown),
