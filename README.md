@@ -67,6 +67,7 @@ fn build_graph() -> Graph {
 Current extras include:
 
 - `freqshift`
+- `iir_hilbert`
 - `crunch`
 - `foldback`
 - `vari_slope_svf`

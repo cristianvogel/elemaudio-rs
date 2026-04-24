@@ -27,6 +27,7 @@
 #include <extra/frame_scope.h>
 #include <extra/frame_value.h>
 #include <extra/freqshift.h>
+#include <extra/iir_hilbert.h>
 #include <extra/limiter.h>
 // VariSlopeSVFNode: Rossum-style continuously morphable Butterworth slope SVF (12–72 dB/oct).
 // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0). Q fixed at Butterworth.
@@ -76,6 +77,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("freqshift", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FreqShiftNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("iirHilbert", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::IIRHilbertNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {

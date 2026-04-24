@@ -30,6 +30,14 @@ export interface FreqShiftProps extends Record<string, unknown> {
 }
 
 /**
+ * Props for `el.extra.iirHilbert(...)`.
+ */
+export interface IIRHilbertProps extends Record<string, unknown> {
+  /** Optional passband gain forwarded to the native Hilbert constructor. Default: `2`. */
+  passbandGain?: number;
+}
+
+/**
  * Props for `el.extra.crunch(...)`.
  */
 export interface CrunchProps extends Record<string, unknown> {
@@ -172,6 +180,31 @@ export function freqshift(
   x: ElemNode,
 ): Array<NodeRepr_t> {
   return unpack(createNode("freqshift", props, [resolve(shiftHz), resolve(feedback), resolve(x)]), 2);
+}
+
+/**
+ * Native IIR Hilbert helper.
+ *
+ * Returns two outputs in fixed order: analytic real part, then analytic imaginary part.
+ *
+ * In other words:
+ * - use `input -> iirHilbert -> ...` for custom analytic-signal processing
+ * - use `input -> freqshift` for the finished SSB/frequency-shift operation
+ *
+ * `freqshift` already contains an internal Hilbert stage, so `iirHilbert` is only
+ * needed when the raw analytic pair is useful directly.
+ *
+ * Props:
+ * - `passbandGain`: optional Hilbert passband gain (default: `2`)
+ *
+ * Child order:
+ * - `x`: audio input
+ */
+export function iirHilbert(
+  props: IIRHilbertProps,
+  x: ElemNode,
+): Array<NodeRepr_t> {
+  return unpack(createNode("iirHilbert", props, [resolve(x)]), 2);
 }
 
 /**

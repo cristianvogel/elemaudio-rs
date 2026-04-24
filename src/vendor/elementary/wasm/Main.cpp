@@ -4,6 +4,7 @@
 //
 // Custom node registry (keep in sync with src/ffi/elementary_bridge.cpp):
 //   "freqshift"    — FreqShiftNode
+//   "iirHilbert"   — IIRHilbertNode
 //   "crunch"       — CrunchNode
 //   "boxsum"       — BoxSumNode
 //   "boxaverage"   — BoxAverageNode
@@ -60,6 +61,7 @@
 #include "../../../../native/extra/frame_scope.h"
 #include "../../../../native/extra/frame_value.h"
 #include "../../../../native/extra/freqshift.h"
+#include "../../../../native/extra/iir_hilbert.h"
 #include "../../../../native/extra/crunch.h"
 #include "../../../../native/extra/limiter.h"
 #include "../../../../native/extra/vari_slope_svf.h"
@@ -119,6 +121,10 @@ public:
 
         runtime->registerNodeType("freqshift", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::FreqShiftNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("iirHilbert", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::IIRHilbertNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {

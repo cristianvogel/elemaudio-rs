@@ -74,6 +74,19 @@ pub fn freqshift(
     )
 }
 
+/// IIR Hilbert helper.
+///
+/// Returns two roots in fixed order: analytic real part, then analytic imaginary part.
+///
+/// Props:
+/// - `passbandGain`: optional Hilbert passband gain, default `2.0`
+///
+/// Child order:
+/// - `x`: audio input
+pub fn iir_hilbert(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
+    unpack(Node::new("iirHilbert", props, vec![resolve(x)]), 2)
+}
+
 /// Crunch distortion helper.
 ///
 /// Returns one root per output channel.

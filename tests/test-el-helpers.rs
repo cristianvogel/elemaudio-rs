@@ -835,6 +835,19 @@ fn covers_extra_helpers() {
         3,
     );
 
+    let iir_hilbert_nodes = extra::iir_hilbert(
+        serde_json::json!({"passbandGain": 1.5}),
+        ElemNode::from(node(1.0)),
+    );
+
+    assert_eq!(iir_hilbert_nodes.len(), 2);
+    assert_nodes(
+        &iir_hilbert_nodes,
+        "iirHilbert",
+        serde_json::json!({"passbandGain": 1.5}),
+        1,
+    );
+
     let crunch_nodes = extra::crunch(
         serde_json::json!({
             "channels": 2,
