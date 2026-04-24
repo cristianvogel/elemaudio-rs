@@ -1,13 +1,13 @@
 import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
 import sampleUrl from "../../../demo-resources/115bpm_808_Beat_mono.wav?url";
-import irUrl from "../../../demo-resources/DEEPNESS.wav?url";
+import irUrl from "../../../demo-resources/SURFACE.wav?url";
 import { buildGraph as dspBuildGraph } from "../demo-dsp/sample-demo.dsp";
 import WebRenderer from "../WebRenderer";
 import "../style.css";
 
-const bundledSamplePath = "demo-resources/115bpm_808_Beat_mono.wav";
-const bundledIrBasePath = "demo-resources/DEEPNESS";
+const bundledSamplePath = "SRC:SAMPLES FILE";
+const bundledIrBasePath = "SRC:IR FILE";
 let samplePath = bundledSamplePath;
 let sampleChannels = 1;
 let irChannelPaths: string[] = [];
@@ -61,7 +61,7 @@ app.innerHTML = `
             <span>Chopper</span>
             <span id="chopper-threshold-value">0.50</span>
           </label>
-          <input id="chopper-threshold" type="range" min="1.0e-4" max="1" value="0.01" step="0.01" />
+          <input id="chopper-threshold" type="range" min="1.0e-4" max="1" value="0.1" step="0.01" />
         </div>
         <div class="dial">
           <label for="freq-shift-hz">
@@ -71,7 +71,7 @@ app.innerHTML = `
             </span>
             <span id="freq-shift-hz-value">110 Hz</span>
           </label>
-          <input id="freq-shift-hz" type="range" min="-600" max="600" value="110" step="0.001" />
+          <input id="freq-shift-hz" type="range" min="-600" max="600" value="50" step="0.001" />
         </div>
         <div class="dial">
           <label for="freqshift-feedback">

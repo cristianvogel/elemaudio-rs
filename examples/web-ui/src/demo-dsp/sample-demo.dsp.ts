@@ -83,8 +83,8 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const shiftDown = leftBands[0];
     const shiftUp = rightBands[1];
 
-    const leftWet = el.convolve({key: "ir-left", path: p.leftIrPath}, el.mul(1.0e-3, shiftDown));
-    const rightWet = el.convolve({key: "ir-right", path: p.rightIrPath}, el.mul(1.0e-3, shiftUp));
+    const leftWet = el.convolve({key: "ir-left", path: p.leftIrPath}, el.mul(0.1, shiftDown));
+    const rightWet = el.convolve({key: "ir-right", path: p.rightIrPath}, el.mul(0.1, shiftUp));
 
     return [
          el.select(blendNode, leftWet, shiftDown),
