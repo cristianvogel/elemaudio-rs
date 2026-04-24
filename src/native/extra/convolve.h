@@ -1,12 +1,11 @@
 #pragma once
 
-#include <AudioFFT.h>
 #include <TwoStageFFTConvolver.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,17 +26,15 @@ namespace elem
         }
     }
 
-    enum class ConvolveWeighting {
-        None,
-        AWeight,
-    };
-
     template <typename FloatType>
     struct ExtraConvolutionNode : public GraphNode<FloatType> {
         ExtraConvolutionNode(NodeId id, FloatType const sr, int const blockSize)
             : GraphNode<FloatType>::GraphNode(id, sr, blockSize)
-            , sampleRate(sr)
+            , attackCoeff(timeConstantCoeff(sr, 0.001))
+            , releaseCoeff(timeConstantCoeff(sr, 0.050))
         {
+            scratchFloatIn.resize(blockSize);
+            scratchFloatOut.resize(blockSize);
             if constexpr (std::is_same_v<FloatType, double>) {
                 scratchIn.resize(blockSize);
                 scratchOut.resize(blockSize);
@@ -60,40 +57,36 @@ namespace elem
                 return rebuildConvolver(resources);
             }
 
-            if (key == "irTrimDb") {
-                if (val.isNull()) {
-                    irTrimDb.reset();
-                    return rebuildConvolver(resources);
-                }
-
+            if (key == "irAttenuationDb") {
                 if (!val.isNumber()) {
                     return elem::ReturnCode::InvalidPropertyType();
                 }
 
                 auto const parsed = static_cast<double>((js::Number) val);
-                if (!std::isfinite(parsed) || parsed >= 0.0) {
+                if (!std::isfinite(parsed) || parsed < 0.0) {
                     return elem::ReturnCode::InvalidPropertyValue();
                 }
 
-                irTrimDb = parsed;
-                return rebuildConvolver(resources);
+                irAttenuationGain.store(dbToGain(-parsed), std::memory_order_relaxed);
+                refreshRunawayGain(resources);
+                return GraphNode<FloatType>::setProperty(key, val);
             }
 
-            if (key == "Weighting") {
-                if (!val.isString()) {
+            if (key == "normalize") {
+                if (!val.isBool()) {
                     return elem::ReturnCode::InvalidPropertyType();
                 }
 
-                auto const parsed = parseWeighting(std::string((js::String) val));
-                if (!parsed.has_value()) {
-                    return elem::ReturnCode::InvalidPropertyValue();
-                }
-
-                weighting = *parsed;
-                return rebuildConvolver(resources);
+                normalizeEnabled.store(static_cast<bool>((js::Boolean) val), std::memory_order_relaxed);
+                return GraphNode<FloatType>::setProperty(key, val);
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
+        }
+
+        void reset() override
+        {
+            inputEnvelope = 0.0;
         }
 
         void process(BlockContext<FloatType> const& ctx) override
@@ -113,16 +106,42 @@ namespace elem
             }
 
             if constexpr (std::is_same_v<FloatType, float>) {
-                convolver->process(inputData[0], outputData, numSamples);
+                auto const* sourceInput = inputData[0];
+                auto const irGain = irAttenuationGain.load(std::memory_order_relaxed);
+                auto const normalize = normalizeEnabled.load(std::memory_order_relaxed);
+                for (size_t i = 0; i < numSamples; ++i) {
+                    auto const source = static_cast<double>(sourceInput[i]);
+                    auto const prepared = normalize ? applyRealtimeNormalization(source) : source;
+                    scratchFloatIn[i] = std::isfinite(prepared) ? static_cast<float>(prepared) : 0.0f;
+                }
+
+                convolver->process(scratchFloatIn.data(), scratchFloatOut.data(), numSamples);
+
+                for (size_t i = 0; i < numSamples; ++i) {
+                    auto const wet = static_cast<double>(scratchFloatOut[i]) * irGain;
+                    outputData[i] = std::isfinite(wet) ? static_cast<FloatType>(wet) : FloatType(0);
+                }
             }
 
             if constexpr (std::is_same_v<FloatType, double>) {
+                auto const* sourceInput = inputData[0];
                 auto* scratchDataIn = scratchIn.data();
                 auto* scratchDataOut = scratchOut.data();
+                auto const irGain = irAttenuationGain.load(std::memory_order_relaxed);
+                auto const normalize = normalizeEnabled.load(std::memory_order_relaxed);
 
-                extra_convolve_detail::copy_cast_n<double, float>(inputData[0], numSamples, scratchDataIn);
+                for (size_t i = 0; i < numSamples; ++i) {
+                    auto const source = static_cast<double>(sourceInput[i]);
+                    auto const prepared = normalize ? applyRealtimeNormalization(source) : source;
+                    scratchDataIn[i] = std::isfinite(prepared) ? static_cast<float>(prepared) : 0.0f;
+                }
+
                 convolver->process(scratchDataIn, scratchDataOut, numSamples);
-                extra_convolve_detail::copy_cast_n<float, double>(scratchDataOut, numSamples, outputData);
+
+                for (size_t i = 0; i < numSamples; ++i) {
+                    auto const wet = static_cast<double>(scratchDataOut[i]) * irGain;
+                    outputData[i] = std::isfinite(wet) ? static_cast<FloatType>(wet) : FloatType(0);
+                }
             }
         }
 
@@ -131,19 +150,10 @@ namespace elem
 
         std::vector<float> scratchIn;
         std::vector<float> scratchOut;
+        std::vector<float> scratchFloatIn;
+        std::vector<float> scratchFloatOut;
 
     private:
-        static std::optional<ConvolveWeighting> parseWeighting(std::string const& value)
-        {
-            if (value == "none") {
-                return ConvolveWeighting::None;
-            }
-            if (value == "a-weight") {
-                return ConvolveWeighting::AWeight;
-            }
-            return std::nullopt;
-        }
-
         int rebuildConvolver(SharedResourceMap& resources)
         {
             if (path.empty()) {
@@ -156,136 +166,76 @@ namespace elem
             }
 
             auto bufferView = resource->getChannelData(0);
-            auto const trimmedLength = analysedTrimLength(bufferView.data(), bufferView.size());
+            runawayGainCoeff.store(computeRunawayGainCoeff(bufferView.data(), bufferView.size()), std::memory_order_relaxed);
 
             auto co = std::make_shared<fftconvolver::TwoStageFFTConvolver>();
             co->reset();
-            co->init(512, 4096, bufferView.data(), trimmedLength);
+            co->init(512, 4096, bufferView.data(), bufferView.size());
             convolverQueue.push(std::move(co));
             return elem::ReturnCode::Ok();
         }
 
-        size_t analysedTrimLength(float const* ir, size_t irLen) const
+        void refreshRunawayGain(SharedResourceMap& resources)
         {
-            if (!irTrimDb.has_value() || ir == nullptr || irLen == 0) {
-                return irLen;
+            if (path.empty()) {
+                runawayGainCoeff.store(1.0, std::memory_order_relaxed);
+                return;
             }
 
-            auto const windowSize = analysisWindowSize(irLen);
-            auto const hopSize = std::max<size_t>(1, windowSize / 2);
-            auto const metrics = analyseTailWindows(ir, irLen, windowSize, hopSize);
-            if (metrics.empty()) {
-                return irLen;
+            auto resource = resources.get(path);
+            if (resource == nullptr) {
+                runawayGainCoeff.store(1.0, std::memory_order_relaxed);
+                return;
             }
 
-            auto const maxMetric = *std::max_element(metrics.begin(), metrics.end());
-            if (!(maxMetric > 0.0)) {
-                return irLen;
-            }
-
-            auto const thresholdLinear = maxMetric * std::pow(10.0, *irTrimDb / 20.0);
-            size_t lastSignificantEnd = irLen;
-            bool found = false;
-
-            for (size_t i = metrics.size(); i-- > 0;) {
-                if (metrics[i] >= thresholdLinear) {
-                    auto const analysisEnd = std::min(irLen, i * hopSize + windowSize);
-                    auto const safetyEnd = std::min(irLen, analysisEnd + windowSize);
-                    lastSignificantEnd = safetyEnd;
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                return irLen;
-            }
-
-            return std::max<size_t>(1, lastSignificantEnd);
+            auto bufferView = resource->getChannelData(0);
+            runawayGainCoeff.store(computeRunawayGainCoeff(bufferView.data(), bufferView.size()), std::memory_order_relaxed);
         }
 
-        static size_t analysisWindowSize(size_t irLen)
+        double computeRunawayGainCoeff(float const* ir, size_t len) const
         {
-            size_t window = 32;
-            while (window < 512 && window < irLen / 2) {
-                window <<= 1;
+            double l1 = 0.0;
+            double peak = 0.0;
+            auto const irGain = irAttenuationGain.load(std::memory_order_relaxed);
+            for (size_t i = 0; i < len; ++i) {
+                auto const magnitude = std::abs(static_cast<double>(ir[i]) * irGain);
+                l1 += magnitude;
+                peak = std::max(peak, magnitude);
             }
-            return std::min(window, std::max<size_t>(32, irLen));
+            return std::max(1.0, 0.5 * l1 + 0.5 * peak);
         }
 
-        std::vector<double> analyseTailWindows(float const* ir, size_t irLen, size_t windowSize, size_t hopSize) const
+        static double dbToGain(double db)
         {
-            std::vector<double> metrics;
-            for (size_t start = 0; start < irLen; start += hopSize) {
-                auto const remaining = irLen - start;
-                auto const sizeCopy = std::min(windowSize, remaining);
-                metrics.push_back(windowMetric(ir + start, sizeCopy, windowSize));
-                if (remaining <= windowSize) {
-                    break;
-                }
-            }
-            return metrics;
+            return std::pow(10.0, db / 20.0);
         }
 
-        double windowMetric(float const* window, size_t sizeCopy, size_t fftSize) const
+        static double timeConstantCoeff(double sampleRate, double seconds)
         {
-            if (weighting == ConvolveWeighting::None) {
-                double energy = 0.0;
-                for (size_t i = 0; i < sizeCopy; ++i) {
-                    auto const sample = static_cast<double>(window[i]);
-                    energy += sample * sample;
-                }
-                return std::sqrt(energy / static_cast<double>(std::max<size_t>(1, sizeCopy)));
-            }
-
-            audiofft::AudioFFT fft;
-            fft.init(fftSize);
-
-            std::vector<float> time(fftSize, 0.0f);
-            std::vector<float> re(audiofft::AudioFFT::ComplexSize(fftSize), 0.0f);
-            std::vector<float> im(audiofft::AudioFFT::ComplexSize(fftSize), 0.0f);
-
-            for (size_t i = 0; i < sizeCopy; ++i) {
-                auto const phase = (2.0 * 3.14159265358979323846 * static_cast<double>(i))
-                    / static_cast<double>(std::max<size_t>(1, fftSize - 1));
-                auto const hann = 0.5 - 0.5 * std::cos(phase);
-                time[i] = static_cast<float>(static_cast<double>(window[i]) * hann);
-            }
-
-            fft.fft(time.data(), re.data(), im.data());
-
-            double weightedEnergy = 0.0;
-            auto const binCount = re.size();
-            for (size_t bin = 1; bin < binCount; ++bin) {
-                auto const freq = (static_cast<double>(bin) * static_cast<double>(sampleRate)) / static_cast<double>(fftSize);
-                auto const gain = aWeightGain(freq);
-                auto const mag2 = static_cast<double>(re[bin]) * static_cast<double>(re[bin])
-                    + static_cast<double>(im[bin]) * static_cast<double>(im[bin]);
-                weightedEnergy += mag2 * gain * gain;
-            }
-
-            return std::sqrt(weightedEnergy / static_cast<double>(std::max<size_t>(1, binCount - 1)));
+            return 1.0 - std::exp(-1.0 / std::max(1.0, sampleRate * seconds));
         }
 
-        static double aWeightGain(double freq)
+        double applyRealtimeNormalization(double inputSample)
         {
-            if (!(freq > 0.0)) {
-                return 0.0;
-            }
+            auto const coeffScale = runawayGainCoeff.load(std::memory_order_relaxed);
+            auto const magnitude = std::abs(inputSample);
+            auto const coeff = magnitude > inputEnvelope ? attackCoeff : releaseCoeff;
+            inputEnvelope += coeff * (magnitude - inputEnvelope);
 
-            auto const f2 = freq * freq;
-            auto const ra = (std::pow(12200.0, 2.0) * f2 * f2)
-                / ((f2 + std::pow(20.6, 2.0))
-                    * std::sqrt((f2 + std::pow(107.7, 2.0)) * (f2 + std::pow(737.9, 2.0)))
-                    * (f2 + std::pow(12200.0, 2.0)));
-            auto const adb = 20.0 * std::log10(ra) + 2.0;
-            return std::pow(10.0, adb / 20.0);
+            auto const predicted = inputEnvelope * coeffScale;
+            auto const gain = predicted > 1.0 ? (1.0 / predicted) : 1.0;
+            auto const makeup = std::sqrt(std::max(1.0, coeffScale));
+            auto const result = inputSample * gain * makeup;
+            return std::isfinite(result) ? result : 0.0;
         }
 
-        FloatType sampleRate;
         std::string path;
-        std::optional<double> irTrimDb;
-        ConvolveWeighting weighting{ConvolveWeighting::None};
+        std::atomic<double> irAttenuationGain{1.0};
+        std::atomic<bool> normalizeEnabled{false};
+        std::atomic<double> runawayGainCoeff{1.0};
+        double inputEnvelope{0.0};
+        double attackCoeff;
+        double releaseCoeff;
     };
 
 } // namespace elem

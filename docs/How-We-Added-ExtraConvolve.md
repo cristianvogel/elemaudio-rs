@@ -4,7 +4,7 @@ Date: 2026-04-24
 
 ## Goal
 
-Add a repo-owned `el::extra::convolve` / `el.extra.convolve` helper that extends the vendor convolver with analytical impulse-response preprocessing.
+Add a repo-owned `el::extra::convolve` / `el.extra.convolve` helper that wraps the vendor convolver in repo-owned bridge/runtime code.
 
 ## Current API
 
@@ -24,26 +24,17 @@ el.extra.convolve(props, x)
 
 - returns one root
 - child order is `x`
-- props support `path`, optional `irTrimDb`, and optional `Weighting`
+- props support `path`, optional `irAttenuationDb`, and optional `normalize`
 
-## Analytical IR processing
+## Runtime behavior
 
-This node performs extra analytical processing on the IR before it initializes the underlying FFT convolver.
+This node forwards the full shared IR buffer to the underlying two-stage FFT convolver.
 
-When `irTrimDb` is present, the node:
+Optional runtime controls:
 
-- analyses the IR in short windows
-- computes a relative significance threshold from the IR itself
-- applies optional analysis weighting through `Weighting`
-- trims the late IR tail at the last analytically significant region plus a safety margin
-
-This is an IR-side optimization step. It does not gate the live input signal.
-
-## Weighting
-
-- `"none"`: unweighted analysis
-- `"a-weight"`: A-weighted spectral analysis of each IR window
+- `irAttenuationDb`: attenuates the wet output by the given positive dB amount
+- `normalize`: applies realtime input normalization based on a gain estimate derived from the loaded IR
 
 ## Validation
 
-The Rust side is covered by helper-shape tests and runtime tests showing that trimmed and untrimmed IRs reach different steady-state gains.
+The Rust side is covered by helper-shape tests and runtime tests for wet attenuation and normalization behavior.

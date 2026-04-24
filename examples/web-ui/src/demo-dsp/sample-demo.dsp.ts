@@ -37,11 +37,13 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     if (p.isStopped) {
         return [el.const({value: 0}), el.const({value: 0})];
     }
+
     const smRate = el.sm(el.const({key: "samp:rate", value: p.rate}));
-    const trigger = el.train(el.mul(smRate, el.extra.sampleCount({unit: "hz", path: p.samplePath})));
+    const trigger = el.train( el.mul( el.extra.sampleCount({unit: "hz", path: p.samplePath}),  smRate ));
     const blendNode = el.const({key: "fx:blend", value: p.blend});
 
     const sampleGainDb = el.const({key: "sample:gain-db", value: -3});
+
     const sample = el.extra.sample({path: p.samplePath}, 0.0, 1.0, smRate, sampleGainDb, trigger);
 
     const leftSource = sample[0];
@@ -83,8 +85,8 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const shiftDown = leftBands[0];
     const shiftUp = rightBands[1];
 
-    const leftWet = el.convolve({key: "ir-left", path: p.leftIrPath}, el.mul(0.1, shiftDown));
-    const rightWet = el.convolve({key: "ir-right", path: p.rightIrPath}, el.mul(0.1, shiftUp));
+    const leftWet =  el.extra.convolve({ path: p.leftIrPath, normalize: false, irAttenuationDb: 20}, shiftDown);
+    const rightWet = el.extra.convolve({ path: p.rightIrPath, normalize: false, irAttenuationDb: 20}, shiftUp);
 
     return [
          el.select(blendNode, leftWet, shiftDown),

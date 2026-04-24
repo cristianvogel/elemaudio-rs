@@ -29,24 +29,18 @@ export interface FreqShiftProps extends Record<string, unknown> {
   fbSource?: FreqShiftFeedbackSource;
 }
 
-/** Weighting mode used while analytically inspecting an IR for trimming. */
-export type ConvolveWeighting = "none" | "a-weight";
-
 /**
  * Props for `el.extra.convolve(...)`.
- *
- * This convolver performs extra analytical processing on the IR before handing
- * the shortened result to the underlying FFT convolver.
  */
 export interface ExtraConvolveProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
   /** Shared resource id for the impulse response. */
   path: string;
-  /** Optional negative dB threshold that enables analytical IR tail trimming. */
-  irTrimDb?: number;
-  /** Optional weighting mode used during IR analysis. */
-  Weighting?: ConvolveWeighting;
+  /** Optional wet-output attenuation in dB. Uses positive dB values, applied as attenuation. */
+  irAttenuationDb?: number;
+  /** Enables realtime input normalization based on the loaded IR gain estimate. */
+  normalize?: boolean;
 }
 
 /**
@@ -197,13 +191,10 @@ export function freqshift(
 /**
  * Extended convolution helper.
  *
- * This node performs extra analytical processing on the IR before initializing
- * the underlying FFT convolver.
- *
  * Props:
  * - `path`: shared resource id for the impulse response
- * - `irTrimDb`: optional negative dB threshold enabling analytical IR tail trimming
- * - `Weighting`: optional IR-analysis weighting mode (`"none"` or `"a-weight"`)
+ * - `irAttenuationDb`: optional wet-output attenuation in dB
+ * - `normalize`: optional realtime input normalization toggle
  *
  * Child order:
  * - `x`: audio input

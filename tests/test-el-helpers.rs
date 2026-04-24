@@ -836,13 +836,13 @@ fn covers_extra_helpers() {
     );
 
     let extra_convolve_node = extra::convolve(
-        serde_json::json!({"path": "ir.wav", "irTrimDb": -60.0, "Weighting": "a-weight"}),
+        serde_json::json!({"path": "ir.wav", "irAttenuationDb": 6.0, "normalize": true}),
         ElemNode::from(node(1.0)),
     );
     assert_node(
         &extra_convolve_node,
         "extra.convolve",
-        serde_json::json!({"path": "ir.wav", "irTrimDb": -60.0, "Weighting": "a-weight"}),
+        serde_json::json!({"path": "ir.wav", "irAttenuationDb": 6.0, "normalize": true}),
         1,
     );
 
