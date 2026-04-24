@@ -153,3 +153,43 @@ fn extra_convolve_reverses_ir_when_end_is_before_start() {
     let reverse_last = settle_last_sample(&runtime_reverse, buffer_size, 20);
     assert!((reverse_last - 5.0).abs() < 1e-4, "reversed IR should preserve region energy sum, got {reverse_last}");
 }
+
+#[test]
+fn extra_convolve_rate_changes_response_length() {
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let ir = vec![1.0_f32, 1.0_f32, 1.0_f32, 1.0_f32];
+
+    let runtime_fast = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()
+        .expect("runtime fast");
+    runtime_fast.add_shared_resource_f32("ir", &ir).expect("resource fast");
+    let graph_fast = Graph::new().render(extra::convolve(
+        json!({"path": "ir", "rate": 2.0}),
+        elemaudio_rs::el::const_(1.0),
+    ));
+    let mounted_fast = graph_fast.mount().expect("mount fast");
+    runtime_fast.apply_instructions(mounted_fast.batch()).expect("apply fast");
+    warm_past_root_fade(&runtime_fast, sample_rate, buffer_size);
+    let fast_last = settle_last_sample(&runtime_fast, buffer_size, 20);
+
+    let runtime_slow = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()
+        .expect("runtime slow");
+    runtime_slow.add_shared_resource_f32("ir", &ir).expect("resource slow");
+    let graph_slow = Graph::new().render(extra::convolve(
+        json!({"path": "ir", "rate": 0.5}),
+        elemaudio_rs::el::const_(1.0),
+    ));
+    let mounted_slow = graph_slow.mount().expect("mount slow");
+    runtime_slow.apply_instructions(mounted_slow.batch()).expect("apply slow");
+    warm_past_root_fade(&runtime_slow, sample_rate, buffer_size);
+    let slow_last = settle_last_sample(&runtime_slow, buffer_size, 20);
+
+    assert!((fast_last - 3.0).abs() < 1e-4, "rate 2.0 should shorten the 4-sample IR to 3 effective taps, got {fast_last}");
+    assert!((slow_last - 7.0).abs() < 1e-4, "rate 0.5 should stretch the 4-sample IR to 7 effective taps, got {slow_last}");
+}

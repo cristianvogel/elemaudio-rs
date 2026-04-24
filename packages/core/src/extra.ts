@@ -41,6 +41,8 @@ export interface ExtraConvolveProps extends Record<string, unknown> {
   start?: number;
   /** Optional normalized IR end position in `[0, 1]`. */
   end?: number;
+  /** Optional positive IR playback-rate multiplier. Values above 1 shorten the response; values below 1 stretch it. */
+  rate?: number;
   /** Optional wet-output attenuation in dB. Uses positive dB values, applied as attenuation. */
   irAttenuationDb?: number;
   /** Enables realtime input normalization based on the loaded IR gain estimate. */
@@ -199,6 +201,7 @@ export function freqshift(
  * - `path`: shared resource id for the impulse response
  * - `start`: optional normalized IR start position in `[0, 1]`
  * - `end`: optional normalized IR end position in `[0, 1]`
+ * - `rate`: optional positive IR playback-rate multiplier
  * - `irAttenuationDb`: optional wet-output attenuation in dB
  * - `normalize`: optional realtime input normalization toggle
  *

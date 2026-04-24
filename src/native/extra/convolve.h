@@ -85,6 +85,20 @@ namespace elem
                 return rebuildConvolver(resources);
             }
 
+            if (key == "rate") {
+                if (!val.isNumber()) {
+                    return elem::ReturnCode::InvalidPropertyType();
+                }
+
+                auto const parsed = static_cast<double>((js::Number) val);
+                if (!std::isfinite(parsed) || parsed <= 0.0) {
+                    return elem::ReturnCode::InvalidPropertyValue();
+                }
+
+                rate.store(parsed, std::memory_order_relaxed);
+                return rebuildConvolver(resources);
+            }
+
             if (key == "irAttenuationDb") {
                 if (!val.isNumber()) {
                     return elem::ReturnCode::InvalidPropertyType();
@@ -288,12 +302,46 @@ namespace elem
                 std::reverse(prepared.begin(), prepared.end());
             }
 
+            prepared = resampleIr(prepared);
             return prepared;
+        }
+
+        std::vector<float> resampleIr(std::vector<float> const& source) const
+        {
+            auto const playbackRate = rate.load(std::memory_order_relaxed);
+            if (source.empty()) {
+                return {0.0f};
+            }
+
+            if (!std::isfinite(playbackRate) || playbackRate <= 0.0) {
+                return source;
+            }
+
+            if (source.size() == 1 || std::abs(playbackRate - 1.0) < 1.0e-12) {
+                return source;
+            }
+
+            auto const lastIndex = static_cast<double>(source.size() - 1);
+            auto const outputLength = std::max<size_t>(1, static_cast<size_t>(std::ceil(lastIndex / playbackRate)) + 1);
+            std::vector<float> resampled(outputLength, 0.0f);
+
+            for (size_t i = 0; i < outputLength; ++i) {
+                auto const readPos = std::min(lastIndex, static_cast<double>(i) * playbackRate);
+                auto const left = static_cast<size_t>(readPos);
+                auto const right = std::min(left + 1, source.size() - 1);
+                auto const alpha = readPos - static_cast<double>(left);
+                auto const value = static_cast<double>(source[left])
+                    + (static_cast<double>(source[right]) - static_cast<double>(source[left])) * alpha;
+                resampled[i] = static_cast<float>(value);
+            }
+
+            return resampled;
         }
 
         std::string path;
         std::atomic<double> start{0.0};
         std::atomic<double> end{1.0};
+        std::atomic<double> rate{1.0};
         std::atomic<double> irAttenuationGain{1.0};
         std::atomic<bool> normalizeEnabled{false};
         std::atomic<double> runawayGainCoeff{1.0};

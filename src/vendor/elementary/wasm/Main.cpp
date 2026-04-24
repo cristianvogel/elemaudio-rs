@@ -334,6 +334,16 @@ public:
 
     val addSharedResource(val name, val buffer)
     {
+        return addOrReplaceSharedResource(name, buffer, false);
+    }
+
+    val replaceSharedResource(val name, val buffer)
+    {
+        return addOrReplaceSharedResource(name, buffer, true);
+    }
+
+    val addOrReplaceSharedResource(val name, val buffer, bool replaceExisting)
+    {
         auto n = emValToValue(name);
         auto buf = emValToValue(buffer);
 
@@ -369,20 +379,24 @@ public:
             }
 
             auto resource = std::make_unique<elem::AudioBufferResource>(channelPointers.data(), channelPointers.size(), channelData[0].size());
-            auto result = runtime->addSharedResource((elem::js::String) n, std::move(resource));
+            auto result = replaceExisting
+                ? runtime->replaceSharedResource((elem::js::String) n, std::move(resource))
+                : runtime->addSharedResource((elem::js::String) n, std::move(resource));
 
             return valueToEmVal(elem::js::Object {
                 {"success", result},
-                {"message", result ? "Ok" : "cannot overwrite existing shared resource"},
+                {"message", result ? "Ok" : (replaceExisting ? "shared resource not found" : "cannot overwrite existing shared resource")},
             });
         }
 
         auto& f32vec = buf.getFloat32Array();
-        auto result = runtime->addSharedResource((elem::js::String) n, std::make_unique<elem::AudioBufferResource>(f32vec.data(), f32vec.size()));
+        auto result = replaceExisting
+            ? runtime->replaceSharedResource((elem::js::String) n, std::make_unique<elem::AudioBufferResource>(f32vec.data(), f32vec.size()))
+            : runtime->addSharedResource((elem::js::String) n, std::make_unique<elem::AudioBufferResource>(f32vec.data(), f32vec.size()));
 
         return valueToEmVal(elem::js::Object {
             {"success", result},
-            {"message", result ? "Ok" : "cannot overwrite existing shared resource"},
+            {"message", result ? "Ok" : (replaceExisting ? "shared resource not found" : "cannot overwrite existing shared resource")},
         });
     }
 
@@ -594,6 +608,7 @@ EMSCRIPTEN_BINDINGS(Elementary) {
         .function("reset", &ElementaryAudioProcessor::reset)
         .function("gc", &ElementaryAudioProcessor::gc)
         .function("addSharedResource", &ElementaryAudioProcessor::addSharedResource)
+        .function("replaceSharedResource", &ElementaryAudioProcessor::replaceSharedResource)
         .function("pruneSharedResources", &ElementaryAudioProcessor::pruneSharedResources)
         .function("listSharedResources", &ElementaryAudioProcessor::listSharedResources)
         .function("process", &ElementaryAudioProcessor::process)

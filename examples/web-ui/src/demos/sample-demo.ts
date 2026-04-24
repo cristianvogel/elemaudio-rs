@@ -41,7 +41,7 @@ app.innerHTML = `
     This makes it trivial to swap the IR flavour, as demonstrated by the UI button.</p>
 
     <div class="controls">
-      <div class="dial-strip" aria-label="Sample processing controls">
+      <div class="dial-strip dial-strip-three" aria-label="Sample and mix controls">
         <div class="dial">
           <label for="rate">
             <span>Playback</span>
@@ -56,7 +56,9 @@ app.innerHTML = `
           </label>
           <input id="blend" type="range" min="0" max="100" value="50" step="1" />
         </div>
-        
+      </div>
+
+      <div class="dial-strip dial-strip-three" aria-label="IR shaping controls">
         <div class="dial">
         <label for="start-offset">
         <span>IR Start</span>
@@ -71,7 +73,16 @@ app.innerHTML = `
         <input id="ir-end" type="range" min="0" max="100" value="100" step="1" />
         <span id="ir-end-value">100</span>
         </div>
-        
+        <div class="dial">
+        <label for="ir-rate">
+        <span>IR Rate</span>
+        <span id="ir-rate-value">1.00x</span>
+        </label>
+        <input id="ir-rate" type="range" min="0.1" max="2.0" value="1.0" step="0.01" />
+        </div>
+      </div>
+
+      <div class="dial-strip dial-strip-three" aria-label="Modulation controls">
         <div class="dial">
           <label for="chopper-threshold">
             <span>Chopper</span>
@@ -97,12 +108,20 @@ app.innerHTML = `
           <input id="freqshift-feedback" type="range" min="0" max="95" value="0" step="1" />
         </div>
       </div>
+
       <div class="row">
         <label for="sample-file">
           <span>Browser file</span>
           <span id="sample-file-name">Built-in sample</span>
         </label>
         <input id="sample-file" type="file" accept="audio/*" />
+      </div>
+      <div class="row">
+        <label for="ir-file">
+          <span>Load new IR</span>
+          <span id="ir-file-name">Overwrite active IR slot(s)</span>
+        </label>
+        <input id="ir-file" type="file" accept="audio/*" />
       </div>
       <div class="button-row">
         <button id="start" class="state-button">Start audio</button>
@@ -124,18 +143,22 @@ const irStart = mustQuery<HTMLInputElement>("#start-offset");
 const irStartValue = mustQuery<HTMLSpanElement>("#start-offset-value");
 const irEnd = mustQuery<HTMLInputElement>("#ir-end");
 const irEndValue = mustQuery<HTMLSpanElement>("#ir-end-value");
+const irRate = mustQuery<HTMLInputElement>("#ir-rate");
+const irRateValue = mustQuery<HTMLSpanElement>("#ir-rate-value");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
 const freqShiftHzSlider = mustQuery<HTMLInputElement>("#freq-shift-hz");
 const freqShiftFeedbackSlider = mustQuery<HTMLInputElement>("#freqshift-feedback");
 const sampleFileInput = mustQuery<HTMLInputElement>("#sample-file");
+const irFileInput = mustQuery<HTMLInputElement>("#ir-file");
 const rateValue = mustQuery<HTMLSpanElement>("#rate-value");
 const blendValue = mustQuery<HTMLSpanElement>("#blend-value");
 const chopperThresholdValue = mustQuery<HTMLSpanElement>("#chopper-threshold-value");
 const freqShiftHzValue = mustQuery<HTMLSpanElement>("#freq-shift-hz-value");
 const freqShiftFeedbackValue = mustQuery<HTMLSpanElement>("#freqshift-feedback-value");
 const sampleFileName = mustQuery<HTMLSpanElement>("#sample-file-name");
+const irFileName = mustQuery<HTMLSpanElement>("#ir-file-name");
 const toggleIrButton = mustQuery<HTMLButtonElement>("#toggle-ir");
 const resourceStatus = mustQuery<HTMLDivElement>("#resource-status");
 const status = mustQuery<HTMLDivElement>("#status");
@@ -193,6 +216,13 @@ async function updateIrStart() {
 
 async function updateIrEnd() {
     irEndValue.textContent = `${ (Number(irEnd.value).toFixed(0)) }%`;
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
+}
+
+async function updateIrRate() {
+    irRateValue.textContent = `${Number(irRate.value).toFixed(2)}x`;
     if (renderer && audioContext?.state === "running") {
         await renderCurrentGraph();
     }
@@ -329,14 +359,44 @@ async function loadBrowserSample(file: File) {
   resourceStatus.textContent = `Loaded ${file.name} from the browser (${buffer.numberOfChannels} ch @ ${buffer.sampleRate} Hz)`;
 }
 
+function activeIrTargetPaths(): [string, string] {
+  const left = irChannelPaths[activeIrPairStart] ?? `${bundledIrBasePath}_ch1.wav`;
+  const right = irChannelPaths[activeIrPairStart + 1] ?? left;
+  return [left, right];
+}
+
+async function loadBrowserIr(file: File) {
+  if (!audioContext || !renderer) {
+    return;
+  }
+
+  const bytes = await file.arrayBuffer();
+  const buffer = await audioContext.decodeAudioData(bytes);
+  const [leftPath, rightPath] = activeIrTargetPaths();
+  const vfs: Record<string, Float32Array | Float32Array[]> = {};
+
+  const leftData = new Float32Array(buffer.getChannelData(0));
+  vfs[leftPath] = leftData;
+
+  if (buffer.numberOfChannels > 1 && rightPath !== leftPath) {
+    vfs[rightPath] = new Float32Array(buffer.getChannelData(1));
+  } else if (rightPath !== leftPath) {
+    vfs[rightPath] = leftData;
+  }
+
+  await renderer.updateVirtualFileSystem(vfs);
+  irFileName.textContent = file.name;
+  resourceStatus.textContent = `Overwrote active IR slot(s) with ${file.name} (${buffer.numberOfChannels} ch @ ${buffer.sampleRate} Hz)`;
+}
+
 function buildGraph(rate: number): NodeRepr_t[] {
-  const leftIrPath = irChannelPaths[activeIrPairStart] ?? `${bundledIrBasePath}_ch1.wav`;
-  const rightIrPath = irChannelPaths[activeIrPairStart + 1] ?? leftIrPath;
+  const [leftIrPath, rightIrPath] = activeIrTargetPaths();
 
   return dspBuildGraph({
     samplePath,
     rate,
     blend: Number(blendSlider.value) / 100,
+    irRate: Number(irRate.value),
     chopperThreshold: Number(chopperThresholdSlider.value),
     freqShiftHz: getFreqShiftHz(),
     feedback: Number(freqShiftFeedbackSlider.value) / 100,
@@ -457,6 +517,22 @@ sampleFileInput.addEventListener("change", async () => {
   }
 });
 
+irFileInput.addEventListener("change", async () => {
+  const file = irFileInput.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  try {
+    await ensureAudio();
+    await loadBrowserIr(file);
+    await renderCurrentGraph();
+  } catch (error) {
+    status.textContent = `Failed to load browser IR: ${formatError(error)}`;
+  }
+});
+
 rateSlider.addEventListener("input", () => {
   rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
   if (renderer && audioContext?.state === "running") {
@@ -474,6 +550,10 @@ irStart.addEventListener("input", () => {
 
 irEnd.addEventListener("input", () => {
     void updateIrEnd();
+})
+
+irRate.addEventListener("input", () => {
+    void updateIrRate();
 })
 
 chopperThresholdSlider.addEventListener("input", () => {
@@ -500,6 +580,7 @@ freqShiftFeedbackSlider.addEventListener("input", () => {
 
 rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
 blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
+irRateValue.textContent = `${Number(irRate.value).toFixed(2)}x`;
 chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
 freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
 void updateFreqShiftFeedback();

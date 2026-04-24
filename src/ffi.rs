@@ -44,8 +44,23 @@ unsafe extern "C" {
         data: *const f32,
         num_samples: usize,
     ) -> c_int;
+    /// Replaces an existing shared `f32` resource in the runtime.
+    pub fn elementary_runtime_replace_shared_resource_f32(
+        handle: *mut ElementaryRuntimeHandle,
+        name: *const c_char,
+        data: *const f32,
+        num_samples: usize,
+    ) -> c_int;
     /// Adds a shared multichannel `f32` resource to the runtime.
     pub fn elementary_runtime_add_shared_resource_f32_multi(
+        handle: *mut ElementaryRuntimeHandle,
+        name: *const c_char,
+        data: *const *const f32,
+        num_channels: usize,
+        num_samples: usize,
+    ) -> c_int;
+    /// Replaces an existing shared multichannel `f32` resource in the runtime.
+    pub fn elementary_runtime_replace_shared_resource_f32_multi(
         handle: *mut ElementaryRuntimeHandle,
         name: *const c_char,
         data: *const *const f32,

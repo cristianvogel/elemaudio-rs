@@ -312,6 +312,16 @@ p {
   gap: 4px;
 }
 
+.dial-strip-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .dial-strip-three {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dial {
   display: grid;
   gap: 4px;

@@ -41,9 +41,10 @@ namespace elem
 
         // Accessor methods for resources
         //
-        // We only allow insertions, not updates. This preserves immutability of existing
-        // entries which we need in case any active graph nodes hold references to those entries.
+        // `add()` only inserts new entries. `replace()` swaps the map entry while preserving
+        // old shared_ptr ownership for any active graph nodes still holding the previous resource.
         bool add(std::string const& name, SharedResourcePtr resource);
+        bool replace(std::string const& name, SharedResourcePtr resource);
         bool has(std::string const& name) const;
         SharedResourcePtr get(std::string const& name) const;
 
@@ -60,6 +61,16 @@ namespace elem
     // Details...
     inline bool SharedResourceMap::add (std::string const& name, SharedResourcePtr resource) {
         return resources.emplace(name, resource).second;
+    }
+
+    inline bool SharedResourceMap::replace (std::string const& name, SharedResourcePtr resource) {
+        auto it = resources.find(name);
+
+        if (it == resources.end())
+            return false;
+
+        it->second = resource;
+        return true;
     }
 
     inline bool SharedResourceMap::has (std::string const& name) const {

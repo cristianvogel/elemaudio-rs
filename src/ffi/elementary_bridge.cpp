@@ -309,6 +309,26 @@ int elementary_runtime_add_shared_resource_f32(
     }
 }
 
+int elementary_runtime_replace_shared_resource_f32(
+    elementary_runtime_handle* handle,
+    char const* name,
+    float const* data,
+    std::size_t num_samples)
+{
+    if (handle == nullptr || name == nullptr || (data == nullptr && num_samples != 0)) {
+        return elem::ReturnCode::InvalidInstructionFormat();
+    }
+
+    try {
+        auto resource = std::make_unique<elem::AudioBufferResource>(const_cast<float*>(data), num_samples);
+        return handle->runtime->replaceSharedResource(std::string(name), std::move(resource))
+            ? elem::ReturnCode::Ok()
+            : elem::ReturnCode::InvariantViolation();
+    } catch (...) {
+        return elem::ReturnCode::InvariantViolation();
+    }
+}
+
 int elementary_runtime_add_shared_resource_f32_multi(
     elementary_runtime_handle* handle,
     char const* name,
@@ -323,6 +343,27 @@ int elementary_runtime_add_shared_resource_f32_multi(
     try {
         auto resource = std::make_unique<elem::AudioBufferResource>(const_cast<float**>(data), num_channels, num_samples);
         return handle->runtime->addSharedResource(std::string(name), std::move(resource))
+            ? elem::ReturnCode::Ok()
+            : elem::ReturnCode::InvariantViolation();
+    } catch (...) {
+        return elem::ReturnCode::InvariantViolation();
+    }
+}
+
+int elementary_runtime_replace_shared_resource_f32_multi(
+    elementary_runtime_handle* handle,
+    char const* name,
+    float const* const* data,
+    std::size_t num_channels,
+    std::size_t num_samples)
+{
+    if (handle == nullptr || name == nullptr || (data == nullptr && num_channels != 0)) {
+        return elem::ReturnCode::InvalidInstructionFormat();
+    }
+
+    try {
+        auto resource = std::make_unique<elem::AudioBufferResource>(const_cast<float**>(data), num_channels, num_samples);
+        return handle->runtime->replaceSharedResource(std::string(name), std::move(resource))
             ? elem::ReturnCode::Ok()
             : elem::ReturnCode::InvariantViolation();
     } catch (...) {

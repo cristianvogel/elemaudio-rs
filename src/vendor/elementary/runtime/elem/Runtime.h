@@ -81,6 +81,7 @@ namespace elem
         // This method populates an internal map from which any GraphNode can request a
         // shared pointer to the resource.
         bool addSharedResource(std::string const& name, std::unique_ptr<SharedResource> resource);
+        bool replaceSharedResource(std::string const& name, std::unique_ptr<SharedResource> resource);
 
         // Removes unused resources from the map
         //
@@ -462,6 +463,12 @@ namespace elem
     bool Runtime<FloatType>::addSharedResource(std::string const& name, std::unique_ptr<SharedResource> resource)
     {
         return sharedResourceMap.add(name, std::move(resource));
+    }
+
+    template <typename FloatType>
+    bool Runtime<FloatType>::replaceSharedResource(std::string const& name, std::unique_ptr<SharedResource> resource)
+    {
+        return sharedResourceMap.replace(name, std::move(resource));
     }
 
     template <typename FloatType>

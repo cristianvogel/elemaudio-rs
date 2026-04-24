@@ -331,6 +331,37 @@ impl Runtime {
         })
     }
 
+    /// Replaces an existing shared `f32` resource by name and mirrors it into the Rust registry.
+    pub fn replace_shared_resource_f32(&self, name: &str, data: &[f32]) -> Result<()> {
+        if name.trim().is_empty() {
+            return Err(Error::InvalidArgument("resource id cannot be empty"));
+        }
+
+        let resource = Resource::f32(Arc::from(data.to_vec().into_boxed_slice()));
+        let resource_name = CString::new(name)?;
+        let code = unsafe {
+            ffi::elementary_runtime_replace_shared_resource_f32(
+                self.handle.as_ptr(),
+                resource_name.as_ptr(),
+                data.as_ptr(),
+                data.len(),
+            )
+        };
+
+        if code == 0 {
+            if let Some(previous) = self.resources.borrow_mut().insert(name, resource)? {
+                self.retired_resources.borrow_mut().push(previous);
+            }
+            return Ok(());
+        }
+
+        Err(Error::Native {
+            operation: "replace_shared_resource_f32",
+            code,
+            message: "native runtime rejected the replacement shared resource".to_string(),
+        })
+    }
+
     /// Adds a decoded mono audio buffer as a shared resource.
     pub fn add_audio_resource(&self, name: &str, buffer: AudioBuffer) -> Result<()> {
         if buffer.channels == 1 {
@@ -341,6 +372,25 @@ impl Runtime {
         self.resources
             .borrow_mut()
             .insert(name, Resource::audio(buffer))?;
+        Ok(())
+    }
+
+    /// Replaces an existing decoded audio buffer as a shared resource.
+    pub fn replace_audio_resource(&self, name: &str, buffer: AudioBuffer) -> Result<()> {
+        if buffer.channels == 1 {
+            self.replace_shared_resource_f32(name, buffer.samples.as_ref())?;
+        } else {
+            self.replace_shared_resource_f32_multi(name, &buffer)?;
+        }
+
+        if let Some(previous) = self
+            .resources
+            .borrow_mut()
+            .insert(name, Resource::audio(buffer))?
+        {
+            self.retired_resources.borrow_mut().push(previous);
+        }
+
         Ok(())
     }
 
@@ -389,6 +439,50 @@ impl Runtime {
             operation: "add_shared_resource_f32_multi",
             code,
             message: "native runtime rejected the shared multichannel resource".to_string(),
+        })
+    }
+
+    fn replace_shared_resource_f32_multi(&self, name: &str, buffer: &AudioBuffer) -> Result<()> {
+        if name.trim().is_empty() {
+            return Err(Error::InvalidArgument("resource id cannot be empty"));
+        }
+
+        let channels = buffer.channels as usize;
+        let frames = buffer.frames();
+        let samples = buffer.samples.as_ref();
+        let mut channel_slices: Vec<Vec<f32>> =
+            (0..channels).map(|_| Vec::with_capacity(frames)).collect();
+
+        for frame in 0..frames {
+            let base = frame * channels;
+            for channel in 0..channels {
+                channel_slices[channel].push(samples[base + channel]);
+            }
+        }
+
+        let channel_ptrs: Vec<*const f32> = channel_slices
+            .iter()
+            .map(|channel| channel.as_ptr())
+            .collect();
+        let resource_name = CString::new(name)?;
+        let code = unsafe {
+            ffi::elementary_runtime_replace_shared_resource_f32_multi(
+                self.handle.as_ptr(),
+                resource_name.as_ptr(),
+                channel_ptrs.as_ptr(),
+                channel_ptrs.len(),
+                frames,
+            )
+        };
+
+        if code == 0 {
+            return Ok(());
+        }
+
+        Err(Error::Native {
+            operation: "replace_shared_resource_f32_multi",
+            code,
+            message: "native runtime rejected the replacement shared multichannel resource".to_string(),
         })
     }
 

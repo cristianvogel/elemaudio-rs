@@ -25,6 +25,7 @@ export interface SampleParams {
     samplePath: string;
     rate: number;
     blend: number;
+    irRate: number;
     chopperThreshold: number;
     freqShiftHz: number;
     feedback: number;
@@ -41,7 +42,7 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     }
 
     const smRate = el.sm(el.const({key: "samp:rate", value: p.rate}));
-    const trigger = el.train( el.mul( el.extra.sampleCount({unit: "hz", path: p.samplePath}),  smRate ));
+    const trigger = el.train(el.mul(el.extra.sampleCount({unit: "hz", path: p.samplePath}), smRate));
     const blendNode = el.const({key: "fx:blend", value: p.blend});
 
     const sampleGainDb = el.const({key: "sample:gain-db", value: -3});
@@ -49,37 +50,37 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const sample = el.extra.sample({path: p.samplePath}, 0.0, 1.0, smRate, sampleGainDb, trigger);
 
     const leftSource = sample[0];
-    const rightSource =sample[1];
+    const rightSource = sample[1];
 
     const chopperThreshold = el.const({key: "sample:chopper-threshold", value: p.chopperThreshold});
 
     const freqShiftHz = el.const({key: "sample:freqshift-hz", value: p.freqShiftHz});
 
     function thresh(x: NodeRepr_t): NodeRepr_t {
-        return el.extra.threshold({ hysteresis: 0.01, latch: true},
-            el.mul( chopperThreshold, (1/3)),
+        return el.extra.threshold({hysteresis: 0.01, latch: true},
+            el.mul(chopperThreshold, (1 / 3)),
             el.train(8),
             el.abs(x));
     }
 
     const ar = {
-        atk: el.tau2pole(1/4096),
-        rel: el.tau2pole(1/128)
+        atk: el.tau2pole(1 / 4096),
+        rel: el.tau2pole(1 / 128)
     }
 
-    const choppedLeft = el.mul( el.env( ar.atk, ar.rel,  thresh(leftSource)), el.add(leftSource));
-    const choppedRight = el.mul( el.env( ar.atk, ar.rel,  thresh(leftSource)), el.add( rightSource));
+    const choppedLeft = el.mul(el.env(ar.atk, ar.rel, thresh(leftSource)), el.add(leftSource));
+    const choppedRight = el.mul(el.env(ar.atk, ar.rel, thresh(leftSource)), el.add(rightSource));
 
     const feedback = el.sm(el.const({key: "sample:freqshift-feedback", value: p.feedback}));
 
     const leftBands = el.extra.freqshift(
-        { key: "fshift_Left", reflect: 1, fbSource: "lower" },
+        {key: "fshift_Left", reflect: 1, fbSource: "lower"},
         freqShiftHz,
         feedback,
         choppedLeft
     );
     const rightBands = el.extra.freqshift(
-        { key: "fshift_Right", reflect: 1, fbSource: "upper" },
+        {key: "fshift_Right", reflect: 1, fbSource: "upper"},
         el.mul(1.618, freqShiftHz),
         feedback,
         choppedRight
@@ -88,13 +89,14 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const shiftDown = leftBands[0];
     const shiftUp = rightBands[1];
 
-    const leftWet =  el.extra.convolve({
+    const leftWet = el.extra.convolve({
             key: "sample:left-wet",
             path: p.leftIrPath,
             normalize: false,
             irAttenuationDb: 20,
+            rate: p.irRate,
             start: p.irStart,
-            end: p.irEnd,
+            end: p.irEnd
         },
         shiftDown);
 
@@ -103,16 +105,18 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
             path: p.rightIrPath,
             normalize: false,
             irAttenuationDb: 20,
+            rate: p.irRate,
             start: p.irStart,
-            end: p.irEnd,
+            end: p.irEnd
         },
         shiftUp);
 
     return [
-         el.select(blendNode, leftWet, shiftDown),
-         el.select(blendNode, rightWet, shiftUp)
+        el.select(blendNode, leftWet, shiftDown),
+        el.select(blendNode, rightWet, shiftUp)
     ];
 }
+
 /**
  * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
  * All rights reserved.

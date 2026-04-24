@@ -34,6 +34,13 @@ function findTransferables(val, transferables = []) {
 }
 
 class ElementaryAudioWorkletProcessor extends AudioWorkletProcessor {
+  _upsertSharedResource(key, val) {
+    const existing = new Set(this._native.listSharedResources());
+    return existing.has(key)
+      ? this._native.replaceSharedResource(key, val)
+      : this._native.addSharedResource(key, val);
+  }
+
   constructor(options) {
     super(options);
 
@@ -62,7 +69,7 @@ class ElementaryAudioWorkletProcessor extends AudioWorkletProcessor {
 
       if (validVFS) {
         for (let [key, val] of Object.entries(virtualFileSystem)) {
-          let result = this._native.addSharedResource(key, val);
+          let result = this._upsertSharedResource(key, val);
 
           if (!result.success) {
             this.port.postMessage(['error', result.message]);
@@ -91,7 +98,7 @@ class ElementaryAudioWorkletProcessor extends AudioWorkletProcessor {
           }]);
         case 'updateSharedResourceMap':
           for (let [key, val] of Object.entries(payload.resources)) {
-            let result = this._native.addSharedResource(key, val);
+            let result = this._upsertSharedResource(key, val);
 
             if (!result.success) {
               return this.port.postMessage(['reply', {
