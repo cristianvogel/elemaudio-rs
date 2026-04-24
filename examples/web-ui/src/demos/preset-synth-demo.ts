@@ -63,6 +63,7 @@ const layout = `
               <button id="preset-badge-${index}" class="preset-badge" type="button">Preset${String(index).padStart(2, "0")}</button>
             `).join("")}
           </div>
+           <button id="save-preset" class="secondary">Save to preset</button>
           <span id="scope-legend">
             <span class="preset-scope-legend edit">edit</span>
             <span class="preset-scope-legend active">morph</span>
@@ -102,9 +103,6 @@ const layout = `
         ).join("")}
       </div>
 
-      <div class="button-row">
-        <button id="save-preset" class="secondary">Save to selected preset</button>
-      </div>
 
       <div class="row toggle-row">
         <label class="toggle-label" for="slot-b">
