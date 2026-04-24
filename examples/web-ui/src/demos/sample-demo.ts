@@ -36,7 +36,7 @@ app.innerHTML = `
     <h1>elemaudiors</h1> <h3><i>extra</i> ⊙ sample ⊙ freqShift ⊙ convolver</h3>
     <p>Loads a sample and a four-channel IR from <code>demo-resources/</code> 
     then processes the audio through 
-    <code>el.extra.freqShift(...)</code> into <code>el.convolve(...)</code>. 
+    <code>el.extra.freqShift(...)</code> into simple <code>el.convolve(...)</code>. 
     The four-channel IR has been pre-prepared, so that channel 3 and 4 are reversed versions of the IR. 
     This makes it trivial to swap the IR flavour, as demonstrated by the UI button.</p>
 
@@ -47,7 +47,7 @@ app.innerHTML = `
             <span>Playback</span>
             <span id="rate-value">1.00x</span>
           </label>
-          <input id="rate" type="range" min="0.5" max="1.5" value="1" step="0.01" />
+          <input id="rate" type="range" min="-1.5" max="1.5" value="1" step="0.01" />
         </div>
         <div class="dial">
           <label for="blend">
@@ -91,7 +91,7 @@ app.innerHTML = `
       <div class="button-row">
         <button id="start" class="state-button">Start audio</button>
         <button id="stop" class="state-button">Stop audio</button>
-        <button id="reload" class="secondary">Reload sample</button>
+        <button id="reload" class="secondary" hidden>Reload sample</button>
         <button id="toggle-ir" class="secondary">Use IR pair 1/2</button>
       </div>
       <div class="status" id="status">Idle</div>
