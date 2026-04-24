@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Error","Instruction","Resource"],"mod":["authoring","core","engine","graph","logging"],"struct":["AudioBuffer","AudioRingBuffer","InstructionBatch","ResourceId","ResourceManager","Runtime"],"type":["NodeId","Result"]};
+window.SIDEBAR_ITEMS = {"enum":["Error","Instruction","Resource"],"mod":["authoring","core","engine","graph","logging"],"struct":["AudioBuffer","AudioRingBuffer","InstructionBatch","ResourceId","ResourceManager","Runtime","RuntimeEvent"],"type":["NodeId","Result"]};
