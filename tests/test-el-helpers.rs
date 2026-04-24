@@ -835,6 +835,17 @@ fn covers_extra_helpers() {
         3,
     );
 
+    let extra_convolve_node = extra::convolve(
+        serde_json::json!({"path": "ir.wav", "irTrimDb": -60.0, "Weighting": "a-weight"}),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &extra_convolve_node,
+        "extra.convolve",
+        serde_json::json!({"path": "ir.wav", "irTrimDb": -60.0, "Weighting": "a-weight"}),
+        1,
+    );
+
     let crunch_nodes = extra::crunch(
         serde_json::json!({
             "channels": 2,

@@ -74,6 +74,22 @@ pub fn freqshift(
     )
 }
 
+/// Extended convolution helper.
+///
+/// This node performs extra analytical processing on the impulse response before
+/// initializing the underlying FFT convolver.
+///
+/// Props:
+/// - `path`: shared resource id for the impulse response
+/// - `irTrimDb`: optional negative dB threshold enabling analytical IR tail trimming
+/// - `Weighting`: optional IR-analysis weighting mode, either `"none"` or `"a-weight"`
+///
+/// Child order:
+/// - `x`: audio input
+pub fn convolve(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+    Node::new("extra.convolve", props, vec![resolve(x)])
+}
+
 /// Crunch distortion helper.
 ///
 /// Returns one root per output channel.
