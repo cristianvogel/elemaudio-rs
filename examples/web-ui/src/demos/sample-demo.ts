@@ -422,7 +422,7 @@ sampleFileInput.addEventListener("change", async () => {
 });
 
 rateSlider.addEventListener("input", () => {
-  persistCurrentControls();
+  ;
   rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
 
   if (renderer && audioContext?.state === "running") {
@@ -431,29 +431,29 @@ rateSlider.addEventListener("input", () => {
 });
 
 blendSlider.addEventListener("input", () => {
-  persistCurrentControls();
+  ;
   void updateBlend();
 });
 
 chopperThresholdSlider.addEventListener("input", () => {
-  persistCurrentControls();
+  ;
   void updateChopperThreshold();
 });
 
 freqShiftHzSlider.addEventListener("input", () => {
-  persistCurrentControls();
+  ;
   void updateFreqShiftHz();
 });
 
 freqShiftZoomButton.addEventListener("click", () => {
   freqShiftFiveHzScale = !freqShiftFiveHzScale;
   configureFreqShiftSlider();
-  persistCurrentControls();
+  ;
   void updateFreqShiftHz();
 });
 
 freqShiftFeedbackSlider.addEventListener("input", () => {
-  persistCurrentControls();
+  ;
   void updateFreqShiftFeedback();
 });
 
