@@ -1,3 +1,4 @@
+
 /**
  * Synth + extras DSP graph — arp synth with crunch, stride delay, and limiter.
  */
@@ -130,3 +131,10 @@ export function buildGraph(p: SynthParams): NodeRepr_t[] {
         delayed[1]
     );
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

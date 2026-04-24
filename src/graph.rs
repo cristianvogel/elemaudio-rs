@@ -1019,7 +1019,7 @@ mod tests {
     }
 
     #[test]
-    fn dust_produces_sparse_random_impulses() {
+    fn rain_produces_sparse_random_impulses() {
         use crate::Runtime;
 
         let sr = 44100.0;
@@ -1031,14 +1031,10 @@ mod tests {
             .expect("runtime creation");
 
         let density = el::const_(100.0);
-        let trails = el::const_(0.0);
-        let dust = extra::dust(
-            serde_json::json!({ "seed": 42, "bipolar": false }),
-            density,
-            trails,
-        );
+        let release = el::const_(0.0);
+        let rain = extra::rain(serde_json::json!({ "seed": 42 }), density, release);
 
-        let graph = Graph::new().render(vec![dust]);
+        let graph = Graph::new().render(vec![rain]);
         let mounted = graph.mount().expect("mount");
         runtime
             .apply_instructions(mounted.batch())
@@ -1049,7 +1045,9 @@ mod tests {
         for _ in 0..10 {
             let mut out = vec![0.0_f64; block];
             let mut outputs = [out.as_mut_slice()];
-            runtime.process(block, &inputs, &mut outputs).expect("process");
+            runtime
+                .process(block, &inputs, &mut outputs)
+                .expect("process");
             all_samples.extend_from_slice(outputs[0]);
         }
 
@@ -1083,7 +1081,7 @@ mod tests {
                 }
                 if periodic {
                     panic!(
-                        "dust output is periodic with cycle length {cycle_len} impulses (total {} impulses in sample)",
+                        "rain output is periodic with cycle length {cycle_len} impulses (total {} impulses in sample)",
                         gaps.len()
                     );
                 }
@@ -1095,7 +1093,7 @@ mod tests {
         let actual = impulse_count as f64;
         assert!(
             actual > lo && actual < hi,
-            "dust produced {impulse_count} impulses, expected ~{expected_count}"
+            "rain produced {impulse_count} impulses, expected ~{expected_count}"
         );
     }
 }

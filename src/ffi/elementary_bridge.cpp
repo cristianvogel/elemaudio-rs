@@ -1,5 +1,7 @@
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -9,12 +11,28 @@
 
 #include <extra/crunch.h>
 #include <extra/boxsum.h>
+#include <extra/frame_clock.h>
+#include <extra/frame_derivative.h>
+#include <extra/mirror_add.h>
+#include <extra/frame_delay.h>
+#include <extra/frame_phasor.h>
+#include <extra/frame_shaper.h>
+#include <extra/frame_poly_signal.h>
+#include <extra/frame_select.h>
+#include <extra/frame_bidi_smooth.h>
+#include <extra/frame_smooth.h>
+#include <extra/frame_write_ram.h>
+#include <extra/frame_random_walks.h>
+#include <extra/wrap_add.h>
+#include <extra/frame_scope.h>
+#include <extra/frame_value.h>
 #include <extra/freqshift.h>
 #include <extra/limiter.h>
 // VariSlopeSVFNode: Rossum-style continuously morphable Butterworth slope SVF (12–72 dB/oct).
 // Inputs: [0] cutoff_hz, [1] audio, [2] slope (1.0–6.0). Q fixed at Butterworth.
 #include <extra/vari_slope_svf.h>
 #include <extra/stridedelay.h>
+#include <extra/sample_time.h>
 // VocoderNode: STFT-based channel vocoder (port of Geraint Luff's JSFX).
 // Inputs: [0] carrier L, [1] carrier R, [2] modulator L, [3] modulator R.
 // Properties: windowMs, smoothingMs, maxGainDb, swapInputs.
@@ -23,14 +41,20 @@
 // Inputs: [0] dur (samples), [1] trigger (rising-edge gate).
 // Property: blocking (bool, default true).
 #include <extra/ramp00.h>
+#include <extra/threshold.h>
+#include <extra/sample.h>
+// PresetWrite / PresetRead / PresetMorph: multi-slot preset RAM bank primitives.
+#include <extra/preset_write.h>
+#include <extra/preset_read.h>
+#include <extra/preset_morph.h>
 // SampleCountNode: emits the exact length (in samples) of a VFS-resident
 // audio resource as a constant-valued signal. Zero children.
 // Property: path (string, required) — VFS key of the resource.
 #include <extra/sample_count.h>
-// DustNode: sparse bipolar impulses with a vactrol-like pinged decay.
-// Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
-// Properties: seed (number, optional), bipolar (bool), jitter (0..1).
-#include <extra/dust.h>
+// RainNode: sparse impulses with a vactrol-like pinged decay.
+// Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
+// Properties: seed (number, optional), jitter (0..1).
+#include <extra/rain.h>
 
 extern "C" {
 
@@ -66,6 +90,66 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::BoxAverageNode<double>>(id, fs, bs);
         });
 
+        handle->runtime->registerNodeType("frameclock", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("wrapAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::WrapAddNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("mirrorAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::MirrorAddNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDelayNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameDerivative", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDerivativeNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameScope", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameScopeNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FramePhasorNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameShaper", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameShaperNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("framePolySignal", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FramePolySignalNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameSelect", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameSelectNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameBiDiSmooth", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameBiDiSmoothNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameSmooth", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameSmoothNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameWriteRAM", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameWriteRAMNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameRandomWalks", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameRandomWalksNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("frameValue", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameValueNode<double>>(id, fs, bs);
+        });
+
         handle->runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });
@@ -96,6 +180,28 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
         });
 
+        handle->runtime->registerNodeType("threshold", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::ThresholdNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("extra.sample", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::ExtraSampleNode<double>>(id, fs, bs);
+        });
+
+        // "presetWrite" / "presetRead" / "presetMorph" — multi-slot preset RAM bank.
+        // Props: path (string, required), framelength (positive int), slots (positive int).
+        handle->runtime->registerNodeType("presetWrite", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetWriteNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("presetRead", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetReadNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("presetMorph", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetMorphNode<double>>(id, fs, bs);
+        });
+
         // "sampleCount" — SampleCountNode.
         // Constant-signal node whose value is the length (in samples, per channel)
         // of the VFS resource named by the `path` prop. Zero children.
@@ -103,12 +209,16 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
-        // "dust" — DustNode.
-        // Sparse random impulses with optional overlapping decaying trails.
-        // Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
-        // Properties: seed, bipolar, jitter.
-        handle->runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
-            return std::make_shared<elem::DustNode<double>>(id, fs, bs);
+        // "rain" — RainNode.
+        // Sparse random impulses with optional overlapping decaying releases.
+        // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
+        // Properties: seed, jitter.
+        handle->runtime->registerNodeType("rain", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::RainNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("time", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::SampleTimeNode<double>>(id, fs, bs);
         });
 
         return handle.release();
@@ -242,6 +352,39 @@ int elementary_runtime_process(
     } catch (...) {
         return elem::ReturnCode::InvariantViolation();
     }
+}
+
+char* elementary_runtime_process_queued_events_json(elementary_runtime_handle* handle)
+{
+    if (handle == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        elem::js::Array batch;
+        handle->runtime->processQueuedEvents([&batch](std::string const& type, elem::js::Value evt) {
+            batch.push_back(elem::js::Object({
+                {"type", type},
+                {"event", evt},
+            }));
+        });
+
+        auto const json = elem::js::serialize(elem::js::Value(batch));
+        auto* out = static_cast<char*>(std::malloc(json.size() + 1));
+        if (out == nullptr) {
+            return nullptr;
+        }
+
+        std::memcpy(out, json.c_str(), json.size() + 1);
+        return out;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void elementary_string_free(char* ptr)
+{
+    std::free(ptr);
 }
 
 void elementary_runtime_gc(elementary_runtime_handle* handle, elementary_gc_callback callback, void* user_data)

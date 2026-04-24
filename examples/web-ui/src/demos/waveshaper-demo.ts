@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs waveshaper demo
+ * elemaudiors waveshaper demo
  *
  * Explores native low-level waveshapers starting with el.extra.foldback.
  * Supports oscillator and sample-based source selection.
@@ -24,7 +24,7 @@ const layout = `
   <elemaudio-oscilloscope id="scope" ></elemaudio-oscilloscope>
   <div class="scope-title"><p>Shaped signal</p></div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>${DEMO_TITLE}</h3>
     <p>${DEMO_DESCRIPTION}</p>
     <div class="controls">

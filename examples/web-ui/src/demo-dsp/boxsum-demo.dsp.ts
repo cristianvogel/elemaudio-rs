@@ -1,3 +1,4 @@
+
 /**
  * Box-sum modulation DSP graph — smoothed noise modulating oscillator frequency.
  */
@@ -42,3 +43,10 @@ export function buildGraph(p: BoxsumParams): NodeRepr_t[] {
 
   return [left, el.add(right, el.mul(0, scopeInsert))];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>elemaudio-rs demos</title>
+  <title>elemaudiors interactive</title>
   <style>
     :root {
       color-scheme: dark;
@@ -148,51 +148,86 @@
       color: var(--muted);
       font-size: 14px;
     }
+    .shepard-lockup {
+      min-height: auto;
+      overflow: visible;
+    }
+
+    .shepard-text {
+      position: static;
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
   </style>
 </head>
 <body>
 
 <aside>
     <div class="sidebar-header">
-        <h1>elemaudio-rs</h1>
-        <p>Interactive demos for the NeLemAudio runtime. These demos were written using the JS authoring surface. The sound design can also be compiled to Rust native code. For that path, also the UIs can be deployed as WebView</p>
+        <div class="shepard-lockup">
+            <h1 class="shepard-text">elemaudiors</h1>
+        </div>
+        <p>Interactive demos for the <span style="font-width: expanded">elemaudiors</span> runtime. These demos were written using the JS authoring surface. The sound design can also be compiled to Rust native code. The UIs can be deployed as WebView or in Browser.</p>
     </div>
 
     <div class="demo-group">
         <div class="demo-group-title">Synth &amp; Effects</div>
         <ul class="demo-list">
-            <li><a href="synth.html" data-demo="synth">Warm Welcome Demo<span class="tag">extra</span></a></li>
-            <li><a href="sample.html" data-demo="sample">Sample Playback<span class="tag">extra</span></a></li>
+            <li><a href="synth.html" data-demo="synth">Warm Welcome Demo<span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="sample.html" data-demo="sample">Sample Playback<span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="preset-synth.html" data-demo="presetSynth">Preset Bank Synth<span class="tag">rs ✅ ts ✅</span></a></li>
         </ul>
     </div>
 
     <div class="demo-group">
         <div class="demo-group-title">Waveshapers</div>
         <ul class="demo-list">
-            <li><a href="waveshaper.html" data-demo="waveshaper">Foldback <span class="tag">extra</span></a></li>
+            <li><a href="waveshaper.html" data-demo="waveshaper">Foldback <span class="tag">rs ✅ ts ✅</span></a></li>
         </ul>
     </div>
 
     <div class="demo-group">
         <div class="demo-group-title">Spectral</div>
         <ul class="demo-list">
-            <li><a href="vocoder.html" data-demo="vocoder">Vocoder <span class="tag">extra</span></a></li>
+            <li><a href="vocoder.html" data-demo="vocoder">Vocoder <span class="tag">rs ✅ ts ✅</span></a></li>
         </ul>
     </div>
 
     <div class="demo-group">
         <div class="demo-group-title">Signal Utilities</div>
         <ul class="demo-list">
-            <li><a href="dust.html" data-demo="dust">Dust Resonator Bank <span class="tag">extra</span></a></li>
-            <li><a href="boxsum.html" data-demo="boxsum">Box Sum / Average <span class="tag">extra</span></a></li>
-            <li><a href="ramp00.html" data-demo="ramp00">Ramp00 One-shot <span class="tag">extra</span></a></li>
+            <li><a href="rain.html" data-demo="rain">Rain <span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="boxsum.html" data-demo="boxsum">Box Sum / Average <span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="ramp00.html" data-demo="ramp00">Ramp00 One-shot <span class="tag">rs ✅ ts ✅</span></a></li>
+        </ul>
+    </div>
+
+    <div class="demo-group">
+        <div class="demo-group-title">Frame Domain Programming</div>
+        <ul class="demo-list">
+            <li><a href="frame-domain.html" data-demo="frameDomain">Frame Phasor<span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="frame-shaper.html" data-demo="frameShaper">Frame Shaper<span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="frame-polysignal.html" data-demo="framePolySignal">Frame MultiLFO<span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="frame-random-walks.html" data-demo="frameRandomWalks">Frame Random Walks<span class="tag">rs ✅ ts ✅</span></a></li>
+            <li><a href="frame-wavetable.html" data-demo="frameWavetable">Frame Wavetable Synth<span class="tag">rs ✅ ts ✅</span></a></li>
+        </ul>
+    </div>
+
+    <div class="demo-group">
+        <div class="demo-group-title">Physical Models</div>
+        <ul class="demo-list">
+            <li><a href="resonator-bank.html" data-demo="resonatorBank">Modal Resonator Bank <span class="tag">ts ✅</span></a></li>
         </ul>
     </div>
 
     <div class="demo-group">
         <div class="demo-group-title">Resource Management</div>
         <ul class="demo-list">
-            <li><a href="resource-manager.html" data-demo="resource">Resource Manager<span class="tag">bonus</span></a></li>
+            <li><a href="resource-manager.html" data-demo="resource">Resource Manager<span class="tag">rs ✅</span></a></li>
         </ul>
     </div>
 

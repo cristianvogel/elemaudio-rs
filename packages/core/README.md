@@ -1,33 +1,37 @@
 # `@elem-rs/core`
 
-This package is the JS/TS authoring surface for Elementary-style graphs.
+JS/TS authoring surface for Elementary-style graphs.
 
-The Rust crate in this repository owns the native runtime, FFI bridge, and DSP execution path. `@elem-rs/core` is the separate authoring surface for browser and application code.
+The Rust crate owns runtime, FFI, native DSP, and browser execution. This package owns the public authoring API consumed by app code.
 
-## Design
+## What this package does
 
-- `src/vendor/elementary` is the upstream vendor source of truth.
-- `packages/core/src` is the stable package boundary we consume from app code.
-- The package re-exports/mirrors the vendor helper surface in a controlled way.
-- `scripts/sync-elementary.sh` refreshes vendor, and `scripts/regen-elementary-ts.sh` regenerates this package from the vendor helper modules.
+- exposes `el.*` helpers
+- exposes `Renderer`
+- mirrors the vendor helper surface from `src/vendor/elementary`
+- stays separate from the runtime bridge so vendor refreshes stay mechanical
 
-## Why this split exists
+## Code path
 
-Keeping the vendor code separate makes upstream updates mechanical and reduces drift. The package stays small and focused on the public authoring API, while vendor remains the authoritative implementation.
+- package source: `packages/core/src`
+- vendor source of truth: `src/vendor/elementary`
+- vendor refresh: `scripts/sync-elementary.sh`
+- TS regeneration: `scripts/regen-elementary-ts.sh`
 
 ## Public API
 
 - `el.*` graph helpers
-- `createNode(...)`, `isNode(...)`, `resolve(...)`, `unpack(...)`, `Renderer`
+- `createNode(...)`
+- `resolve(...)`
+- `unpack(...)`
+- `Renderer`
 - `NodeRepr_t`
 
-Use `Renderer` when you want the full upstream reconciliation flow, including `renderWithOptions`, `createRef`, and `prune`.
+Use `Renderer` when you want the upstream reconciliation flow, including `renderWithOptions`, `createRef`, and `prune`.
 
 ## Import
 
-Use the package alias:
-
 ```ts
-import { createCore, el } from "@elem-rs/core";
+import { el, Renderer } from "@elem-rs/core";
 import type { NodeRepr_t } from "@elem-rs/core";
 ```

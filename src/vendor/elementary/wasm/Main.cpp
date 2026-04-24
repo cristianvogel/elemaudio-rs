@@ -7,13 +7,30 @@
 //   "crunch"       — CrunchNode
 //   "boxsum"       — BoxSumNode
 //   "boxaverage"   — BoxAverageNode
+//   "frameClock"   — FrameClockNode
+//   "wrapAdd"      — WrapAddNode
+//   "mirrorAdd"    — MirrorAddNode
+//   "frameDelay"   — FrameDelayNode
+//   "frameDerivative" — FrameDerivativeNode
+//   "framePhasor"  — FramePhasorNode
+//   "frameShaper"  — FrameShaperNode
+//   "framePolySignal" — FramePolySignalNode
+//   "frameSelect"  — FrameSelectNode
+//   "frameBiDiSmooth" — FrameBiDiSmoothNode
+//   "frameSmooth"  — FrameSmoothNode
+//   "frameWriteRAM" — FrameWriteRAMNode
+//   "frameRandomWalks" — FrameRandomWalksNode
+//   "frameScope"   — FrameScopeNode
+//   "frameValue"   — FrameValueNode
 //   "limiter"      — LimiterNode
 //   "variSlopeSvf" — VariSlopeSVFNode  (Butterworth, 12–72 dB/oct, no Q)
 //   "stridedelay"  — StrideDelayNode
 //   "vocoder"      — VocoderNode       (STFT channel vocoder, 4-in 2-out)
 //   "ramp00"       — Ramp00Node        (sample-accurate one-shot 0→1 ramp)
+//   "threshold"    — ThresholdNode     (sample-accurate threshold edge detector)
+//   "extra.sample" — ExtraSampleNode   (always-multichannel sample playback)
 //   "sampleCount"  — SampleCountNode   (VFS resource length as a constant signal)
-//   "dust"         — DustNode          (random impulses with optional trails)
+//   "rain"         — RainNode          (random impulses with optional release)
 //   "convolve"     — ConvolutionNode   (WASM-only)
 //   "fft"          — FFTNode           (WASM-only)
 //   "metro"        — MetronomeNode     (WASM-only)
@@ -27,6 +44,21 @@
 #include "Convolve.h"
 #include "FFT.h"
 #include "../../../../native/extra/boxsum.h"
+#include "../../../../native/extra/frame_clock.h"
+#include "../../../../native/extra/frame_derivative.h"
+#include "../../../../native/extra/mirror_add.h"
+#include "../../../../native/extra/frame_delay.h"
+#include "../../../../native/extra/frame_phasor.h"
+#include "../../../../native/extra/frame_shaper.h"
+#include "../../../../native/extra/frame_poly_signal.h"
+#include "../../../../native/extra/frame_select.h"
+#include "../../../../native/extra/frame_bidi_smooth.h"
+#include "../../../../native/extra/frame_smooth.h"
+#include "../../../../native/extra/frame_write_ram.h"
+#include "../../../../native/extra/frame_random_walks.h"
+#include "../../../../native/extra/wrap_add.h"
+#include "../../../../native/extra/frame_scope.h"
+#include "../../../../native/extra/frame_value.h"
 #include "../../../../native/extra/freqshift.h"
 #include "../../../../native/extra/crunch.h"
 #include "../../../../native/extra/limiter.h"
@@ -34,8 +66,13 @@
 #include "../../../../native/extra/stridedelay.h"
 #include "../../../../native/extra/vocoder.h"
 #include "../../../../native/extra/ramp00.h"
+#include "../../../../native/extra/threshold.h"
+#include "../../../../native/extra/sample.h"
+#include "../../../../native/extra/preset_write.h"
+#include "../../../../native/extra/preset_read.h"
+#include "../../../../native/extra/preset_morph.h"
 #include "../../../../native/extra/sample_count.h"
-#include "../../../../native/extra/dust.h"
+#include "../../../../native/extra/rain.h"
 #include "../../../../native/extra/sample_count.h"
 #include "Metro.h"
 #include "SampleTime.h"
@@ -96,6 +133,66 @@ public:
             return std::make_shared<elem::BoxAverageNode<double>>(id, fs, bs);
         });
 
+        runtime->registerNodeType("frameClock", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameClockNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("wrapAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::WrapAddNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("mirrorAdd", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::MirrorAddNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameDelay", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDelayNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameDerivative", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameDerivativeNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameScope", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameScopeNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("framePhasor", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FramePhasorNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameShaper", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameShaperNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("framePolySignal", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FramePolySignalNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameSelect", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameSelectNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameBiDiSmooth", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameBiDiSmoothNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameSmooth", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameSmoothNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameWriteRAM", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameWriteRAMNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameRandomWalks", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameRandomWalksNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("frameValue", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::FrameValueNode<double>>(id, fs, bs);
+        });
+
         runtime->registerNodeType("limiter", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::LimiterNode<double>>(id, fs, bs);
         });
@@ -123,6 +220,27 @@ public:
             return std::make_shared<elem::Ramp00Node<double>>(id, fs, bs);
         });
 
+        runtime->registerNodeType("threshold", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::ThresholdNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("extra.sample", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::ExtraSampleNode<double>>(id, fs, bs);
+        });
+
+        // PresetWrite / PresetRead / PresetMorph: multi-slot preset RAM bank.
+        runtime->registerNodeType("presetWrite", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetWriteNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("presetRead", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetReadNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("presetMorph", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::PresetMorphNode<double>>(id, fs, bs);
+        });
+
         // SampleCountNode: emits the length (in samples) of a VFS-resident
         // audio resource as a constant-valued signal. Zero children.
         // Property: path (string, required) — VFS key of the resource.
@@ -130,11 +248,11 @@ public:
             return std::make_shared<elem::SampleCountNode<double>>(id, fs, bs);
         });
 
-        // DustNode: sparse bipolar impulses with a pinged, vactrol-like trail.
-        // Inputs: [0] density (impulses/sec), [1] trails (seconds, signal).
-        // Properties: seed, bipolar, jitter.
-        runtime->registerNodeType("dust", [](elem::NodeId const id, double fs, int const bs) {
-            return std::make_shared<elem::DustNode<double>>(id, fs, bs);
+        // RainNode: sparse impulses with a pinged, vactrol-like trail.
+        // Inputs: [0] density (impulses/sec), [1] release (seconds, signal).
+        // Properties: seed, jitter.
+        runtime->registerNodeType("rain", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::RainNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("fft", [](elem::NodeId const id, double fs, int const bs) {

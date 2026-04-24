@@ -1,3 +1,4 @@
+
 /**
  * Waveshaper DSP graph — foldback shaper with dry/wet mix and scope insert.
  * Supports oscillator or sample-based source selection.
@@ -67,3 +68,10 @@ export function buildGraph(p: WaveshaperParams): NodeRepr_t[] {
 
   return [left, right];
 }
+/**
+ * Copyright (c) 2026 NeverEngineLabs (www.neverenginelabs.com)
+ * All rights reserved.
+ *
+ * Web UI composition source.
+ * Not licensed for commercial derivatives or embedding in commercial products.
+ */

@@ -20,7 +20,7 @@ pub use audio_ring_buffer::AudioRingBuffer;
 /// Authoring surface with node composition helpers.
 pub use authoring::{el, extra, mc};
 /// Core node utilities mirroring the upstream package surface.
-pub use core::{create_node, is_node, resolve, unpack, ElemNode};
+pub use core::{ElemNode, create_node, is_node, resolve, unpack};
 /// Generic DSP engine with auto-diffing parameter updates.
 pub use engine::{DspGraph, Engine, KeyedConst, NativeProp};
 /// Error types and helpers used by the public API.
@@ -30,4 +30,4 @@ pub use graph::{Graph, MountError, MountedGraph, MountedNode, Node};
 /// Rust-native resource registry and resource values.
 pub use resource::{AudioBuffer, Resource, ResourceId, ResourceManager};
 /// Instruction types and the runtime wrapper.
-pub use runtime::{Instruction, InstructionBatch, NodeId, Runtime};
+pub use runtime::{Instruction, InstructionBatch, NodeId, Runtime, RuntimeEvent};

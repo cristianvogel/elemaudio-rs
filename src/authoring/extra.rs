@@ -1,6 +1,6 @@
 use super::el;
 use crate::graph::Node;
-use crate::{resolve, unpack, ElemNode};
+use crate::{ElemNode, resolve, unpack};
 
 /// Internal enum for box_sum window input (props or signal).
 pub enum BoxSumWindowInput {
@@ -48,16 +48,30 @@ fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value
 
 /// Frequency shifter helper.
 ///
-/// Returns two roots:
-/// - output 0: down-shifted
-/// - output 1: up-shifted
+/// Returns two roots in fixed order: lower sideband, then upper sideband.
 ///
 /// Props:
-/// - `shiftHz`: frequency shift in Hz
-/// - `mix`: wet amount in the range `0.0..=1.0`
 /// - `reflect`: integer mode for negative shift handling
-pub fn freqshift(props: serde_json::Value, x: impl Into<ElemNode>) -> Vec<Node> {
-    unpack(Node::new("freqshift", props, vec![resolve(x)]), 2)
+/// - `fbSource`: `"lower"` or `"upper"` to select the feedback band
+///
+/// Child order:
+/// - `shift_hz`: audio-rate shift amount in Hz
+/// - `feedback`: audio-rate feedback amount (clamped per-sample to `[0, 0.999]`)
+/// - `x`: audio input
+pub fn freqshift(
+    props: serde_json::Value,
+    shift_hz: impl Into<ElemNode>,
+    feedback: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Vec<Node> {
+    unpack(
+        Node::new(
+            "freqshift",
+            props,
+            vec![resolve(shift_hz), resolve(feedback), resolve(x)],
+        ),
+        2,
+    )
 }
 
 /// Crunch distortion helper.
@@ -784,7 +798,9 @@ pub fn stride_delay_with_insert(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
     else {
-        log::error!("stride_delay_with_insert: missing 'fbtap' prop, falling back to stride_delay without insert");
+        log::error!(
+            "stride_delay_with_insert: missing 'fbtap' prop, falling back to stride_delay without insert"
+        );
         return stride_delay(props, delay_ms, fb, x);
     };
 
@@ -866,7 +882,9 @@ pub fn stereo_stride_delay_with_insert(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
     else {
-        log::error!("stereo_stride_delay_with_insert: missing 'fbtap' prop, falling back to stereo stride_delay without insert");
+        log::error!(
+            "stereo_stride_delay_with_insert: missing 'fbtap' prop, falling back to stereo stride_delay without insert"
+        );
         let props_val = serde_json::Value::Object(props_obj);
         let resolved = stride_delay_resolve_defaults(props_val);
         let dl = resolve(delay_ms);
@@ -1129,6 +1147,85 @@ fn ramp00_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
+/// Sample-accurate threshold gate with optional hold/reset behavior.
+///
+/// Child order follows the requested contract: `[threshold, reset, x]`.
+///
+/// - `threshold` is read at sample rate.
+/// - `reset` is only used when `latch = true`.
+/// - `x` is the observed signal.
+///
+/// Props:
+/// - `key`: optional authoring key for stable identity
+/// - `hysteresis`: hysteresis width around the threshold, default `0`
+/// - `latch`: when `true`, output holds at `1` until `reset` rises;
+///   when `false`, `reset` is ignored and the node emits threshold-gate pulses
+///
+/// Vendor comparators already cover basic thresholding. This node is the
+/// threshold-gate variant: it rearms when `x <= threshold - hysteresis/2`, then
+/// fires when `x > threshold + hysteresis/2`.
+pub fn threshold(
+    props: serde_json::Value,
+    threshold: impl Into<ElemNode>,
+    reset: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    let resolved_props = threshold_resolve_defaults(props);
+    Node::new(
+        "threshold",
+        resolved_props,
+        vec![resolve(threshold), resolve(reset), resolve(x)],
+    )
+}
+
+fn threshold_resolve_defaults(props: serde_json::Value) -> serde_json::Value {
+    let mut map = match props {
+        serde_json::Value::Object(m) => m,
+        _ => serde_json::Map::new(),
+    };
+
+    map.entry("hysteresis")
+        .or_insert_with(|| serde_json::Value::from(0.0));
+    map.entry("latch")
+        .or_insert_with(|| serde_json::Value::from(false));
+    serde_json::Value::Object(map)
+}
+
+/// Always-multichannel sample playback helper.
+///
+/// Child order: `[start, end, rate, gain_db, trigger]`.
+///
+/// The native node always returns two output roots. Mono sources are copied to
+/// both channels. Playback always loops inside the normalized `[start, end]`
+/// region. `gain_db` is an audio-rate stereo gain control shared by both
+/// outputs and converted to linear gain in the native node.
+///
+/// Typical `gain_db` range is `0` down to silence, with optional positive
+/// headroom such as `+6 dB` when desired by the caller.
+pub fn sample(
+    props: serde_json::Value,
+    start: impl Into<ElemNode>,
+    end: impl Into<ElemNode>,
+    rate: impl Into<ElemNode>,
+    gain_db: impl Into<ElemNode>,
+    trigger: impl Into<ElemNode>,
+) -> Vec<Node> {
+    unpack(
+        Node::new(
+            "extra.sample",
+            props,
+            vec![
+                resolve(start),
+                resolve(end),
+                resolve(rate),
+                resolve(gain_db),
+                resolve(trigger),
+            ],
+        ),
+        2,
+    )
+}
+
 /// Emit the length of a VFS-resident audio resource as a constant signal,
 /// optionally scaled into a natural domain (`samp`, `ms`, or `hz`).
 ///
@@ -1182,33 +1279,387 @@ pub fn sample_count(props: serde_json::Value) -> Node {
     Node::new("sampleCount", props, vec![])
 }
 
-/// Sparse random impulses with optional decaying trails.
+/// Fixed-period frame clock anchored to absolute sample time.
 ///
-/// Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
+/// Emits a one-sample pulse at absolute sample indices
+/// `0, period, 2*period, ...` regardless of backend block size.
+///
+/// `period` is measured in samples and must be positive.
+pub fn frameclock(period: usize) -> Node {
+    Node::new(
+        "frameclock",
+        serde_json::json!({ "period": period }),
+        vec![],
+    )
+}
+
+/// Frame-synchronised integer delay line whose delay unit is whole frames.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `maxframes`: maximum supported delay in frames
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `delay_frames`: integer delay time in frames, sampled only at frame boundaries
+/// - `x`: input signal to delay
+pub fn frame_delay(
+    props: serde_json::Value,
+    delay_frames: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_delay");
+    Node::new("frameDelay", props, vec![resolve(delay_frames), resolve(x)])
+}
+
+/// Frame-synchronised derivative against the previous frame at the same sample offset.
+///
+/// Emits `x[n] - x[n - framelength]` with a fixed latency of one frame.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `key`: optional authoring key
+pub fn frame_derivative(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
+    assert_even_framelength(&props, "frame_derivative");
+    Node::new("frameDerivative", props, vec![resolve(x)])
+}
+
+/// Frame-synchronised scope that emits one exact frame of samples per event.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `name`: event source identifier
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - one or more signals to capture in lockstep across each frame
+pub fn frame_scope<T>(props: serde_json::Value, args: impl IntoIterator<Item = T>) -> Node
+where
+    T: Into<ElemNode>,
+{
+    assert_even_framelength(&props, "frame_scope");
+    Node::new("frameScope", props, args.into_iter().map(resolve).collect())
+}
+
+/// Absolute-sample-aligned frame phasor with frame-latched shaping controls.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `key`: optional authoring key
+///
+/// Inputs (all latched on frame boundaries):
+/// - `offset`: vertical DC offset added after curvature/scale; hard-clipped bipolar result
+/// - `shift`: horizontal phase rotation in integer samples, wrapped into the frame
+/// - `curvature`: bipolar phase warp amount
+/// - `scale`: bipolar vertical amplitude scale applied to the curved phase;
+///   negative values mirror the phasor vertically; final output hard-clipped to [-1, 1]
+pub fn frame_phasor(
+    props: serde_json::Value,
+    offset: impl Into<ElemNode>,
+    shift: impl Into<ElemNode>,
+    curvature: impl Into<ElemNode>,
+    scale: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_phasor");
+    Node::new(
+        "framePhasor",
+        props,
+        vec![
+            resolve(offset),
+            resolve(shift),
+            resolve(curvature),
+            resolve(scale),
+        ],
+    )
+}
+
+/// Absolute-sample-aligned frame shaper oscillator with frame-latched controls.
+///
+/// Starts flat at `wave = 0`, morphs to a full bipolar triangle at
+/// `|wave| = 0.5`, then morphs onward to a full bipolar sine at
+/// `|wave| = 1`. Negative `wave` values invert the oscillator core vertically.
+///
+/// Props:
+/// - `framelength`: positive even integer frame size in samples
+/// - `key`: optional authoring key
+///
+/// Inputs (all latched on frame boundaries):
+/// - `offset`: vertical DC offset added after shaping
+/// - `shift`: horizontal phase rotation in integer samples, wrapped into the frame
+/// - `tilt`: center-skew amount that asymmetrically remaps the frame phase
+/// - `zoom`: horizontal zoom around the center track; `< 1` zooms inward, `> 1` contracts inward
+/// - `scale`: bipolar vertical amplitude scale applied after the waveform is chosen
+/// - `wave`: shape morph and vertical polarity control for the oscillator core
+pub fn frame_shaper(
+    props: serde_json::Value,
+    offset: impl Into<ElemNode>,
+    shift: impl Into<ElemNode>,
+    tilt: impl Into<ElemNode>,
+    zoom: impl Into<ElemNode>,
+    scale: impl Into<ElemNode>,
+    wave: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_shaper");
+
+    Node::new(
+        "frameShaper",
+        props,
+        vec![
+            resolve(offset),
+            resolve(shift),
+            resolve(tilt),
+            resolve(zoom),
+            resolve(scale),
+            resolve(wave),
+        ],
+    )
+}
+
+/// Frame PolySignal / Frame MultiLFO primitive.
+///
+/// Reads a source wavetable by normalized phase for each track in the frame and
+/// de-correlates the tracks over time using a base low-rate `bpm` plus two
+/// per-track control signals:
+/// - `shape_phases`: scales an internal full ramp [-1, 1] into per-track lookup phase offsets
+/// - `shape_frequencies`: scales an internal full ramp [-1, 1] into per-track rate multiplier bias
+///
+/// If `path` is omitted, the source defaults to an internal sine wave.
+///
+/// Current reset behavior:
+/// - `reset` input still accepts a rising-edge signal and performs a hard native reset
+/// - `resetcounter` prop, when changed between renders, also requests a hard native reset
+/// - the hard reset clears drift phases and the latched `bpm` / spread state
+pub fn frame_poly_signal(
+    props: serde_json::Value,
+    shape_phases: impl Into<ElemNode>,
+    shape_frequencies: impl Into<ElemNode>,
+    reset: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_poly_signal");
+    Node::new(
+        "framePolySignal",
+        props,
+        vec![resolve(shape_phases), resolve(shape_frequencies), resolve(reset)],
+    )
+}
+
+/// Frame-synchronised select helper.
+///
+/// Latches the boolean interpretation of `condition` on each absolute frame
+/// boundary and holds that branch choice for the full frame while passing the
+/// selected sample-rate branch through unchanged.
+pub fn frame_select(
+    props: serde_json::Value,
+    condition: impl Into<ElemNode>,
+    when_true: impl Into<ElemNode>,
+    when_false: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_select");
+    Node::new(
+        "frameSelect",
+        props,
+        vec![resolve(condition), resolve(when_true), resolve(when_false)],
+    )
+}
+
+/// WireFrames-style frame-domain smoothing processor with per-track SR modulation.
+///
+/// The base `time_constant` is shaped per track using the same order-4 law as
+/// `frame_random_walks`: shaper `0` keeps the default time, `1` makes it 16x
+/// faster, and `-1` makes it 16x slower.
+///
+/// Props:
+/// - `framelength`: positive even integer frame size in samples
+/// - `key`: optional authoring key
+pub fn frame_smooth(
+    props: serde_json::Value,
+    time_constant: impl Into<ElemNode>,
+    time_constant_frame_shaper: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_smooth");
+    Node::new(
+        "frameSmooth",
+        props,
+        vec![
+            resolve(time_constant),
+            resolve(time_constant_frame_shaper),
+            resolve(x),
+        ],
+    )
+}
+
+/// WireFrames-style bidirectional frame-domain smoother with separate attack
+/// and release times plus per-track frame shapers for both directions.
+pub fn frame_bidi_smooth(
+    props: serde_json::Value,
+    attack_time: impl Into<ElemNode>,
+    release_time: impl Into<ElemNode>,
+    attack_frame_shaper: impl Into<ElemNode>,
+    release_frame_shaper: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_bidi_smooth");
+    Node::new(
+        "frameBiDiSmooth",
+        props,
+        vec![
+            resolve(attack_time),
+            resolve(release_time),
+            resolve(attack_frame_shaper),
+            resolve(release_frame_shaper),
+            resolve(x),
+        ],
+    )
+}
+
+/// WireFrames-style RAM writer for a live mono frame stream.
+///
+/// Captures one full frame from `x` and writes the completed frame into a
+/// runtime-owned RAM buffer addressed by `path`. The write commits on the next
+/// frame boundary, so downstream readers observe coherent whole-frame updates.
+///
+/// Props:
+/// - `framelength`: positive even integer frame size in samples
+/// - `path`: RAM slot identifier shared with readers like `el::table`
+/// - `key`: optional authoring key
+pub fn frame_write_ram(
+    props: serde_json::Value,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_write_ram");
+    Node::new("frameWriteRAM", props, vec![resolve(x)])
+}
+
+/// Wrapping addition inside a runtime range `[min, max)`.
+pub fn wrap_add(
+    min: impl Into<ElemNode>,
+    max: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+    y: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "wrapAdd",
+        serde_json::Value::Null,
+        vec![resolve(min), resolve(max), resolve(x), resolve(y)],
+    )
+}
+
+/// Mirror-reflected addition inside a runtime range `[min, max]`.
+pub fn mirror_add(
+    min: impl Into<ElemNode>,
+    max: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+    y: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "mirrorAdd",
+        serde_json::Value::Null,
+        vec![resolve(min), resolve(max), resolve(x), resolve(y)],
+    )
+}
+
+fn assert_even_framelength(props: &serde_json::Value, helper: &str) {
+    if let Some(frame_length) = props.get("framelength").and_then(serde_json::Value::as_i64) {
+        assert!(
+            frame_length > 0 && frame_length % 2 == 0,
+            "{helper} requires an even positive framelength"
+        );
+    }
+}
+
+/// Frame-synchronised packed random walks with per-track step/time shaping.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `seed`: optional deterministic seed, with `0` treated as `1`
+/// - `absolute`: optional positive-only output mode
+/// - `interpolation`: optional cosine interpolation mode, defaults to `true`
+/// - `startingfrom`: optional reset value for all tracks before initial deviation
+/// - `initialdeviation`: optional maximum reset deviation from `startingfrom`
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `step_size`: maximum random deviation per step
+/// - `time_constant`: nominal step duration in seconds
+/// - `step_size_frame_shaper`: per-track order-4 scaler for `step_size`
+/// - `time_constant_frame_shaper`: per-track inverse order-4 scaler for `time_constant`
+pub fn frame_random_walks(
+    props: serde_json::Value,
+    step_size: impl Into<ElemNode>,
+    time_constant: impl Into<ElemNode>,
+    step_size_frame_shaper: impl Into<ElemNode>,
+    time_constant_frame_shaper: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_random_walks");
+    Node::new(
+        "frameRandomWalks",
+        props,
+        vec![
+            resolve(step_size),
+            resolve(time_constant),
+            resolve(step_size_frame_shaper),
+            resolve(time_constant_frame_shaper),
+        ],
+    )
+}
+
+/// Frame-synchronous single-value getter with queued event output.
+///
+/// Props:
+/// - `framelength`: positive integer frame size in samples
+/// - `name`: event source identifier
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `index`: frame-rate-synchronised sample index, latched on frame boundaries
+/// - `x`: source signal to read and pass through unchanged
+pub fn frame_value(
+    props: serde_json::Value,
+    index: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    assert_even_framelength(&props, "frame_value");
+    Node::new("frameValue", props, vec![resolve(index), resolve(x)])
+}
+
+/// Sparse random impulses with optional decaying release.
+///
+/// Inspired by SuperCollider's `Dust` with a twist: each impulse
 /// can have a trailing exponential decay instead of being a single-sample
-/// spike. Trails overlap and sum (polyphonic voice pool of 64).
+/// spike. Releases overlap and sum (polyphonic voice pool of 64).
 ///
 /// # Arguments (AGENTS.md order: props first, inputs last)
-/// - `props` — optional `seed`, `bipolar`, `jitter`, and/or `key`
+/// - `props` — optional `seed`, `jitter`, and/or `key`
 /// - `density` — impulses per second (Poisson rate, signal)
-/// - `trails` — T60 decay time in seconds per impulse (signal, audio-rate)
+/// - `release` — T60 decay time in seconds per impulse (signal, audio-rate)
 ///
 /// # Props
 /// | Key       | Type | Default | Notes                                         |
 /// |-----------|------|---------|-----------------------------------------------|
 /// | `seed`    | num  | random  | Deterministic RNG seed (0 treated as 1)       |
-/// | `bipolar` | bool | `true`  | `true` = Dust2 (-1/+1), `false` = Dust (0..1) |
 /// | `jitter`  | num  | `0.0`   | Per-impulse amplitude randomness 0..1         |
 /// | `key`     | str  | —       | Optional authoring key                        |
 ///
 /// # Behaviour
 /// - Each sample runs a Bernoulli trial with probability `density / sr`.
-/// - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
+/// - On trigger, a new voice spawns with amplitude 1.
 /// - `jitter` scales the impulse amplitude randomly per trigger.
-/// - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+/// - Voices decay exponentially at T60 = `release` seconds and sum at the output.
 /// - If all 64 voice slots are busy, new triggers are dropped.
-/// - `trails <= 0` → single-sample impulse (voice expires immediately after firing).
-/// - `density <= 0` → no new triggers, existing trails keep decaying.
+/// - `release <= 0` → single-sample impulse (voice expires immediately after firing).
+/// - `density <= 0` → no new triggers, existing releases keep decaying.
+///
+/// # Overlap handling
+/// New events use gap-filling spawn. When a trigger fires while the summed
+/// envelope is at level `d`, the new voice is born at amplitude `(1 - d)` so
+/// the envelope jumps back to exactly 1.0 rather than stacking on top.
+/// A vendor-style `dcblock` poststage then recenters the output around 0.
+/// Sonically this reads as a probabilistically-retriggered exponential
+/// envelope whose decay tail shortens as density rises, without drifting DC.
+///
+/// For the `release <= 0` impulse mode, voices expire on the next sample so
+/// there is no overlap to manage.
 ///
 /// # Example
 ///
@@ -1216,16 +1667,77 @@ pub fn sample_count(props: serde_json::Value) -> Node {
 /// use elemaudio_rs::{el, extra};
 /// use serde_json::json;
 ///
-/// let noise = extra::dust(
-///     json!({ "seed": 1, "bipolar": true, "jitter": 0.25 }),
+/// let noise = extra::rain(
+///     json!({ "seed": 1, "jitter": 0.25 }),
 ///     el::const_(200.0),
 ///     el::const_(0.05),
 /// );
 /// ```
-pub fn dust(
+pub fn rain(
     props: serde_json::Value,
     density: impl Into<ElemNode>,
-    trails: impl Into<ElemNode>,
+    release: impl Into<ElemNode>,
 ) -> Node {
-    Node::new("dust", props, vec![resolve(density), resolve(trails)])
+    Node::new("rain", props, vec![resolve(density), resolve(release)])
+}
+
+/// Multi-slot preset RAM writer (MVP).
+///
+/// Treats one preset as a fixed-length numeric frame and writes it into a
+/// chosen slot of a runtime-owned preset RAM bank addressed by `path`. The
+/// writer latches `slot` at every frame boundary and commits the captured
+/// frame on the next frame boundary, similar to `frame_write_ram`.
+///
+/// Props:
+/// - `path`: shared bank identifier; readers and writers with the same path
+///   share the same `slots * framelength` mono RAM buffer
+/// - `framelength`: positive integer frame size in samples (one frame = one preset)
+/// - `slots`: positive integer number of presets stored in the bank
+/// - `metadata` (optional): static descriptor object for lane schema, ranges,
+///   tapers, slot names, etc. Not consulted by the audio thread.
+/// - `key`: optional authoring key
+///
+/// Inputs:
+/// - `slot`: preset slot index, clamped to `[0, slots - 1]`
+/// - `x`: frame-domain signal captured as one full frame per slot
+pub fn preset_write(
+    props: serde_json::Value,
+    slot: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    Node::new("presetWrite", props, vec![resolve(slot), resolve(x)])
+}
+
+/// Multi-slot preset RAM reader (MVP).
+///
+/// Reads one preset slot as a mono lookup table with linear interpolation by a
+/// normalized `phase` in `[0, 1]`. `slot` is clamped to `[0, slots - 1]` and is
+/// sampled per-sample — the reader is intended for parameter morphing and
+/// scene selection, not audio loop playback.
+pub fn preset_read(
+    props: serde_json::Value,
+    slot: impl Into<ElemNode>,
+    phase: impl Into<ElemNode>,
+) -> Node {
+    Node::new("presetRead", props, vec![resolve(slot), resolve(phase)])
+}
+
+/// Multi-slot preset RAM morph (MVP).
+///
+/// Reads two preset slots with the same normalized phase and linearly
+/// crossfades between them by `mix` (clamped to `[0, 1]`). `mix = 0` picks
+/// `slot_a`, `mix = 1` picks `slot_b`, so this single node also covers hard
+/// slot selection without a separate select helper.
+pub fn preset_morph(
+    props: serde_json::Value,
+    slot_a: impl Into<ElemNode>,
+    slot_b: impl Into<ElemNode>,
+    mix: impl Into<ElemNode>,
+    phase: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "presetMorph",
+        props,
+        vec![resolve(slot_a), resolve(slot_b), resolve(mix), resolve(phase)],
+    )
 }

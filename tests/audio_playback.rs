@@ -140,7 +140,7 @@ fn play_graph_through_ring_buffer_with_fast_path_setter() -> Result<(), Box<dyn 
 /// To run this mc test:
 /// `cargo test --test audio_playback --features resources -- --ignored play_mc_graph_through_ring_buffer`
 fn play_mc_graph_through_ring_buffer() -> Result<(), Box<dyn Error>> {
-    use elemaudio_rs::{el, mc, Graph};
+    use elemaudio_rs::{Graph, el, mc};
     use std::path::PathBuf;
 
     let (device, supported) = audio_support::default_output_setup()?;

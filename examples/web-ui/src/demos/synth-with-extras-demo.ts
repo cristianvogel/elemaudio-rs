@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs synth + extras demo
+ * elemaudiors synth + extras demo
  *
  * Arp synth with crunch distortion, stride delay, and stereo limiter.
  */
@@ -12,7 +12,7 @@ import { initDemo } from "./demo-harness";
 
 const layout = `
   <div class="panel">
-    <h1>Synth + Extras</h1>
+    <h1>Welcome to Elemaudiors</h1>
     <p>Demos a complex graph, mixing <code>el.＊</code> with <code>el.extra.＊</code> nodes. </p>
     <div class="controls">
       <div class="button-row">

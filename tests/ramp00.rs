@@ -11,7 +11,7 @@
 //! raw output values, otherwise the expected ramp is multiplied by the
 //! fade envelope and comparisons fail.
 
-use elemaudio_rs::{el, extra, ElemNode, Graph, Runtime};
+use elemaudio_rs::{ElemNode, Graph, Runtime, el, extra};
 use serde_json::json;
 
 /// Render enough silent blocks to drain the root's 20 ms fade-in so raw

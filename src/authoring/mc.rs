@@ -1,5 +1,5 @@
 use crate::graph::Node;
-use crate::{create_node, unpack, ElemNode};
+use crate::{ElemNode, create_node, unpack};
 
 fn channels_and_props(mut props: serde_json::Value) -> (usize, serde_json::Value) {
     let channels = props

@@ -1,4 +1,4 @@
-use crate::core::{resolve, ElemNode};
+use crate::core::{ElemNode, resolve};
 use crate::graph::{Node, Value};
 
 fn empty_props() -> Value {

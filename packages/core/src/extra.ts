@@ -4,9 +4,18 @@ import type { ElemNode, NodeRepr_t } from "./vendor";
 /**
  * Reflect modes for `freqshift`.
  *
- * These values match the native processor's integer `reflect` prop.
+ * These values match the native processor's integer `reflect` prop and only
+ * affect negative `shiftHz` values.
+ *
+ * - `0`: no reflection, no output swap
+ * - `1`: reflect negative shift to positive magnitude
+ * - `2`: swap lower/upper outputs for negative shift
+ * - `3`: reflect negative shift and swap outputs
  */
 export type FreqShiftReflectMode = 0 | 1 | 2 | 3;
+
+/** Selects which split band feeds the optional internal feedback loop. */
+export type FreqShiftFeedbackSource = "lower" | "upper";
 
 /**
  * Props for `el.extra.freqshift(...)`.
@@ -14,12 +23,10 @@ export type FreqShiftReflectMode = 0 | 1 | 2 | 3;
 export interface FreqShiftProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
   key?: string;
-  /** Frequency shift amount in Hz. */
-  shiftHz: number;
-  /** Wet mix in the range `0.0..=1.0`. */
-  mix?: number;
   /** Negative-frequency handling mode. */
   reflect?: FreqShiftReflectMode;
+  /** Which semantic output band feeds the internal feedback loop. Default: `"lower"`. */
+  fbSource?: FreqShiftFeedbackSource;
 }
 
 /**
@@ -147,13 +154,24 @@ export interface VariSlopeSvfProps extends Record<string, unknown> {
 /**
  * Native frequency shifter helper.
  *
- * Returns two outputs in order: down-shifted, then up-shifted.
+ * Returns two outputs in fixed order: lower sideband, then upper sideband.
+ *
+ * Props:
+ * - `reflect`: negative shift handling mode (default: `0`)
+ * - `fbSource`: which output band feeds the internal feedback loop (default: `"lower"`)
+ *
+ * Child order:
+ * - `shiftHz`: audio-rate shift amount in Hz
+ * - `feedback`: audio-rate feedback amount (clamped per-sample to [0, 0.999])
+ * - `x`: audio input
  */
 export function freqshift(
   props: FreqShiftProps,
+  shiftHz: ElemNode,
+  feedback: ElemNode,
   x: ElemNode,
 ): Array<NodeRepr_t> {
-  return unpack(createNode("freqshift", props, [resolve(x)]), 2);
+  return unpack(createNode("freqshift", props, [resolve(shiftHz), resolve(feedback), resolve(x)]), 2);
 }
 
 /**
@@ -986,6 +1004,409 @@ export function sampleCount(props: SampleCountProps): NodeRepr_t {
   return createNode("sampleCount", props, []);
 }
 
+/**
+ * Fixed-period frame clock anchored to absolute sample time.
+ *
+ * Emits a one-sample pulse at absolute sample indices
+ * `0, period, 2*period, ...` regardless of backend block size.
+ */
+export function frameClock(period: number): NodeRepr_t {
+  return createNode("frameClock", { period }, []);
+}
+
+/** Backward-compatible alias for `frameClock(...)`. */
+export function frameclock(period: number): NodeRepr_t {
+  return frameClock(period);
+}
+
+/** Props for `el.extra.framePhasor(...)`. */
+export interface FrameDelayProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+  /** Maximum supported delay in whole frames. Must be a non-negative integer. */
+  maxframes: number;
+}
+
+/** Props for `el.extra.frameDerivative(...)`. */
+export interface FrameDerivativeProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.frameScope(...)`. */
+export interface FrameScopeProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Event source name forwarded through scope events. */
+  name: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.framePhasor(...)`. */
+export interface FramePhasorProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.frameShaper(...)`. */
+export interface FrameShaperProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.framePolySignal(...)`. */
+export interface FramePolySignalProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+  /** Base low-rate dephasing speed in beats per minute. */
+  bpm: number;
+  /** Optional mono wavetable resource path. If omitted, uses an internal sine. */
+  path?: string;
+  /** Optional monotonic reset request counter for hard native resync between renders. */
+  resetcounter?: number;
+}
+
+/** Props for `el.extra.frameSelect(...)`. */
+export interface FrameSelectProps extends Record<string, unknown> {
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.frameSmooth(...)`. */
+export interface FrameSmoothProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.frameBiDiSmooth(...)`. */
+export interface FrameBiDiSmoothProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+/** Props for `el.extra.frameWriteRAM(...)`. */
+export interface FrameWriteRAMProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+  /** RAM slot identifier shared with readers like `el.table(...)`. */
+  path: string;
+}
+
+/** Props for `el.extra.frameRandomWalks(...)`. */
+export interface FrameRandomWalksProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+  /** Optional deterministic RNG seed. Zero is treated as one. */
+  seed?: number;
+  /** Optional positive-only output mode. */
+  absolute?: boolean;
+  /** Optional cosine interpolation toggle. Defaults to true. */
+  interpolation?: boolean;
+  /** Optional reset starting value before initial deviation is applied. */
+  startingfrom?: number;
+  /** Optional reset deviation range around `startingfrom`. */
+  initialdeviation?: number;
+}
+
+/** Props for `el.extra.frameValue(...)`. */
+export interface FrameValueProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Event source name forwarded through queued runtime events. */
+  name?: string;
+  /** Fixed frame length in samples. Must be a positive even integer. */
+  framelength: number;
+}
+
+function assertEvenFrameLength(name: string, frameLength: number) {
+  if (!Number.isInteger(frameLength) || frameLength <= 0 || frameLength % 2 !== 0) {
+    throw new Error(`${name} requires a positive even framelength prop`);
+  }
+}
+
+/**
+ * Absolute-sample-aligned frame phasor with frame-latched shaping controls.
+ *
+ * All four controls are latched only on frame boundaries. The final output
+ * is hard-clipped to the bipolar range [-1, 1]:
+ *   - `offset`: vertical DC offset added after curvature/scale
+ *   - `shift`:  horizontal phase rotation in integer samples, wrapped into the frame
+ *   - `curvature`: bipolar phase curve warp
+ *   - `scale`:  bipolar vertical amplitude scale applied to the curved phase;
+ *               negative values mirror the phasor vertically
+ */
+export function framePhasor(
+  props: FramePhasorProps,
+  offset: ElemNode,
+  shift: ElemNode,
+  curvature: ElemNode,
+  scale: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("framePhasor", props.framelength);
+
+  return createNode("framePhasor", props, [
+    resolve(offset),
+    resolve(shift),
+    resolve(curvature),
+    resolve(scale),
+  ]);
+}
+
+/**
+ * Absolute-sample-aligned frame shaper oscillator with frame-latched controls.
+ *
+ * `wave` morphs the oscillator core by magnitude:
+ * - `0.0`   -> flat DC zero
+ * - `0.5`   -> full bipolar triangle
+ * - `1.0`   -> full bipolar sine
+ *
+ * Negative `wave` values invert the oscillator core vertically.
+ *
+ * `tilt` skews the waveform around the center of the frame by remapping the
+ * phase asymmetrically while preserving the endpoints.
+ *
+ * `zoom` narrows or widens the active rendering width around the frame center:
+ * - `< 1` zooms inward and expands the wave around the center track
+ * - `> 1` contracts the wave inward toward a narrow central selector
+ */
+export function frameShaper(
+  props: FrameShaperProps,
+  offset: ElemNode,
+  shift: ElemNode,
+  tilt: ElemNode,
+  zoom: ElemNode,
+  scale: ElemNode,
+  wave: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameShaper", props.framelength);
+
+  return createNode("frameShaper", props, [
+    resolve(offset),
+    resolve(shift),
+    resolve(tilt),
+    resolve(zoom),
+    resolve(scale),
+    resolve(wave),
+  ]);
+}
+
+/**
+ * Frame PolySignal / Frame MultiLFO primitive.
+ *
+ * Reads one source wavetable across the frame and de-correlates each track's
+ * time path using built-in full-ramp shaping scaled by `shapePhases` and
+ * `shapeFrequencies`. If `path` is omitted, the source defaults to an internal sine wave.
+ *
+ * Current reset behavior:
+ * - the `reset` input performs a hard native reset on rising edge
+ * - changing `props.resetcounter` between renders also performs a hard native reset
+ */
+export function framePolySignal(
+  props: FramePolySignalProps,
+  shapePhases: ElemNode,
+  shapeFrequencies: ElemNode,
+  reset: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("framePolySignal", props.framelength);
+  return createNode("framePolySignal", props, [
+    resolve(shapePhases),
+    resolve(shapeFrequencies),
+    resolve(reset),
+  ]);
+}
+
+/**
+ * Frame-synchronised select helper.
+ *
+ * The condition is sampled only on frame boundaries and held for the whole
+ * frame. The chosen branch still runs at sample rate.
+ */
+export function frameSelect(
+  props: FrameSelectProps,
+  condition: ElemNode,
+  whenTrue: ElemNode,
+  whenFalse: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameSelect", props.framelength);
+  return createNode("frameSelect", props, [
+    resolve(condition),
+    resolve(whenTrue),
+    resolve(whenFalse),
+  ]);
+}
+
+/**
+ * WireFrames-style frame-domain smoothing processor with per-track SR modulation.
+ *
+ * `timeConstantFrameShaper` uses the same inverse order-4 time scaling law as
+ * `frameRandomWalks`: `0 -> default`, `1 -> 16x faster`, `-1 -> 16x slower`.
+ */
+export function frameSmooth(
+  props: FrameSmoothProps,
+  timeConstant: ElemNode,
+  timeConstantFrameShaper: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameSmooth", props.framelength);
+  return createNode("frameSmooth", props, [
+    resolve(timeConstant),
+    resolve(timeConstantFrameShaper),
+    resolve(x),
+  ]);
+}
+
+/**
+ * WireFrames-style bidirectional frame-domain smoother with separate attack
+ * and release times plus independent per-track shapers for both directions.
+ */
+export function frameBiDiSmooth(
+  props: FrameBiDiSmoothProps,
+  attackTime: ElemNode,
+  releaseTime: ElemNode,
+  attackFrameShaper: ElemNode,
+  releaseFrameShaper: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameBiDiSmooth", props.framelength);
+  return createNode("frameBiDiSmooth", props, [
+    resolve(attackTime),
+    resolve(releaseTime),
+    resolve(attackFrameShaper),
+    resolve(releaseFrameShaper),
+    resolve(x),
+  ]);
+}
+
+/**
+ * WireFrames-style RAM writer for a live mono frame stream.
+ *
+ * Captures one complete frame from `x` and writes the coherent frame into the
+ * runtime-owned RAM slot at `path` on the next frame boundary.
+ */
+export function frameWriteRAM(
+  props: FrameWriteRAMProps,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameWriteRAM", props.framelength);
+  return createNode("frameWriteRAM", props, [resolve(x)]);
+}
+
+/** Wrapping addition inside a runtime range `[min, max)`. */
+export function wrapAdd(min: ElemNode, max: ElemNode, x: ElemNode, y: ElemNode): NodeRepr_t {
+  return createNode("wrapAdd", {}, [resolve(min), resolve(max), resolve(x), resolve(y)]);
+}
+
+/** Mirror-reflected addition inside a runtime range `[min, max]`. */
+export function mirrorAdd(min: ElemNode, max: ElemNode, x: ElemNode, y: ElemNode): NodeRepr_t {
+  return createNode("mirrorAdd", {}, [resolve(min), resolve(max), resolve(x), resolve(y)]);
+}
+
+/**
+ * Frame-synchronised packed random walks with per-track step/time shaping.
+ *
+ * `stepSizeFrameShaper` scales `stepSize` by an order-4 frame shaper law:
+ * `-1 -> 1/16`, `0 -> 1`, `1 -> 16`.
+ *
+ * `timeConstantFrameShaper` applies the inverse order-4 law to `timeConstant`:
+ * `-1 -> 16x slower`, `0 -> default`, `1 -> 16x faster`.
+ */
+export function frameRandomWalks(
+  props: FrameRandomWalksProps,
+  stepSize: ElemNode,
+  timeConstant: ElemNode,
+  stepSizeFrameShaper: ElemNode,
+  timeConstantFrameShaper: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameRandomWalks", props.framelength);
+
+  return createNode("frameRandomWalks", props, [
+    resolve(stepSize),
+    resolve(timeConstant),
+    resolve(stepSizeFrameShaper),
+    resolve(timeConstantFrameShaper),
+  ]);
+}
+
+/**
+ * Frame-synchronised integer delay line whose delay unit is whole frames.
+ *
+ * The `delayFrames` signal is sampled only on frame boundaries and held for
+ * the full frame.
+ */
+export function frameDelay(
+  props: FrameDelayProps,
+  delayFrames: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameDelay", props.framelength);
+  if (!Number.isInteger(props.maxframes) || props.maxframes < 0) {
+    throw new Error("frameDelay requires a non-negative integer maxframes prop");
+  }
+
+  return createNode("frameDelay", props, [resolve(delayFrames), resolve(x)]);
+}
+
+/**
+ * Frame-synchronised derivative against the previous frame at the same sample offset.
+ *
+ * Emits `x[n] - x[n - framelength]` with a fixed latency of one frame.
+ */
+export function frameDerivative(
+  props: FrameDerivativeProps,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameDerivative", props.framelength);
+  return createNode("frameDerivative", props, [resolve(x)]);
+}
+
+/**
+ * Frame-synchronised scope that emits one exact frame of samples per event.
+ */
+export function frameScope(
+  props: FrameScopeProps,
+  ...args: ElemNode[]
+): NodeRepr_t {
+  assertEvenFrameLength("frameScope", props.framelength);
+
+  return createNode("frameScope", props, args.map(resolve));
+}
+
+/**
+ * Frame-synchronous single-value getter with queued event output.
+ *
+ * The `index` signal is sampled only on frame boundaries. The node passes `x`
+ * through unchanged and emits the selected frame sample through queued runtime
+ * events as `frameValue`.
+ */
+export function frameValue(
+  props: FrameValueProps,
+  index: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  assertEvenFrameLength("frameValue", props.framelength);
+
+  return createNode("frameValue", props, [resolve(index), resolve(x)]);
+}
+
 
 // ---------------------------------------------------------------------------
 // ramp00
@@ -1003,6 +1424,32 @@ export interface Ramp00Props extends Record<string, unknown> {
    * on the trigger restarts the ramp from 0.
    */
   blocking?: boolean;
+}
+
+/**
+ * Props for `el.extra.threshold(...)`.
+ */
+export interface ThresholdProps extends Record<string, unknown> {
+  /** Optional authoring key for stable identity. */
+  key?: string;
+  /** Hysteresis width applied around the threshold. Default: 0. */
+  hysteresis?: number;
+  /**
+   * When `true`, output holds at `1` after a threshold crossing until the
+   * `reset` signal rises. When `false` (default), `reset` is ignored and the
+   * node emits one-sample threshold-gate pulses on rising crossings only.
+   */
+  latch?: boolean;
+}
+
+/**
+ * Props for `el.extra.sample(...)`.
+ */
+export interface ExtraSampleProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** VFS path of the source asset. */
+  path: string;
 }
 
 /**
@@ -1047,23 +1494,72 @@ export function ramp00(
   return createNode("ramp00", resolvedProps, [resolve(dur), resolve(x)]);
 }
 
+/**
+ * Sample-accurate threshold gate with optional hold/reset behavior.
+ *
+ * Child order: `threshold`, `reset`, `x`.
+ *
+ * - `threshold` is a signal and may vary per-sample.
+ * - `reset` is only used when `latch: true`.
+ * - `x` is the observed signal.
+ *
+ * Vendor comparators already cover basic thresholding. This node is the
+ * threshold-gate variant: it watches for upward crossings through a threshold
+ * band and emits either one-sample pulses or a held gate, depending on `latch`.
+ *
+ * It rearms when `x <= threshold - hysteresis/2`, then fires when
+ * `x > threshold + hysteresis/2`.
+ */
+export function threshold(
+  props: ThresholdProps,
+  threshold: ElemNode,
+  reset: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  const { hysteresis = 0, latch = false, ...other } = props;
+  const resolvedProps = { ...other, hysteresis, latch };
+  return createNode("threshold", resolvedProps, [resolve(threshold), resolve(reset), resolve(x)]);
+}
+
+/**
+ * Always-multichannel sample playback helper.
+ *
+ * Child order: `start`, `end`, `rate`, `gainDb`, `trigger`.
+ *
+ * The native node always produces a stereo pair. Mono sources are copied to
+ * both channels. Looping is always enabled inside the normalized `[start, end]`
+ * region. `gainDb` is an audio-rate stereo gain control shared by both outputs.
+ * The native node converts dB to linear gain internally.
+ *
+ * Typical `gainDb` range is `0` down to silence, with optional positive headroom
+ * such as `+6 dB` when desired by the caller.
+ */
+export function sample(
+  props: ExtraSampleProps,
+  start: ElemNode,
+  end: ElemNode,
+  rate: ElemNode,
+  gainDb: ElemNode,
+  trigger: ElemNode,
+): Array<NodeRepr_t> {
+  return unpack(
+    createNode("extra.sample", props, [resolve(start), resolve(end), resolve(rate), resolve(gainDb), resolve(trigger)]),
+    2,
+  );
+}
+
 // ---------------------------------------------------------------------------
-// dust
+// rain
 // ---------------------------------------------------------------------------
 
 /**
- * Props for `el.extra.dust(...)`.
+ * Props for `el.extra.rain(...)`.
  */
-export interface DustProps extends Record<string, unknown> {
+export interface RainProps extends Record<string, unknown> {
   /** Optional authoring key for stable identity. */
   key?: string;
   /** Optional deterministic RNG seed (0 treated as 1). */
   seed?: number;
-  /**
-   * `true` (default) = Dust2-style bipolar output (-1 or +1 per impulse).
-   * `false` = SC Dust-style unipolar output (always +1).
-   */
-  bipolar?: boolean;
   /**
    * Per-impulse amplitude randomness, 0.0–1.0. Default 0.
    * - 0.0 = all impulses at amplitude 1 (constant)
@@ -1074,46 +1570,190 @@ export interface DustProps extends Record<string, unknown> {
 }
 
 /**
- * Sparse random impulses with optional decaying trails.
+ * Sparse random impulses with optional decaying release.
  *
- * Inspired by SuperCollider's `Dust` / `Dust2` with a twist: each impulse
- * can have a trailing exponential decay instead of being a single-sample
- * spike. Trails overlap and sum (polyphonic voice pool of 64).
+ * Inspired by SuperCollider's `Dust` with a twist: each impulse
+ * can have a trailing exponential release instead of being a single-sample
+ * spike. Releases overlap and sum (polyphonic voice pool of 64).
  *
  * ### Behaviour
  *
  * - Each sample runs a Bernoulli trial with probability `density / sr`.
- * - On trigger, a new voice spawns with amplitude 1 (random sign if bipolar).
- * - Voices decay exponentially at T60 = `trails` seconds and sum at the output.
+ * - On trigger, a new voice spawns with amplitude 1.
+ * - Voices decay exponentially at T60 = `release` seconds and sum at the output.
  * - If all 64 voice slots are busy, new triggers are dropped.
- * - `trails <= 0` → single-sample impulse (voice expires immediately).
- * - `density <= 0` → no new triggers, existing trails keep decaying.
+ * - `release <= 0` → single-sample impulse (voice expires immediately).
+ * - `density <= 0` → no new triggers, existing releases keep decaying.
  *
- * @param props   - see {@link DustProps}
+ * ### Overlap handling
+ *
+ * New events use gap-filling spawn. When a trigger fires while the summed
+ * envelope is at level `d`, the new voice is born at amplitude `(1 - d)` so
+ * the envelope jumps back to exactly 1.0 rather than stacking on top.
+ * A vendor-style `dcblock` poststage then recenters the output around 0.
+ * Sonically this reads as a probabilistically-retriggered exponential
+ * envelope whose decay tail shortens as density rises, without drifting DC.
+ *
+ * For the `release <= 0` impulse mode, voices expire on the next sample so
+ * there is no overlap to manage.
+ *
+ * @param props   - see {@link RainProps}
  * @param density - impulses per second (Poisson rate, signal)
- * @param trails  - T60 decay time in seconds per impulse (signal, audio-rate)
+ * @param release - T60 decay time in seconds per impulse (signal, audio-rate)
  *
  * @example
  * ```ts
- * // Dense bipolar dust with 50ms trails
- * const noise = el.extra.dust(
- *   { seed: 1, bipolar: true },
+ * // Dense rain with 50ms release
+ * const noise = el.extra.rain(
+ *   { seed: 1 },
  *   el.const({ value: 200 }),
  *   el.const({ value: 0.05 }),
  * );
  *
- * // Classic SC-Dust (unipolar, single-sample impulses)
- * const clicks = el.extra.dust(
- *   { bipolar: false },
+ * // Single-sample impulses
+ * const clicks = el.extra.rain(
+ *   {},
  *   el.const({ value: 10 }),
  *   el.const({ value: 0 }),
  * );
  * ```
  */
-export function dust(
-  props: DustProps,
+export function rain(
+  props: RainProps,
   density: ElemNode,
-  trails: ElemNode,
+  release: ElemNode,
 ): NodeRepr_t {
-  return createNode("dust", props, [resolve(density), resolve(trails)]);
+  return createNode("rain", props, [resolve(density), resolve(release)]);
+}
+
+// ---------------------------------------------------------------------------
+// preset bank (MVP)
+// ---------------------------------------------------------------------------
+
+/** Taper family used to denormalise a preset lane on read. */
+export type PresetLaneTaper = "linear" | "exp" | "quantize";
+
+/** Declarative description of one preset lane inside a bank. */
+export interface PresetLaneMetadata {
+  /** Lane index inside the frame (0..framelength-1). */
+  index: number;
+  /** Human-readable lane name, e.g. "cutoffHz". */
+  name: string;
+  /** Optional minimum value after denormalisation. */
+  min?: number;
+  /** Optional maximum value after denormalisation. */
+  max?: number;
+  /** Optional taper/curve family applied during denormalisation. */
+  taper?: PresetLaneTaper;
+  /** Optional default normalized value used when authoring presets. */
+  default?: number;
+  /** Optional unit label, informational only. */
+  unit?: string;
+}
+
+/** Static descriptor attached to a preset bank. Not consulted at audio rate. */
+export interface PresetBankMetadata extends Record<string, unknown> {
+  /** Optional schema tag, useful for forward/backward compatibility. */
+  schema?: string;
+  /** Optional schema version. */
+  version?: number;
+  /** Declared lanes for this bank (by index). */
+  lanes?: readonly PresetLaneMetadata[];
+  /** Optional human-friendly slot names, parallel to slot indices. */
+  slotNames?: readonly string[];
+}
+
+/** Props shared by preset bank nodes. */
+export interface PresetBankProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Shared bank identifier. All nodes referring to the same bank share RAM. */
+  path: string;
+  /** Positive integer frame size in samples. One frame = one preset. */
+  framelength: number;
+  /** Positive integer number of presets stored in the bank. */
+  slots: number;
+  /** Optional descriptor object for lanes, tapers, slot names, etc. */
+  metadata?: PresetBankMetadata;
+}
+
+/**
+ * Multi-slot preset RAM writer (MVP).
+ *
+ * Captures one full frame of `x` and commits it into the chosen slot of a
+ * runtime-owned preset bank on the next frame boundary. `slot` is latched at
+ * frame boundaries and clamped to `[0, slots - 1]`.
+ */
+export function presetWrite(
+  props: PresetBankProps,
+  slot: ElemNode,
+  x: ElemNode,
+): NodeRepr_t {
+  return createNode("presetWrite", props, [resolve(slot), resolve(x)]);
+}
+
+/**
+ * Multi-slot preset RAM reader (MVP).
+ *
+ * Reads one preset slot as a mono lookup table with linear interpolation by a
+ * normalized `phase` in `[0, 1]`. `slot` is clamped to `[0, slots - 1]`.
+ */
+export function presetRead(
+  props: PresetBankProps,
+  slot: ElemNode,
+  phase: ElemNode,
+): NodeRepr_t {
+  return createNode("presetRead", props, [resolve(slot), resolve(phase)]);
+}
+
+/**
+ * Multi-slot preset RAM morph (MVP).
+ *
+ * Reads two preset slots with the same normalized phase and linearly
+ * crossfades between them by `mix` (clamped to `[0, 1]`). `mix = 0` picks
+ * `slotA`, `mix = 1` picks `slotB`, so this same node also covers hard
+ * slot selection.
+ */
+export function presetMorph(
+  props: PresetBankProps,
+  slotA: ElemNode,
+  slotB: ElemNode,
+  mix: ElemNode,
+  phase: ElemNode,
+): NodeRepr_t {
+  return createNode("presetMorph", props, [
+    resolve(slotA),
+    resolve(slotB),
+    resolve(mix),
+    resolve(phase),
+  ]);
+}
+
+/**
+ * Host-side helper: denormalise a `[0, 1]` value to a real parameter value
+ * using a lane's declared `min`/`max`/`taper`. Intended for UI-side decoding
+ * of preset metadata. Not called on the audio thread.
+ */
+export function denormalisePresetLane(
+  lane: PresetLaneMetadata,
+  value: number,
+): number {
+  const min = typeof lane.min === "number" ? lane.min : 0;
+  const max = typeof lane.max === "number" ? lane.max : 1;
+  const clamped = Math.max(0, Math.min(1, value));
+
+  if (lane.taper === "exp") {
+    if (min <= 0 || max <= 0) {
+      return min + clamped * (max - min);
+    }
+    return min * Math.pow(max / min, clamped);
+  }
+
+  if (lane.taper === "quantize") {
+    const steps = Math.max(1, Math.round(max - min));
+    const quantized = Math.round(clamped * steps);
+    return min + quantized;
+  }
+
+  return min + clamped * (max - min);
 }

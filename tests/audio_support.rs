@@ -7,8 +7,8 @@
 
 use std::error::Error;
 
-use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::SampleFormat;
+use cpal::traits::{DeviceTrait, HostTrait};
 use elemaudio_rs::AudioRingBuffer;
 
 /// Discovers and configures the default system audio output device.

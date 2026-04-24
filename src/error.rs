@@ -15,6 +15,8 @@ pub enum Error {
     InvalidArgument(&'static str),
     /// A string contained an interior nul byte before crossing the FFI boundary.
     CString(NulError),
+    /// JSON serialization or parsing failed in the wrapper.
+    Json(serde_json::Error),
     /// A native operation returned a non-zero status code.
     Native {
         /// The operation that failed.
@@ -45,6 +47,7 @@ impl Display for Error {
             Self::NullHandle => write!(f, "native runtime handle was null"),
             Self::InvalidArgument(message) => write!(f, "invalid argument: {message}"),
             Self::CString(err) => write!(f, "string contains interior nul byte: {err}"),
+            Self::Json(err) => write!(f, "json error: {err}"),
             Self::Native {
                 operation,
                 code,
@@ -73,6 +76,12 @@ impl From<NulError> for Error {
     }
 }
 
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Json(value)
+    }
+}
+
 /// Describes a native runtime return code.
 ///
 /// The mapping is used when the native bridge reports a failure code and the
@@ -80,7 +89,9 @@ impl From<NulError> for Error {
 pub fn describe_return_code(code: i32) -> &'static str {
     match code {
         0 => "Ok",
-        1 => "Node type not recognized: the requested node kind was not registered in the runtime bridge",
+        1 => {
+            "Node type not recognized: the requested node kind was not registered in the runtime bridge"
+        }
         2 => "Node not found",
         3 => "Attempting to create a node that already exists",
         4 => "Attempting to create a node type that already exists",

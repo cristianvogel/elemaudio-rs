@@ -1,5 +1,5 @@
 /**
- * elemaudio-rs box-sum modulation demo
+ * elemaudiors box-sum modulation demo
  *
  * Uses el.extra.boxSum / el.extra.boxAverage to smooth white noise
  * and modulate oscillator frequency.
@@ -16,7 +16,7 @@ const layout = `
   <elemaudio-oscilloscope id="scope"></elemaudio-oscilloscope>
   <div class="scope-title"><p>Modulation Signal</p></div>
   <div class="panel">
-    <h1>elemaudio-rs</h1>
+    <h1>elemaudiors</h1>
     <h3>box-sum modulation demo</h3>
     <p>Uses <code>el.extra.boxSum(windowSamplesNode, x)</code> or <code>el.extra.boxAverage(windowSamplesNode, x)</code> to smooth white noise and modulate oscillator frequency.</p>
     <div class="controls">

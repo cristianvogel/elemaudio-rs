@@ -167,11 +167,13 @@ class ElemaudioOscilloscope extends HTMLElement {
         if (this._frozen) return;
         if (!Array.isArray(value)) return;
 
-        // el.scope emits small blocks over time.
-        // Zoom is expected to increase the visible time window by keeping more
-        // history; therefore blocks must be accumulated.
         const block = value as number[];
-        if (this._history.length === 0) {
+        // When `mode="replace"` each incoming block IS the display (one frame per event).
+        // Otherwise blocks are accumulated into a rolling history of size `TIME_SCALE * zoom`.
+        const mode = this.getAttribute("mode") ?? "accumulate";
+        if (mode === "replace") {
+          this._history = block.slice();
+        } else if (this._history.length === 0) {
           this._history = block;
         } else {
           this._history.push(...block);

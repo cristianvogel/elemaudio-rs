@@ -1,10 +1,10 @@
-//! End-to-end tests for the `dust` native node.
+//! End-to-end tests for the `rain` native node.
 //!
 //! These exercise the full Rust authoring → Runtime → native C++ path.
 //! The node is intentionally sparse and stateful, so the tests focus on
 //! deterministic shape properties rather than exact random-event timing.
 
-use elemaudio_rs::{extra, Graph, Runtime};
+use elemaudio_rs::{Graph, Runtime, extra};
 use serde_json::json;
 
 fn warm_past_root_fade(runtime: &Runtime, sample_rate: f64, buffer_size: usize) {
@@ -22,14 +22,14 @@ fn warm_past_root_fade(runtime: &Runtime, sample_rate: f64, buffer_size: usize) 
 }
 
 #[test]
-fn dust_is_silent_when_density_is_zero() {
+fn rain_is_silent_when_density_is_zero() {
     let runtime = Runtime::new()
         .sample_rate(48_000.0)
         .buffer_size(64)
         .call()
         .expect("runtime");
 
-    let graph = Graph::new().render(extra::dust(
+    let graph = Graph::new().render(extra::rain(
         json!({ "seed": 1 }),
         elemaudio_rs::el::const_(0.0),
         elemaudio_rs::el::const_(0.05),
@@ -47,9 +47,9 @@ fn dust_is_silent_when_density_is_zero() {
 }
 
 #[test]
-fn dust_trails_overlap_and_shorter_trails_decay_faster() {
+fn rain_output_stays_bounded_across_release_sweeps() {
     let sample_rate = 48_000.0;
-    let buffer_size = 64;
+    let buffer_size = 512;
 
     let runtime = Runtime::new()
         .sample_rate(sample_rate)
@@ -57,14 +57,15 @@ fn dust_trails_overlap_and_shorter_trails_decay_faster() {
         .call()
         .expect("runtime");
 
-    // High density + long trails should create overlapping voices with
-    // substantial output energy.
+    // Stress test: high density + long release should pile up many
+    // concurrent voices. The node's built-in normalization must keep the
+    // output within ±1 regardless, preventing downstream clipping.
     let density = elemaudio_rs::el::const_with_key("density", sample_rate);
-    let trails = elemaudio_rs::el::const_with_key("trails", 0.05);
-    let graph = Graph::new().render(extra::dust(
-        json!({ "seed": 1234, "bipolar": false, "jitter": 0.0 }),
+    let release = elemaudio_rs::el::const_with_key("release", 0.1);
+    let graph = Graph::new().render(extra::rain(
+        json!({ "seed": 1234, "jitter": 0.0 }),
         density,
-        trails,
+        release,
     ));
     let mounted = graph.mount().expect("mount");
     runtime.apply_instructions(mounted.batch()).expect("apply");
@@ -72,25 +73,47 @@ fn dust_trails_overlap_and_shorter_trails_decay_faster() {
     warm_past_root_fade(&runtime, sample_rate, buffer_size);
 
     let mut out = vec![0.0_f64; buffer_size];
-    {
+
+    // Let the bank saturate: process several blocks so voices fully stack
+    // up to the expected polyphony ceiling.
+    for _ in 0..8 {
         let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[], &mut outputs).expect("process");
+        runtime
+            .process(buffer_size, &[], &mut outputs)
+            .expect("process");
     }
 
+    let max_abs = out.iter().map(|s| s.abs()).fold(0.0_f64, f64::max);
     let energy_long: f64 = out.iter().map(|s| s.abs()).sum();
-    assert!(energy_long > 10.0, "long overlapping trails should produce substantial energy: {energy_long}");
 
-    // Shorten the trail at runtime and verify the same node now decays faster.
-    let len_node = mounted.node_with_key("trails").expect("keyed trails");
+    // Tolerance picks up the tiny FP round-off in the gap-filling
+    // unipolar path, which by construction targets exactly 1.0 at peak.
+    const EPS: f64 = 1e-9;
+    assert!(
+        max_abs <= 1.0 + EPS,
+        "normalized rain must stay within ±1 at heavy polyphony; max abs = {max_abs}",
+    );
+    assert!(
+        energy_long > 0.0,
+        "rain should produce non-zero output: {energy_long}"
+    );
+
+    // Now shorten the release drastically. The bound must still hold.
+    let len_node = mounted.node_with_key("release").expect("keyed release");
     runtime
-        .apply_instructions(&len_node.set_const_value(0.005))
-        .expect("apply trails update");
+        .apply_instructions(&len_node.set_const_value(0.001))
+        .expect("apply release update");
 
-    {
+    for _ in 0..4 {
         let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[], &mut outputs).expect("process 2");
+        runtime
+            .process(buffer_size, &[], &mut outputs)
+            .expect("process 2");
     }
 
-    let energy_short: f64 = out.iter().map(|s| s.abs()).sum();
-    assert!(energy_short < energy_long, "shorter trails should reduce total energy: short={energy_short}, long={energy_long}");
+    let max_abs_short = out.iter().map(|s| s.abs()).fold(0.0_f64, f64::max);
+    assert!(
+        max_abs_short <= 1.0 + EPS,
+        "normalized rain must stay within ±1 after release change; max abs = {max_abs_short}",
+    );
 }

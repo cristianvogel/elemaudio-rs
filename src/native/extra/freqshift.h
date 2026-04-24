@@ -14,9 +14,21 @@ namespace elem
 
     // Frequency shifter built from a Hilbert / single-sideband modulator.
     //
-    // One input signal produces two outputs:
-    //   - output 0: down-shifted
-    //   - output 1: up-shifted
+    // One input signal produces two sideband outputs in fixed order.
+    //
+    // Optional internal feedback feeds a low-passed copy of either the lower
+    // or upper output band back into the input of the shifter. This creates a
+    // cascade of repeated frequency shifts without changing the node's split
+    // output contract.
+    //
+    // Child layout:
+    //   [0] shiftHz   - audio-rate frequency shift amount in Hz
+    //   [1] feedback  - audio-rate feedback amount (clamped per-sample to [0, 0.999])
+    //   [2] input     - audio input
+    //
+    // Output order:
+    //   [0] lower sideband
+    //   [1] upper sideband
     template <typename FloatType>
     struct FreqShiftNode : public GraphNode<FloatType> {
         using GraphNode<FloatType>::GraphNode;
@@ -25,26 +37,29 @@ namespace elem
 
         FreqShiftNode(NodeId id, double sr, int blockSize)
             : GraphNode<FloatType>(id, sr, blockSize)
+            , feedbackLowpassAlpha(computeFeedbackLowpassAlpha(sr))
             , hilbert(static_cast<Sample>(sr), 1)
         {}
 
         int setProperty(std::string const& key, js::Value const& val, SharedResourceMap&) override
         {
-            if (key == "shiftHz") {
-                if (!val.isNumber())
-                    return ReturnCode::InvalidPropertyType();
-
-                shiftHzTarget.store(static_cast<Sample>((js::Number) val), std::memory_order_relaxed);
-            } else if (key == "mix") {
-                if (!val.isNumber())
-                    return ReturnCode::InvalidPropertyType();
-
-                mixTarget.store(clamp01(static_cast<Sample>((js::Number) val)), std::memory_order_relaxed);
-            } else if (key == "reflect") {
+            if (key == "reflect") {
                 if (!val.isNumber())
                     return ReturnCode::InvalidPropertyType();
 
                 reflectTarget.store(static_cast<int>((js::Number) val), std::memory_order_relaxed);
+            } else if (key == "fbSource") {
+                if (!val.isString())
+                    return ReturnCode::InvalidPropertyType();
+
+                auto const source = std::string((js::String) val);
+                if (source == "lower") {
+                    fbSourceTarget.store(0, std::memory_order_relaxed);
+                } else if (source == "upper") {
+                    fbSourceTarget.store(1, std::memory_order_relaxed);
+                } else {
+                    return ReturnCode::InvalidPropertyType();
+                }
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
@@ -53,9 +68,7 @@ namespace elem
         void reset() override
         {
             phase = 0;
-            currentShiftHz = shiftHzTarget.load(std::memory_order_relaxed);
-            currentMix = mixTarget.load(std::memory_order_relaxed);
-            currentReflect = reflectTarget.load(std::memory_order_relaxed);
+            feedbackState = Sample(0);
             hilbert.reset();
         }
 
@@ -71,60 +84,53 @@ namespace elem
                 std::fill_n(outputData[j], numSamples, FloatType(0));
             }
 
-            if (numIns < 1 || numOuts < 1 || numSamples == 0) {
+            if (numIns < 3 || numOuts < 1 || numSamples == 0) {
                 return;
             }
 
-            auto const sampleRate = GraphNode<FloatType>::getSampleRate();
-            auto const targetShiftHz = shiftHzTarget.load(std::memory_order_relaxed);
-            auto const targetMix = mixTarget.load(std::memory_order_relaxed);
             auto const targetReflect = reflectTarget.load(std::memory_order_relaxed);
-            auto const shiftStep = (targetShiftHz - currentShiftHz) / static_cast<Sample>(numSamples);
-            auto const mixStep = (targetMix - currentMix) / static_cast<Sample>(numSamples);
-            auto shiftHz = currentShiftHz;
-            auto mix = currentMix;
+            auto const targetFbSource = fbSourceTarget.load(std::memory_order_relaxed);
+            auto const sampleRate = GraphNode<FloatType>::getSampleRate();
             auto phaseLocal = phase;
-            auto const* in = inputData[0];
+            auto feedbackStateLocal = feedbackState;
+            auto const* shiftSignal = inputData[0];
+            auto const* fbSignal = inputData[1];
+            auto const* in = inputData[2];
             auto const twoPi = Sample(6.28318530717958647692528676655900576839);
-            bool swapOutputs = shouldSwapOutputs(targetReflect, targetShiftHz);
-            bool reflectShift = shouldReflectShift(targetReflect, targetShiftHz);
 
             for (size_t i = 0; i < numSamples; ++i) {
-                shiftHz += shiftStep;
-                mix += mixStep;
+                auto const fbAmount = std::clamp(fbSignal[i], Sample(0), Sample(0.999));
+                auto const inputSample = in[i] + (fbAmount * feedbackStateLocal);
+                auto shiftHz = shiftSignal[i];
+                bool swapOutputs = shouldSwapOutputs(targetReflect, shiftHz);
+                bool reflectShift = shouldReflectShift(targetReflect, shiftHz);
 
                 auto effectiveShiftHz = reflectShift && shiftHz < 0 ? -shiftHz : shiftHz;
                 phaseLocal += effectiveShiftHz / static_cast<Sample>(sampleRate);
 
-                Complex analytic = hilbert(in[i], 0);
+                Complex analytic = hilbert(inputSample, 0);
                 auto rot = std::polar(Sample(1), phaseLocal * twoPi);
                 auto down = std::real(analytic * std::conj(rot));
                 auto up = std::real(analytic * rot);
-                auto dry = in[i];
-                auto wet = mix;
+                auto const lower = swapOutputs ? up : down;
+                auto const upper = swapOutputs ? down : up;
+                auto const fbSample = targetFbSource == 0 ? lower : upper;
+
+                feedbackStateLocal += feedbackLowpassAlpha * (fbSample - feedbackStateLocal);
 
                 if (numOuts > 0) {
-                    auto first = swapOutputs ? up : down;
-                    outputData[0][i] = dry * (Sample(1) - wet) + wet * first;
+                    outputData[0][i] = lower;
                 }
                 if (numOuts > 1) {
-                    auto second = swapOutputs ? down : up;
-                    outputData[1][i] = dry * (Sample(1) - wet) + wet * second;
+                    outputData[1][i] = upper;
                 }
             }
 
-            currentShiftHz = targetShiftHz;
-            currentMix = targetMix;
-            currentReflect = targetReflect;
             phase = wrapPhase(phaseLocal);
+            feedbackState = feedbackStateLocal;
         }
 
     private:
-        static Sample clamp01(Sample value)
-        {
-            return std::max<Sample>(0, std::min<Sample>(1, value));
-        }
-
         static bool shouldReflectShift(int reflect, Sample shiftHz)
         {
             return (reflect == 1 || reflect == 3) && shiftHz < 0;
@@ -141,13 +147,20 @@ namespace elem
             return phase;
         }
 
-        std::atomic<Sample> shiftHzTarget{Sample(50)};
-        std::atomic<Sample> mixTarget{Sample(1)};
+        static constexpr Sample feedbackLowpassCutoffHz = Sample(4000);
+
+        static Sample computeFeedbackLowpassAlpha(double sampleRate)
+        {
+            auto const twoPi = Sample(6.28318530717958647692528676655900576839);
+            auto const exponent = -twoPi * feedbackLowpassCutoffHz / static_cast<Sample>(sampleRate);
+            return Sample(1) - std::exp(exponent);
+        }
+
         std::atomic<int> reflectTarget{0};
-        Sample currentShiftHz = Sample(50);
-        Sample currentMix = Sample(1);
-        int currentReflect = 0;
+        std::atomic<int> fbSourceTarget{0};
         Sample phase = Sample(0);
+        Sample feedbackState = Sample(0);
+        Sample feedbackLowpassAlpha;
         signalsmith::hilbert::HilbertIIR<Sample> hilbert;
     };
 

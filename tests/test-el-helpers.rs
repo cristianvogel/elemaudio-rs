@@ -1,4 +1,4 @@
-use elemaudio_rs::{el, extra, mc, ElemNode, Graph, Node};
+use elemaudio_rs::{ElemNode, Graph, Node, el, extra, mc};
 
 fn assert_node(node: &Node, kind: &str, props: serde_json::Value, child_count: usize) {
     assert_eq!(node.kind(), kind);
@@ -821,7 +821,9 @@ fn covers_mc_helpers() {
 #[test]
 fn covers_extra_helpers() {
     let freqshift_nodes = extra::freqshift(
-        serde_json::json!({"shiftHz": 250.0, "mix": 0.75, "reflect": 2}),
+        serde_json::json!({"reflect": 2, "fbSource": "upper"}),
+        ElemNode::from(node(250.0)),
+        ElemNode::from(0.6),
         ElemNode::from(node(1.0)),
     );
 
@@ -829,8 +831,8 @@ fn covers_extra_helpers() {
     assert_nodes(
         &freqshift_nodes,
         "freqshift",
-        serde_json::json!({"shiftHz": 250.0, "mix": 0.75, "reflect": 2}),
-        1,
+        serde_json::json!({"reflect": 2, "fbSource": "upper"}),
+        3,
     );
 
     let crunch_nodes = extra::crunch(
@@ -895,6 +897,48 @@ fn covers_extra_helpers() {
         2,
     );
 
+    let threshold_default = extra::threshold(
+        serde_json::json!({"key": "thresh"}),
+        ElemNode::from(node(0.5)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &threshold_default,
+        "threshold",
+        serde_json::json!({"key": "thresh", "hysteresis": 0.0, "latch": false}),
+        3,
+    );
+
+    let threshold_hysteretic = extra::threshold(
+        serde_json::json!({"hysteresis": 0.25, "latch": true}),
+        ElemNode::from(node(0.5)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &threshold_hysteretic,
+        "threshold",
+        serde_json::json!({"hysteresis": 0.25, "latch": true}),
+        3,
+    );
+
+    let extra_sample_nodes = extra::sample(
+        serde_json::json!({"path": "drums/kick.wav"}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_eq!(extra_sample_nodes.len(), 2);
+    assert_nodes(
+        &extra_sample_nodes,
+        "extra.sample",
+        serde_json::json!({"path": "drums/kick.wav"}),
+        5,
+    );
+
     // sampleCount: zero children, props pass through verbatim.
     let sample_count_node = extra::sample_count(serde_json::json!({"path": "drums/kick.wav"}));
     assert_node(
@@ -914,18 +958,265 @@ fn covers_extra_helpers() {
         0,
     );
 
-    // dust: seed prop preserved; two signal children (density, trails).
-    let dust_node = extra::dust(
-        serde_json::json!({"seed": 1234, "bipolar": false, "jitter": 0.25}),
+    let frameclock_node = extra::frameclock(128);
+    assert_node(
+        &frameclock_node,
+        "frameclock",
+        serde_json::json!({"period": 128}),
+        0,
+    );
+
+    let frame_phasor_node = extra::frame_phasor(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.0)), // offset
+        ElemNode::from(node(0.0)), // shift
+        ElemNode::from(node(0.0)), // curvature
+        ElemNode::from(node(1.0)), // scale
+    );
+    assert_node(
+        &frame_phasor_node,
+        "framePhasor",
+        serde_json::json!({"framelength": 128}),
+        4,
+    );
+
+    let frame_shaper_node = extra::frame_shaper(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.5)),
+    );
+    assert_node(
+        &frame_shaper_node,
+        "frameShaper",
+        serde_json::json!({"framelength": 128}),
+        6,
+    );
+
+    let frame_poly_signal_node = extra::frame_poly_signal(
+        serde_json::json!({"framelength": 128, "bpm": 30}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &frame_poly_signal_node,
+        "framePolySignal",
+        serde_json::json!({"framelength": 128, "bpm": 30}),
+        3,
+    );
+
+    let frame_select_node = extra::frame_select(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(2.0)),
+        ElemNode::from(node(3.0)),
+    );
+    assert_node(
+        &frame_select_node,
+        "frameSelect",
+        serde_json::json!({"framelength": 128}),
+        3,
+    );
+
+    let wrap_add_node = extra::wrap_add(
+        ElemNode::from(node(-1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.75)),
+        ElemNode::from(node(0.5)),
+    );
+    assert_node(&wrap_add_node, "wrapAdd", serde_json::Value::Null, 4);
+
+    let frame_derivative_node = extra::frame_derivative(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.25)),
+    );
+    assert_node(
+        &frame_derivative_node,
+        "frameDerivative",
+        serde_json::json!({"framelength": 128}),
+        1,
+    );
+
+    let mirror_add_node = extra::mirror_add(
+        ElemNode::from(node(-1.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.75)),
+        ElemNode::from(node(0.5)),
+    );
+    assert_node(&mirror_add_node, "mirrorAdd", serde_json::Value::Null, 4);
+
+    let frame_smooth_node = extra::frame_smooth(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.1)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &frame_smooth_node,
+        "frameSmooth",
+        serde_json::json!({"framelength": 128}),
+        3,
+    );
+
+    let frame_bidi_smooth_node = extra::frame_bidi_smooth(
+        serde_json::json!({"framelength": 128}),
+        ElemNode::from(node(0.1)),
+        ElemNode::from(node(0.2)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &frame_bidi_smooth_node,
+        "frameBiDiSmooth",
+        serde_json::json!({"framelength": 128}),
+        5,
+    );
+
+    let frame_write_ram_node = extra::frame_write_ram(
+        serde_json::json!({"framelength": 128, "path": "wf/ram/demo"}),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &frame_write_ram_node,
+        "frameWriteRAM",
+        serde_json::json!({"framelength": 128, "path": "wf/ram/demo"}),
+        1,
+    );
+
+    let odd_frame_shaper = std::panic::catch_unwind(|| {
+        extra::frame_shaper(
+            serde_json::json!({"framelength": 127}),
+            ElemNode::from(node(0.0)),
+            ElemNode::from(node(0.0)),
+            ElemNode::from(node(0.0)),
+            ElemNode::from(node(1.0)),
+            ElemNode::from(node(1.0)),
+            ElemNode::from(node(0.5)),
+        )
+    });
+    assert!(odd_frame_shaper.is_err());
+
+    let frame_random_walks_node = extra::frame_random_walks(
+        serde_json::json!({
+            "framelength": 128,
+            "seed": 7,
+            "absolute": true,
+            "interpolation": false,
+            "startingfrom": 0.25,
+            "initialdeviation": 0.5,
+        }),
+        ElemNode::from(node(0.2)),
+        ElemNode::from(node(0.5)),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(
+        &frame_random_walks_node,
+        "frameRandomWalks",
+        serde_json::json!({
+            "framelength": 128,
+            "seed": 7,
+            "absolute": true,
+            "interpolation": false,
+            "startingfrom": 0.25,
+            "initialdeviation": 0.5,
+        }),
+        4,
+    );
+
+    let frame_delay_node = extra::frame_delay(
+        serde_json::json!({"framelength": 128, "maxframes": 4}),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.25)),
+    );
+    assert_node(
+        &frame_delay_node,
+        "frameDelay",
+        serde_json::json!({"framelength": 128, "maxframes": 4}),
+        2,
+    );
+
+    let frame_scope_node = extra::frame_scope(
+        serde_json::json!({"framelength": 128, "name": "frame-scope"}),
+        [ElemNode::from(node(0.25))],
+    );
+    assert_node(
+        &frame_scope_node,
+        "frameScope",
+        serde_json::json!({"framelength": 128, "name": "frame-scope"}),
+        1,
+    );
+
+    let frame_value_node = extra::frame_value(
+        serde_json::json!({"framelength": 128, "name": "frame-readout"}),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &frame_value_node,
+        "frameValue",
+        serde_json::json!({"framelength": 128, "name": "frame-readout"}),
+        2,
+    );
+
+    // rain: seed prop preserved; two signal children (density, release).
+    let rain_node = extra::rain(
+        serde_json::json!({"seed": 1234, "jitter": 0.25}),
         ElemNode::from(node(200.0)),
         ElemNode::from(node(0.05)),
     );
     assert_node(
-        &dust_node,
-        "dust",
-        serde_json::json!({"seed": 1234, "bipolar": false, "jitter": 0.25}),
+        &rain_node,
+        "rain",
+        serde_json::json!({"seed": 1234, "jitter": 0.25}),
         2,
     );
+
+    // preset bank helpers: props pass through verbatim; child shapes match
+    // the `(slot, x)`, `(slot, phase)`, and `(slotA, slotB, mix, phase)`
+    // contracts. Metadata travels alongside props and does not modify the
+    // audio children.
+    let preset_props = serde_json::json!({
+        "path": "bank:mvp",
+        "framelength": 16,
+        "slots": 4,
+        "metadata": {
+            "schema": "synth-mvp",
+            "version": 1,
+            "lanes": [
+                { "index": 0, "name": "freqHz", "min": 40.0, "max": 2000.0, "taper": "exp" },
+                { "index": 1, "name": "cutoffHz", "min": 80.0, "max": 16000.0, "taper": "exp" }
+            ]
+        }
+    });
+
+    let preset_write_node = extra::preset_write(
+        preset_props.clone(),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(0.25)),
+    );
+    assert_node(&preset_write_node, "presetWrite", preset_props.clone(), 2);
+
+    let preset_read_node = extra::preset_read(
+        preset_props.clone(),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(&preset_read_node, "presetRead", preset_props.clone(), 2);
+
+    let preset_morph_node = extra::preset_morph(
+        preset_props.clone(),
+        ElemNode::from(node(0.0)),
+        ElemNode::from(node(1.0)),
+        ElemNode::from(node(0.5)),
+        ElemNode::from(node(0.0)),
+    );
+    assert_node(&preset_morph_node, "presetMorph", preset_props, 4);
 }
 
 #[test]
