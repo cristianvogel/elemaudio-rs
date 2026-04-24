@@ -2,7 +2,7 @@ import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
 import sampleUrl from "../../../demo-resources/115bpm_808_Beat_mono.wav?url";
 import irUrl from "../../../demo-resources/SURFACE.wav?url";
-import { buildGraph as dspBuildGraph } from "../demo-dsp/sample-demo.dsp";
+import {buildGraph as dspBuildGraph} from "../demo-dsp/sample-demo.dsp";
 import WebRenderer from "../WebRenderer";
 import "../style.css";
 
@@ -16,19 +16,19 @@ let activeIrPairStart = 0;
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (!app) {
-  throw new Error("Missing app root");
+    throw new Error("Missing app root");
 }
 
 const root = app;
 
 function mustQuery<T extends Element>(selector: string): T {
-  const element = root.querySelector<T>(selector);
+    const element = root.querySelector<T>(selector);
 
-  if (!element) {
-    throw new Error(`Missing control: ${selector}`);
-  }
+    if (!element) {
+        throw new Error(`Missing control: ${selector}`);
+    }
 
-  return element;
+    return element;
 }
 
 app.innerHTML = `
@@ -36,9 +36,9 @@ app.innerHTML = `
     <h1>elemaudiors</h1> <h3><i>extra</i> ⊙ sample ⊙ freqShift ⊙ convolver</h3>
     <p>Loads a sample and a four-channel IR from <code>demo-resources/</code> 
     then processes the audio through 
-    <code>el.extra.freqShift(...)</code> into simple <code>el.convolve(...)</code>. 
-    The four-channel IR has been pre-prepared, so that channel 3 and 4 are reversed versions of the IR. 
-    This makes it trivial to swap the IR flavour, as demonstrated by the UI button.</p>
+    <code>el.extra.freqShift(...)</code> into simple <code>el.extra.convolve(...)</code>. 
+    The demo IR has 4 channels. It has been pre-prepared so that channel 3 and 4 are reversed versions of the IR. 
+    This is one way to make it trivial to swap the response in realtime.</p>
 
     <div class="controls">
       <div class="dial-strip dial-strip-three" aria-label="Sample and mix controls">
@@ -58,7 +58,7 @@ app.innerHTML = `
         </div>
       </div>
 
-      <div class="dial-strip dial-strip-three" aria-label="IR shaping controls">
+      <div class="dial-strip dial-strip-ir" aria-label="IR shaping controls">
         <div class="dial">
         <label for="start-offset">
         <span>IR Start</span>
@@ -79,6 +79,19 @@ app.innerHTML = `
         <span id="ir-rate-value">1.00x</span>
         </label>
         <input id="ir-rate" type="range" min="0.1" max="2.0" value="1.0" step="0.01" />
+        </div>
+        <div class="dial">
+        <label for="ir-attenuation">
+        <span>IR Attenuation </span>
+        <span id="ir-attenuation-value">0 dB</span>
+        </label>
+        <input id="ir-attenuation" type="range" min="0" max="60" value="16" step="1" />
+        </div>
+        <div class="dial">
+        <label for="ir-normalize">
+        <span>Normalise</span>
+        </label>
+        <input id="ir-normalize" type="checkbox" checked/>
         </div>
       </div>
 
@@ -109,19 +122,21 @@ app.innerHTML = `
         </div>
       </div>
 
-      <div class="row">
-        <label for="sample-file">
-          <span>Browser file</span>
-          <span id="sample-file-name">Built-in sample</span>
-        </label>
-        <input id="sample-file" type="file" accept="audio/*" />
-      </div>
-      <div class="row">
-        <label for="ir-file">
-          <span>Load new IR</span>
-          <span id="ir-file-name">Overwrite active IR slot(s)</span>
-        </label>
-        <input id="ir-file" type="file" accept="audio/*" />
+      <div class="resource-row resource-grid">
+        <div class="row resource-cell">
+          <label for="sample-file">
+            <span>Browser file</span>
+            <span id="sample-file-name" class="file-name">Demo sample</span>
+          </label>
+          <input id="sample-file" type="file" accept="audio/*" />
+        </div>
+        <div class="row resource-cell">
+          <label for="ir-file">
+            <span>Load new IR</span>
+            <span id="ir-file-name" class="file-name">Demo IR</span>
+          </label>
+          <input id="ir-file" type="file" accept="audio/*" />
+        </div>
       </div>
       <div class="button-row">
         <button id="start" class="state-button">Start audio</button>
@@ -145,6 +160,9 @@ const irEnd = mustQuery<HTMLInputElement>("#ir-end");
 const irEndValue = mustQuery<HTMLSpanElement>("#ir-end-value");
 const irRate = mustQuery<HTMLInputElement>("#ir-rate");
 const irRateValue = mustQuery<HTMLSpanElement>("#ir-rate-value");
+const irAttenuation = mustQuery<HTMLInputElement>("#ir-attenuation");
+const irAttenuationValue = mustQuery<HTMLSpanElement>("#ir-attenuation-value");
+const irNormalize = mustQuery<HTMLInputElement>("#ir-normalize");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
@@ -172,50 +190,50 @@ let isStopped = false;
 let freqShiftFiveHzScale = false;
 
 function formatError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
+    if (error instanceof Error) {
+        return error.message;
+    }
 
-  if (typeof error === "string") {
-    return error;
-  }
+    if (typeof error === "string") {
+        return error;
+    }
 
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return String(error);
+    }
 }
 
 function updateIrToggleLabel() {
-  if (irChannelPaths.length < 2) {
-    toggleIrButton.disabled = true;
-    toggleIrButton.textContent = "IR pair unavailable";
-    return;
-  }
+    if (irChannelPaths.length < 2) {
+        toggleIrButton.disabled = true;
+        toggleIrButton.textContent = "IR pair unavailable";
+        return;
+    }
 
-  toggleIrButton.disabled = irChannelPaths.length < 4;
-  toggleIrButton.textContent = activeIrPairStart === 0 ? "Use IR pair 1/2" : "Use IR pair 3/4";
+    toggleIrButton.disabled = irChannelPaths.length < 4;
+    toggleIrButton.textContent = activeIrPairStart === 0 ? "Use IR pair 1/2" : "Use IR pair 3/4";
 }
 
 async function updateBlend() {
-  const blend = Number(blendSlider.value) / 100;
-  blendValue.textContent = `${Math.round(blend * 100)}%`;
+    const blend = Number(blendSlider.value) / 100;
+    blendValue.textContent = `${Math.round(blend * 100)}%`;
 
-  if (renderer && audioContext?.state === "running") {
-    await renderCurrentGraph();
-  }
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
 }
 
 async function updateIrStart() {
-    irStartValue.textContent = `${(Number(irStart.value).toFixed(0)) }%`;
+    irStartValue.textContent = `${(Number(irStart.value).toFixed(0))}%`;
     if (renderer && audioContext?.state === "running") {
         await renderCurrentGraph();
     }
 }
 
 async function updateIrEnd() {
-    irEndValue.textContent = `${ (Number(irEnd.value).toFixed(0)) }%`;
+    irEndValue.textContent = `${(Number(irEnd.value).toFixed(0))}%`;
     if (renderer && audioContext?.state === "running") {
         await renderCurrentGraph();
     }
@@ -228,320 +246,336 @@ async function updateIrRate() {
     }
 }
 
-async function updateChopperThreshold() {
-  chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
+async function updateIrAttenuation() {
+    irAttenuationValue.textContent = `${Number(irAttenuation.value).toFixed(0)} dB`;
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
+}
 
-  if (renderer && audioContext?.state === "running") {
-    await renderCurrentGraph();
-  }
+async function updateIrNormalize() {
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
+}
+
+async function updateChopperThreshold() {
+    chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
+
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
 }
 
 async function updateFreqShiftHz() {
-  freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
+    freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
 
-  if (renderer && audioContext?.state === "running") {
-    await renderCurrentGraph();
-  }
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
 }
 
 function getFreqShiftHz() {
-  return Number(freqShiftHzSlider.value);
+    return Number(freqShiftHzSlider.value);
 }
 
 function setFreqShiftSliderFromHz(hz: number) {
-  const limit = freqShiftFiveHzScale ? 6 : 600;
-  const clamped = Math.max(-limit, Math.min(limit, hz));
-  freqShiftHzSlider.value = String(clamped);
+    const limit = freqShiftFiveHzScale ? 6 : 600;
+    const clamped = Math.max(-limit, Math.min(limit, hz));
+    freqShiftHzSlider.value = String(clamped);
 }
 
 function configureFreqShiftSlider(rescaleCurrentHz = true) {
-  const currentHz = getFreqShiftHz();
-  if (freqShiftFiveHzScale) {
-    freqShiftHzSlider.min = "-6";
-    freqShiftHzSlider.max = "6";
-    freqShiftHzSlider.step = "0.001";
-    freqShiftZoomButton.textContent = "x100";
-    if (rescaleCurrentHz) {
-      setFreqShiftSliderFromHz(currentHz * 0.01);
+    const currentHz = getFreqShiftHz();
+    if (freqShiftFiveHzScale) {
+        freqShiftHzSlider.min = "-6";
+        freqShiftHzSlider.max = "6";
+        freqShiftHzSlider.step = "0.001";
+        freqShiftZoomButton.textContent = "x100";
+        if (rescaleCurrentHz) {
+            setFreqShiftSliderFromHz(currentHz * 0.01);
+        }
+    } else {
+        freqShiftHzSlider.min = "-600";
+        freqShiftHzSlider.max = "600";
+        freqShiftHzSlider.step = "0.1";
+        freqShiftZoomButton.textContent = "x0.01";
+        if (rescaleCurrentHz) {
+            setFreqShiftSliderFromHz(currentHz * 100);
+        }
     }
-  } else {
-    freqShiftHzSlider.min = "-600";
-    freqShiftHzSlider.max = "600";
-    freqShiftHzSlider.step = "0.1";
-    freqShiftZoomButton.textContent = "x0.01";
-    if (rescaleCurrentHz) {
-      setFreqShiftSliderFromHz(currentHz * 100);
-    }
-  }
 }
 
 async function updateFreqShiftFeedback() {
-  freqShiftFeedbackValue.textContent = `${Number(freqShiftFeedbackSlider.value)}%`;
+    freqShiftFeedbackValue.textContent = `${Number(freqShiftFeedbackSlider.value)}%`;
 
-  if (renderer && audioContext?.state === "running") {
-    await renderCurrentGraph();
-  }
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
 }
 
 async function loadBundledResources() {
-  if (!audioContext || !renderer) {
-    return;
-  }
+    if (!audioContext || !renderer) {
+        return;
+    }
 
-  const [sampleResponse, irResponse] = await Promise.all([fetch(sampleUrl), fetch(irUrl)]);
+    const [sampleResponse, irResponse] = await Promise.all([fetch(sampleUrl), fetch(irUrl)]);
 
-  if (!sampleResponse.ok) {
-    throw new Error(`Failed to fetch sample: ${sampleResponse.status} ${sampleResponse.statusText}`);
-  }
+    if (!sampleResponse.ok) {
+        throw new Error(`Failed to fetch sample: ${sampleResponse.status} ${sampleResponse.statusText}`);
+    }
 
-  if (!irResponse.ok) {
-    throw new Error(`Failed to fetch IR: ${irResponse.status} ${irResponse.statusText}`);
-  }
+    if (!irResponse.ok) {
+        throw new Error(`Failed to fetch IR: ${irResponse.status} ${irResponse.statusText}`);
+    }
 
-  const [sampleBytes, irBytes] = await Promise.all([sampleResponse.arrayBuffer(), irResponse.arrayBuffer()]);
-  const [sampleBuffer, irBuffer] = await Promise.all([
-    audioContext.decodeAudioData(sampleBytes),
-    audioContext.decodeAudioData(irBytes),
-  ]);
+    const [sampleBytes, irBytes] = await Promise.all([sampleResponse.arrayBuffer(), irResponse.arrayBuffer()]);
+    const [sampleBuffer, irBuffer] = await Promise.all([
+        audioContext.decodeAudioData(sampleBytes),
+        audioContext.decodeAudioData(irBytes)
+    ]);
 
-  sampleChannels = sampleBuffer.numberOfChannels;
-  const sampleData = sampleBuffer.numberOfChannels > 1
-    ? Array.from({ length: sampleBuffer.numberOfChannels }, (_, index) =>
-        new Float32Array(sampleBuffer.getChannelData(index)),
-      )
-    : new Float32Array(sampleBuffer.getChannelData(0));
+    sampleChannels = sampleBuffer.numberOfChannels;
+    const sampleData = sampleBuffer.numberOfChannels > 1
+        ? Array.from({length: sampleBuffer.numberOfChannels}, (_, index) =>
+            new Float32Array(sampleBuffer.getChannelData(index))
+        )
+        : new Float32Array(sampleBuffer.getChannelData(0));
 
-  const irData = Array.from({ length: irBuffer.numberOfChannels }, (_, index) =>
-    new Float32Array(irBuffer.getChannelData(index)),
-  );
+    const irData = Array.from({length: irBuffer.numberOfChannels}, (_, index) =>
+        new Float32Array(irBuffer.getChannelData(index))
+    );
 
-  irChannelPaths = irData.map((_, index) => `${bundledIrBasePath}_ch${index + 1}.wav`);
+    irChannelPaths = irData.map((_, index) => `${bundledIrBasePath}_ch${index + 1}.wav`);
 
-  const vfs: Record<string, Float32Array | Float32Array[]> = {
-    [samplePath]: sampleData,
-  };
+    const vfs: Record<string, Float32Array | Float32Array[]> = {
+        [samplePath]: sampleData
+    };
 
-  irChannelPaths.forEach((path, index) => {
-    vfs[path] = irData[index];
-  });
+    irChannelPaths.forEach((path, index) => {
+        vfs[path] = irData[index];
+    });
 
-  await renderer.updateVirtualFileSystem(vfs);
+    await renderer.updateVirtualFileSystem(vfs);
 
-  sampleLoaded = true;
-  activeIrPairStart = 0;
-  updateIrToggleLabel();
-  resourceStatus.textContent = `Loaded ${samplePath} and ${irChannelPaths.length} IR channels (${sampleBuffer.numberOfChannels} ch + ${irBuffer.numberOfChannels} ch @ ${sampleBuffer.sampleRate} Hz)`;
+    sampleLoaded = true;
+    activeIrPairStart = 0;
+    updateIrToggleLabel();
+    resourceStatus.textContent = `Loaded ${samplePath} and ${irChannelPaths.length} IR channels (${sampleBuffer.numberOfChannels} ch + ${irBuffer.numberOfChannels} ch @ ${sampleBuffer.sampleRate} Hz)`;
 }
 
 async function loadBrowserSample(file: File) {
-  if (!audioContext || !renderer) {
-    return;
-  }
+    if (!audioContext || !renderer) {
+        return;
+    }
 
-  const bytes = await file.arrayBuffer();
-  const buffer = await audioContext.decodeAudioData(bytes);
+    const bytes = await file.arrayBuffer();
+    const buffer = await audioContext.decodeAudioData(bytes);
 
-  samplePath = `browser/${file.name}`;
-  sampleFileName.textContent = file.name;
-  sampleChannels = buffer.numberOfChannels;
+    samplePath = `browser/${file.name}`;
+    sampleFileName.textContent = file.name;
+    sampleChannels = buffer.numberOfChannels;
 
-  const sampleData = buffer.numberOfChannels > 1
-    ? Array.from({ length: buffer.numberOfChannels }, (_, index) =>
-        new Float32Array(buffer.getChannelData(index)),
-      )
-    : new Float32Array(buffer.getChannelData(0));
+    const sampleData = buffer.numberOfChannels > 1
+        ? Array.from({length: buffer.numberOfChannels}, (_, index) =>
+            new Float32Array(buffer.getChannelData(index))
+        )
+        : new Float32Array(buffer.getChannelData(0));
 
-  await renderer.updateVirtualFileSystem({
-    [samplePath]: sampleData,
-  });
+    await renderer.updateVirtualFileSystem({
+        [samplePath]: sampleData
+    });
 
-  sampleLoaded = true;
-  resourceStatus.textContent = `Loaded ${file.name} from the browser (${buffer.numberOfChannels} ch @ ${buffer.sampleRate} Hz)`;
+    sampleLoaded = true;
+    resourceStatus.textContent = `Loaded ${file.name} from the browser (${buffer.numberOfChannels} ch @ ${buffer.sampleRate} Hz)`;
 }
 
 function activeIrTargetPaths(): [string, string] {
-  const left = irChannelPaths[activeIrPairStart] ?? `${bundledIrBasePath}_ch1.wav`;
-  const right = irChannelPaths[activeIrPairStart + 1] ?? left;
-  return [left, right];
+    const left = irChannelPaths[activeIrPairStart] ?? `${bundledIrBasePath}_ch1.wav`;
+    const right = irChannelPaths[activeIrPairStart + 1] ?? left;
+    return [left, right];
 }
 
 async function loadBrowserIr(file: File) {
-  if (!audioContext || !renderer) {
-    return;
-  }
+    if (!audioContext || !renderer) {
+        return;
+    }
 
-  const bytes = await file.arrayBuffer();
-  const buffer = await audioContext.decodeAudioData(bytes);
-  const [leftPath, rightPath] = activeIrTargetPaths();
-  const vfs: Record<string, Float32Array | Float32Array[]> = {};
+    const bytes = await file.arrayBuffer();
+    const buffer = await audioContext.decodeAudioData(bytes);
+    const [leftPath, rightPath] = activeIrTargetPaths();
+    const vfs: Record<string, Float32Array | Float32Array[]> = {};
 
-  const leftData = new Float32Array(buffer.getChannelData(0));
-  vfs[leftPath] = leftData;
+    const leftData = new Float32Array(buffer.getChannelData(0));
+    vfs[leftPath] = leftData;
 
-  if (buffer.numberOfChannels > 1 && rightPath !== leftPath) {
-    vfs[rightPath] = new Float32Array(buffer.getChannelData(1));
-  } else if (rightPath !== leftPath) {
-    vfs[rightPath] = leftData;
-  }
+    if (buffer.numberOfChannels > 1 && rightPath !== leftPath) {
+        vfs[rightPath] = new Float32Array(buffer.getChannelData(1));
+    } else if (rightPath !== leftPath) {
+        vfs[rightPath] = leftData;
+    }
 
-  await renderer.updateVirtualFileSystem(vfs);
-  irFileName.textContent = file.name;
-  resourceStatus.textContent = `Overwrote active IR slot(s) with ${file.name} (${buffer.numberOfChannels} ch @ ${buffer.sampleRate} Hz)`;
+    await renderer.updateVirtualFileSystem(vfs);
+    irFileName.textContent = file.name;
+    resourceStatus.textContent = `Overwrote active IR slot(s) with ${file.name} (${buffer.numberOfChannels} ch @ ${buffer.sampleRate} Hz)`;
 }
 
 function buildGraph(rate: number): NodeRepr_t[] {
-  const [leftIrPath, rightIrPath] = activeIrTargetPaths();
+    const [leftIrPath, rightIrPath] = activeIrTargetPaths();
 
-  return dspBuildGraph({
-    samplePath,
-    rate,
-    blend: Number(blendSlider.value) / 100,
-    irRate: Number(irRate.value),
-    chopperThreshold: Number(chopperThresholdSlider.value),
-    freqShiftHz: getFreqShiftHz(),
-    feedback: Number(freqShiftFeedbackSlider.value) / 100,
-    leftIrPath,
-    rightIrPath,
-    isStopped,
-      irStart: Number(irStart.value) / 100,
-      irEnd: Number(irEnd.value) / 100,
-  });
+    return dspBuildGraph({
+        samplePath,
+        rate,
+        blend: Number(blendSlider.value) / 100,
+        irRate: Number(irRate.value),
+        irAttenuationDb: Number(irAttenuation.value),
+        irNormalize: irNormalize.checked,
+        chopperThreshold: Number(chopperThresholdSlider.value),
+        freqShiftHz: getFreqShiftHz(),
+        feedback: Number(freqShiftFeedbackSlider.value) / 100,
+        leftIrPath,
+        rightIrPath,
+        isStopped,
+        irStart: Number(irStart.value) / 100,
+        irEnd: Number(irEnd.value) / 100
+
+    });
 }
 
 configureFreqShiftSlider(false);
 
 async function ensureAudio() {
-  if (audioContext && renderer) {
-    return;
-  }
+    if (audioContext && renderer) {
+        return;
+    }
 
-  audioContext = new AudioContext();
-  renderer = new WebRenderer();
+    audioContext = new AudioContext();
+    renderer = new WebRenderer();
 
-  const worklet = await renderer.initialize(audioContext);
-  worklet.connect(audioContext.destination);
+    const worklet = await renderer.initialize(audioContext);
+    worklet.connect(audioContext.destination);
 
-  await loadBundledResources();
+    await loadBundledResources();
 }
 
 async function renderCurrentGraph() {
-  if (!renderer) {
-    return;
-  }
+    if (!renderer) {
+        return;
+    }
 
-  const rate = Number(rateSlider.value);
-  rateValue.textContent = `${rate.toFixed(2)}x`;
-  status.textContent = isStopped ? "Audio stopped" : (sampleLoaded ? "Playing sample" : "Loading sample");
+    const rate = Number(rateSlider.value);
+    rateValue.textContent = `${rate.toFixed(2)}x`;
+    status.textContent = isStopped ? "Audio stopped" : (sampleLoaded ? "Playing sample" : "Loading sample");
 
-  await renderer.render(...buildGraph(rate));
+    status.textContent = JSON.stringify( await renderer.render(...buildGraph(rate)));
 }
 
 startButton.addEventListener("click", async () => {
-  isStopped = false;
-  startButton.disabled = true;
-  status.textContent = "Starting audio...";
+    isStopped = false;
+    startButton.disabled = true;
+    status.textContent = "Starting audio...";
 
-  try {
-    await ensureAudio();
-    await audioContext?.resume();
-    await renderCurrentGraph();
-    stopButton.disabled = false;
-  } catch (error) {
-    status.textContent = `Failed to start audio: ${formatError(error)}`;
-    startButton.disabled = false;
-  }
+    try {
+        await ensureAudio();
+        await audioContext?.resume();
+        await renderCurrentGraph();
+        stopButton.disabled = false;
+    } catch (error) {
+        status.textContent = `Failed to start audio: ${formatError(error)}`;
+        startButton.disabled = false;
+    }
 });
 
 stopButton.addEventListener("click", async () => {
-  if (!renderer || !audioContext) return;
+    if (!renderer || !audioContext) return;
 
-  isStopped = true;
-  status.textContent = "Stopping audio...";
-  stopButton.disabled = true;
+    isStopped = true;
+    status.textContent = "Stopping audio...";
+    stopButton.disabled = true;
 
-  // Render silence with a short fade-out
-  await renderer.renderWithOptions(
-    { rootFadeInMs: 0, rootFadeOutMs: 100 },
-    ...[el.const({ value: 0 }), el.const({ value: 0 })]
-  );
+    // Render silence with a short fade-out
+    await renderer.renderWithOptions(
+        {rootFadeInMs: 0, rootFadeOutMs: 100},
+        ...[el.const({value: 0}), el.const({value: 0})]
+    );
 
-  // Give it a moment to fade out before suspending
-  await new Promise((resolve) => setTimeout(resolve, 120));
-  await audioContext.suspend();
+    // Give it a moment to fade out before suspending
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await audioContext.suspend();
 
-  status.textContent = "Audio stopped";
-  startButton.disabled = false;
+    status.textContent = "Audio stopped";
+    startButton.disabled = false;
 });
 
 reloadButton.addEventListener("click", async () => {
-  try {
-    await ensureAudio();
-    samplePath = bundledSamplePath;
-    sampleChannels = 1;
-    irChannelPaths = [];
-    activeIrPairStart = 0;
-    sampleFileName.textContent = "Built-in sample";
-    await loadBundledResources();
-    await renderCurrentGraph();
-  } catch (error) {
-    status.textContent = `Failed to reload sample: ${formatError(error)}`;
-  }
+    try {
+        await ensureAudio();
+        samplePath = bundledSamplePath;
+        sampleChannels = 1;
+        irChannelPaths = [];
+        activeIrPairStart = 0;
+        sampleFileName.textContent = "Built-in sample";
+        await loadBundledResources();
+        await renderCurrentGraph();
+    } catch (error) {
+        status.textContent = `Failed to reload sample: ${formatError(error)}`;
+    }
 });
 
 toggleIrButton.addEventListener("click", async () => {
-  if (irChannelPaths.length < 4) {
-    return;
-  }
+    if (irChannelPaths.length < 4) {
+        return;
+    }
 
-  activeIrPairStart = activeIrPairStart === 0 ? 2 : 0;
-  updateIrToggleLabel();
+    activeIrPairStart = activeIrPairStart === 0 ? 2 : 0;
+    updateIrToggleLabel();
 
-  if (renderer && audioContext?.state === "running") {
-    await renderCurrentGraph();
-  }
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
 });
 
 sampleFileInput.addEventListener("change", async () => {
-  const file = sampleFileInput.files?.[0];
+    const file = sampleFileInput.files?.[0];
 
-  if (!file) {
-    return;
-  }
+    if (!file) {
+        return;
+    }
 
-  try {
-    await ensureAudio();
-    await loadBrowserSample(file);
-    await renderCurrentGraph();
-  } catch (error) {
-    status.textContent = `Failed to load browser file: ${formatError(error)}`;
-  }
+    try {
+        await ensureAudio();
+        await loadBrowserSample(file);
+        await renderCurrentGraph();
+    } catch (error) {
+        status.textContent = `Failed to load browser file: ${formatError(error)}`;
+    }
 });
 
 irFileInput.addEventListener("change", async () => {
-  const file = irFileInput.files?.[0];
+    const file = irFileInput.files?.[0];
 
-  if (!file) {
-    return;
-  }
+    if (!file) {
+        return;
+    }
 
-  try {
-    await ensureAudio();
-    await loadBrowserIr(file);
-    await renderCurrentGraph();
-  } catch (error) {
-    status.textContent = `Failed to load browser IR: ${formatError(error)}`;
-  }
+    try {
+        await ensureAudio();
+        await loadBrowserIr(file);
+         await renderCurrentGraph();
+    } catch (error) {
+        status.textContent = `Failed to load browser IR: ${formatError(error)}`;
+    }
 });
 
 rateSlider.addEventListener("input", () => {
-  rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
-  if (renderer && audioContext?.state === "running") {
-    void renderCurrentGraph();
-  }
+    rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
+    if (renderer && audioContext?.state === "running") {
+        void renderCurrentGraph();
+    }
 });
 
 blendSlider.addEventListener("input", () => {
-  void updateBlend();
+    void updateBlend();
 });
 
 irStart.addEventListener("input", () => {
@@ -554,33 +588,42 @@ irEnd.addEventListener("input", () => {
 
 irRate.addEventListener("input", () => {
     void updateIrRate();
-})
+});
+
+irAttenuation.addEventListener("input", () => {
+    void updateIrAttenuation();
+});
+
+irNormalize.addEventListener("change", () => {
+    void updateIrNormalize();
+});
 
 chopperThresholdSlider.addEventListener("input", () => {
 
-  void updateChopperThreshold();
+    void updateChopperThreshold();
 });
 
 freqShiftHzSlider.addEventListener("input", () => {
 
-  void updateFreqShiftHz();
+    void updateFreqShiftHz();
 });
 
 freqShiftZoomButton.addEventListener("click", () => {
-  freqShiftFiveHzScale = !freqShiftFiveHzScale;
-  configureFreqShiftSlider();
+    freqShiftFiveHzScale = !freqShiftFiveHzScale;
+    configureFreqShiftSlider();
 
-  void updateFreqShiftHz();
+    void updateFreqShiftHz();
 });
 
 freqShiftFeedbackSlider.addEventListener("input", () => {
 
-  void updateFreqShiftFeedback();
+    void updateFreqShiftFeedback();
 });
 
 rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
 blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
 irRateValue.textContent = `${Number(irRate.value).toFixed(2)}x`;
+irAttenuationValue.textContent = `${Number(irAttenuation.value).toFixed(0)} dB`;
 chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
 freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
 void updateFreqShiftFeedback();

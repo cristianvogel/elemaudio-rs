@@ -26,6 +26,8 @@ export interface SampleParams {
     rate: number;
     blend: number;
     irRate: number;
+    irAttenuationDb: number;
+    irNormalize: boolean;
     chopperThreshold: number;
     freqShiftHz: number;
     feedback: number;
@@ -92,8 +94,8 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const leftWet = el.extra.convolve({
             key: "sample:left-wet",
             path: p.leftIrPath,
-            normalize: false,
-            irAttenuationDb: 20,
+            normalize: p.irNormalize,
+            irAttenuationDb: p.irAttenuationDb,
             rate: p.irRate,
             start: p.irStart,
             end: p.irEnd
@@ -103,8 +105,8 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const rightWet = el.extra.convolve({
             key: "sample:right-wet",
             path: p.rightIrPath,
-            normalize: false,
-            irAttenuationDb: 20,
+            normalize: p.irNormalize,
+            irAttenuationDb: p.irAttenuationDb,
             rate: p.irRate,
             start: p.irStart,
             end: p.irEnd
