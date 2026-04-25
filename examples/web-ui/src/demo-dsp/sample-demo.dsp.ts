@@ -91,6 +91,7 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const shiftDown = leftBands[0];
     const shiftUp = rightBands[1];
 
+    // Glitch free but slow editable IR
     const leftWet = el.extra.convolve({
             key: "sample:left-wet",
             path: p.leftIrPath,
@@ -102,6 +103,7 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
         },
         shiftDown);
 
+    // Glitch free but slow fast editable IR
     const rightWet = el.extra.convolve({
             key: "sample:right-wet",
             path: p.rightIrPath,
