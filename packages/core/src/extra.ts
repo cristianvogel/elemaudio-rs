@@ -50,6 +50,26 @@ export interface ExtraConvolveProps extends Record<string, unknown> {
 }
 
 /**
+ * Props for `el.extra.convolveSpectral(...)`.
+ */
+export interface ConvolveSpectralProps extends Record<string, unknown> {
+  /** Optional authoring key used for stable identity. */
+  key?: string;
+  /** Shared resource id for the impulse response. */
+  path: string;
+  /** Optional power-of-two IR edit partition size. Non-powers are rounded up natively. */
+  partitionSize?: number;
+  /** Optional tail block size for the internal convolver. Non-powers are rounded up natively. */
+  tailBlockSize?: number;
+  /** Optional global spectral magnitude gain in dB. */
+  magnitudeGainDb?: number;
+  /** Optional spectral tilt in dB/octave, referenced to Nyquist. */
+  tiltDbPerOct?: number;
+  /** Optional partition-to-partition magnitude smoothing in [0, 1). */
+  blur?: number;
+}
+
+/**
  * Props for `el.extra.crunch(...)`.
  */
 export interface CrunchProps extends Record<string, unknown> {
@@ -213,6 +233,27 @@ export function convolve(
   x: ElemNode,
 ): NodeRepr_t {
   return createNode("extra.convolve", props, [resolve(x)]);
+}
+
+/**
+ * Prototype convolution helper with fixed-size magnitude-only spectral IR edits.
+ *
+ * Props:
+ * - `path`: shared resource id for the impulse response
+ * - `partitionSize`: optional power-of-two IR edit partition size
+ * - `tailBlockSize`: optional tail block size for the internal convolver
+ * - `magnitudeGainDb`: optional global spectral magnitude gain in dB
+ * - `tiltDbPerOct`: optional spectral tilt applied around Nyquist
+ * - `blur`: optional partition-to-partition magnitude smoothing in [0, 1)
+ *
+ * Child order:
+ * - `x`: audio input
+ */
+export function convolveSpectral(
+  props: ConvolveSpectralProps,
+  x: ElemNode,
+): NodeRepr_t {
+  return createNode("extra.convolveSpectral", props, [resolve(x)]);
 }
 
 /**

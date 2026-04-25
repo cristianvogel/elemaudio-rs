@@ -12,6 +12,7 @@
 #include <extra/crunch.h>
 #include <extra/boxsum.h>
 #include <extra/convolve.h>
+#include <extra/convolve_spectral.h>
 #include <extra/frame_clock.h>
 #include <extra/frame_derivative.h>
 #include <extra/mirror_add.h>
@@ -81,6 +82,10 @@ elementary_runtime_handle* elementary_runtime_new(double sample_rate, int block_
 
         handle->runtime->registerNodeType("extra.convolve", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::ExtraConvolutionNode<double>>(id, fs, bs);
+        });
+
+        handle->runtime->registerNodeType("extra.convolveSpectral", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::SpectralConvolutionNode<double>>(id, fs, bs);
         });
 
         handle->runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {

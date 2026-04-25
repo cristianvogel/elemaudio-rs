@@ -5,6 +5,7 @@
 // Custom node registry (keep in sync with src/ffi/elementary_bridge.cpp):
 //   "freqshift"    — FreqShiftNode
 //   "extra.convolve" — ExtraConvolutionNode
+//   "extra.convolveSpectral" — SpectralConvolutionNode
 //   "crunch"       — CrunchNode
 //   "boxsum"       — BoxSumNode
 //   "boxaverage"   — BoxAverageNode
@@ -46,6 +47,7 @@
 #include "FFT.h"
 #include "../../../../native/extra/boxsum.h"
 #include "../../../../native/extra/convolve.h"
+#include "../../../../native/extra/convolve_spectral.h"
 #include "../../../../native/extra/frame_clock.h"
 #include "../../../../native/extra/frame_derivative.h"
 #include "../../../../native/extra/mirror_add.h"
@@ -125,6 +127,10 @@ public:
 
         runtime->registerNodeType("extra.convolve", [](elem::NodeId const id, double fs, int const bs) {
             return std::make_shared<elem::ExtraConvolutionNode<double>>(id, fs, bs);
+        });
+
+        runtime->registerNodeType("extra.convolveSpectral", [](elem::NodeId const id, double fs, int const bs) {
+            return std::make_shared<elem::SpectralConvolutionNode<double>>(id, fs, bs);
         });
 
         runtime->registerNodeType("crunch", [](elem::NodeId const id, double fs, int const bs) {

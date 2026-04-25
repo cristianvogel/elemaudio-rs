@@ -1,6 +1,6 @@
 //! End-to-end tests for the `threshold` native node.
 
-use elemaudio_rs::{el, extra, ElemNode, Graph, Runtime};
+use elemaudio_rs::{ElemNode, Graph, Runtime, el, extra};
 use serde_json::json;
 
 fn warm_past_root_fade(runtime: &Runtime, sample_rate: f64, buffer_size: usize) {
@@ -82,7 +82,9 @@ fn threshold_latch_holds_until_reset_rises() {
     let mut held = vec![0.0_f64; 64];
     {
         let mut outputs = [held.as_mut_slice()];
-        runtime.process(64, &[], &mut outputs).expect("process held");
+        runtime
+            .process(64, &[], &mut outputs)
+            .expect("process held");
     }
     assert!(held.iter().all(|&s| s == 1.0));
 
@@ -93,7 +95,9 @@ fn threshold_latch_holds_until_reset_rises() {
     let mut reset_block = vec![0.0_f64; 64];
     {
         let mut outputs = [reset_block.as_mut_slice()];
-        runtime.process(64, &[], &mut outputs).expect("process reset");
+        runtime
+            .process(64, &[], &mut outputs)
+            .expect("process reset");
     }
     assert!(reset_block.iter().all(|&s| s == 0.0));
 }

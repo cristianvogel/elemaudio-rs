@@ -27,7 +27,10 @@ fn build_runtime(sample_rate: f64, buffer_size: usize) -> Runtime {
 
 fn assert_close(actual: f64, expected: f64, context: &str) {
     let delta = (actual - expected).abs();
-    assert!(delta <= 1e-9, "{context}: expected {expected}, got {actual} (|delta|={delta})");
+    assert!(
+        delta <= 1e-9,
+        "{context}: expected {expected}, got {actual} (|delta|={delta})"
+    );
 }
 
 #[test]
@@ -52,7 +55,9 @@ fn frame_smooth_passes_immediately_when_time_constant_is_zero() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
     for (i, sample) in block.iter().enumerate() {
         assert_close(*sample, 0.75, &format!("sample {i}"));
@@ -82,21 +87,27 @@ fn frame_smooth_reaches_a_constant_target_over_two_frames() {
 
     let mut first = vec![0.0_f64; frame_length];
     let mut outputs = [first.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("first");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("first");
     for (i, sample) in first.iter().enumerate() {
         assert_close(*sample, 0.5, &format!("first sample {i}"));
     }
 
     let mut second = vec![0.0_f64; frame_length];
     let mut outputs = [second.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("second");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("second");
     for (i, sample) in second.iter().enumerate() {
         assert_close(*sample, 1.0, &format!("second sample {i}"));
     }
 
     let mut third = vec![0.0_f64; frame_length];
     let mut outputs = [third.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("third");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("third");
     for (i, sample) in third.iter().enumerate() {
         assert_close(*sample, 1.0, &format!("third sample {i}"));
     }
@@ -110,13 +121,7 @@ fn frame_smooth_time_shaper_changes_per_track_speed() {
     let runtime = build_runtime(sample_rate, buffer_size);
     let frame_duration = frame_length as f64 / sample_rate;
 
-    let shaper = extra::frame_phasor(
-        json!({ "framelength": frame_length }),
-        -1.0,
-        0.0,
-        0.0,
-        2.0,
-    );
+    let shaper = extra::frame_phasor(json!({ "framelength": frame_length }), -1.0, 0.0, 0.0, 2.0);
     let graph = Graph::new().render(extra::frame_smooth(
         json!({ "framelength": frame_length }),
         frame_duration * 2.0,
@@ -132,8 +137,18 @@ fn frame_smooth_time_shaper_changes_per_track_speed() {
 
     let mut first = vec![0.0_f64; frame_length];
     let mut outputs = [first.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("first");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("first");
 
-    assert!(first[0] < 0.1, "lowest track should remain much slower, got {}", first[0]);
-    assert!(first[7] > 0.99, "highest track should converge almost immediately, got {}", first[7]);
+    assert!(
+        first[0] < 0.1,
+        "lowest track should remain much slower, got {}",
+        first[0]
+    );
+    assert!(
+        first[7] > 0.99,
+        "highest track should converge almost immediately, got {}",
+        first[7]
+    );
 }

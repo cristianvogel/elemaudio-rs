@@ -41,7 +41,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         synth: resolve(__dirname, "synth.html"),
-        sample: resolve(__dirname, "sample.html"),
+        sampleFshiftConvolvers: resolve(__dirname, "sample-fshift-convolvers.html"),
         rain: resolve(__dirname, "rain.html"),
         boxsum: resolve(__dirname, "boxsum.html"),
         frameDomain: resolve(__dirname, "frame-domain.html"),

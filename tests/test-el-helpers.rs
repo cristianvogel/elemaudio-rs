@@ -846,6 +846,17 @@ fn covers_extra_helpers() {
         1,
     );
 
+    let convolve_spectral_node = extra::convolve_spectral(
+        serde_json::json!({"path": "ir.wav", "partitionSize": 128, "tailBlockSize": 1024, "magnitudeGainDb": -6.0, "tiltDbPerOct": -3.0, "blur": 0.25}),
+        ElemNode::from(node(1.0)),
+    );
+    assert_node(
+        &convolve_spectral_node,
+        "extra.convolveSpectral",
+        serde_json::json!({"path": "ir.wav", "partitionSize": 128, "tailBlockSize": 1024, "magnitudeGainDb": -6.0, "tiltDbPerOct": -3.0, "blur": 0.25}),
+        1,
+    );
+
     let crunch_nodes = extra::crunch(
         serde_json::json!({
             "channels": 2,

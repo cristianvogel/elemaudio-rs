@@ -28,6 +28,9 @@ export interface SampleParams {
     irRate: number;
     irAttenuationDb: number;
     irNormalize: boolean;
+    convolverMode: "static" | "spectral";
+    spectralTiltDbPerOct: number;
+    spectralBlur: number;
     chopperThreshold: number;
     freqShiftHz: number;
     feedback: number;
@@ -91,29 +94,41 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const shiftDown = leftBands[0];
     const shiftUp = rightBands[1];
 
-    // Glitch free but slow editable IR
-    const leftWet = el.extra.convolve({
-            key: "sample:left-wet",
-            path: p.leftIrPath,
-            normalize: p.irNormalize,
-            irAttenuationDb: p.irAttenuationDb,
-            rate: p.irRate,
-            start: p.irStart,
-            end: p.irEnd
-        },
-        shiftDown);
+    function staticConvolve(key: string, path: string, x: NodeRepr_t): NodeRepr_t {
+        return el.extra.convolve({
+                key,
+                path,
+                normalize: p.irNormalize,
+                irAttenuationDb: p.irAttenuationDb,
+                rate: p.irRate,
+                start: p.irStart,
+                end: p.irEnd
+            },
+            x);
+    }
 
-    // Glitch free but slow fast editable IR
-    const rightWet = el.extra.convolve({
-            key: "sample:right-wet",
-            path: p.rightIrPath,
-            normalize: p.irNormalize,
-            irAttenuationDb: p.irAttenuationDb,
-            rate: p.irRate,
-            start: p.irStart,
-            end: p.irEnd
-        },
-        shiftUp);
+    function spectralConvolve(key: string, path: string, x: NodeRepr_t): NodeRepr_t {
+        return el.extra.convolveSpectral({
+                key,
+                path,
+                partitionSize: 512,
+                tailBlockSize: 4096,
+                magnitudeGainDb: -p.irAttenuationDb,
+                tiltDbPerOct: p.spectralTiltDbPerOct,
+                blur: ( p.spectralBlur )
+            },
+            x);
+    }
+
+    const convolverMode = el.const({key: "sample:convolver-mode", value: p.convolverMode === "spectral" ? 1 : 0});
+
+    const leftStaticWet = staticConvolve("sample:left-wet", p.leftIrPath, shiftDown);
+    const rightStaticWet = staticConvolve("sample:right-wet", p.rightIrPath, shiftUp);
+    const leftSpectralWet = spectralConvolve("sample:left-spectral-wet", p.leftIrPath, shiftDown);
+    const rightSpectralWet = spectralConvolve("sample:right-spectral-wet", p.rightIrPath, shiftUp);
+
+    const leftWet = el.select(convolverMode, leftSpectralWet, leftStaticWet);
+    const rightWet = el.select(convolverMode, rightSpectralWet, rightStaticWet);
 
     return [
         el.select(blendNode, leftWet, shiftDown),

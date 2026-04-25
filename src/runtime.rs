@@ -482,7 +482,8 @@ impl Runtime {
         Err(Error::Native {
             operation: "replace_shared_resource_f32_multi",
             code,
-            message: "native runtime rejected the replacement shared multichannel resource".to_string(),
+            message: "native runtime rejected the replacement shared multichannel resource"
+                .to_string(),
         })
     }
 

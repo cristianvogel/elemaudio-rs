@@ -27,7 +27,10 @@ fn build_runtime(sample_rate: f64, buffer_size: usize) -> Runtime {
 
 fn assert_close(actual: f64, expected: f64, context: &str) {
     let delta = (actual - expected).abs();
-    assert!(delta <= 1e-9, "{context}: expected {expected}, got {actual} (|delta|={delta})");
+    assert!(
+        delta <= 1e-9,
+        "{context}: expected {expected}, got {actual} (|delta|={delta})"
+    );
 }
 
 #[test]
@@ -65,14 +68,18 @@ fn frame_write_ram_updates_table_after_one_frame_latency() {
 
     let mut first = vec![0.0_f64; frame_length];
     let mut outputs = [first.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("first");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("first");
     for (i, sample) in first.iter().enumerate() {
         assert_close(*sample, 0.0, &format!("first frame sample {i}"));
     }
 
     let mut second = vec![0.0_f64; frame_length];
     let mut outputs = [second.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("second");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("second");
     for (i, sample) in second.iter().enumerate() {
         assert_close(*sample, 1.0, &format!("second frame sample {i}"));
     }

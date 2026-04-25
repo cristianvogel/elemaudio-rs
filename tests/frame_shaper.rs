@@ -57,7 +57,9 @@ fn frame_shaper_starts_flat_at_zero_wave() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
     for (i, sample) in block.iter().enumerate() {
         assert_close(*sample, 0.0, &format!("flat sample {i}"));
@@ -88,7 +90,9 @@ fn frame_shaper_wave_half_emits_full_triangle() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
     let expected = [-1.0, -0.5, 0.0, 0.5, 1.0, 0.5, 0.0, -0.5];
     for (i, sample) in block.iter().enumerate() {
@@ -120,7 +124,9 @@ fn frame_shaper_wave_one_emits_full_sine() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
     let expected = [
         -1.0,
@@ -144,7 +150,11 @@ fn frame_shaper_shift_latches_at_frame_boundaries() {
     let frame_length = 8_usize;
     let runtime = build_runtime(sample_rate, buffer_size);
 
-    let shift = elemaudio_rs::el::select(elemaudio_rs::el::ge(elemaudio_rs::el::time(), 2.0), 2.0, 0.0);
+    let shift = elemaudio_rs::el::select(
+        elemaudio_rs::el::ge(elemaudio_rs::el::time(), 2.0),
+        2.0,
+        0.0,
+    );
     let graph = Graph::new().render(extra::frame_shaper(
         json!({ "framelength": frame_length }),
         0.0,
@@ -162,18 +172,30 @@ fn frame_shaper_shift_latches_at_frame_boundaries() {
 
     let mut first = vec![0.0_f64; frame_length];
     let mut outputs = [first.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("first");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("first");
     let expected_first = [-1.0, -0.5, 0.0, 0.5, 1.0, 0.5, 0.0, -0.5];
     for (i, sample) in first.iter().enumerate() {
-        assert_close(*sample, expected_first[i], &format!("first frame sample {i}"));
+        assert_close(
+            *sample,
+            expected_first[i],
+            &format!("first frame sample {i}"),
+        );
     }
 
     let mut second = vec![0.0_f64; frame_length];
     let mut outputs = [second.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("second");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("second");
     let expected_second = [0.0, 0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5];
     for (i, sample) in second.iter().enumerate() {
-        assert_close(*sample, expected_second[i], &format!("second frame sample {i}"));
+        assert_close(
+            *sample,
+            expected_second[i],
+            &format!("second frame sample {i}"),
+        );
     }
 }
 
@@ -201,7 +223,9 @@ fn frame_shaper_zoom_below_one_expands_wave_around_center() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
     let expected = [0.0, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25];
     for (i, sample) in block.iter().enumerate() {
@@ -233,7 +257,9 @@ fn frame_shaper_zoom_above_one_contracts_wave_toward_center() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
     let expected = [0.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0];
     for (i, sample) in block.iter().enumerate() {

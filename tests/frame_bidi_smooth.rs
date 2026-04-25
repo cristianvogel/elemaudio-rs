@@ -27,7 +27,10 @@ fn build_runtime(sample_rate: f64, buffer_size: usize) -> Runtime {
 
 fn assert_close(actual: f64, expected: f64, context: &str) {
     let delta = (actual - expected).abs();
-    assert!(delta <= 1e-9, "{context}: expected {expected}, got {actual} (|delta|={delta})");
+    assert!(
+        delta <= 1e-9,
+        "{context}: expected {expected}, got {actual} (|delta|={delta})"
+    );
 }
 
 #[test]
@@ -55,7 +58,9 @@ fn frame_bidi_smooth_uses_attack_time_for_rising_changes() {
 
     let mut first = vec![0.0_f64; frame_length];
     let mut outputs = [first.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("first");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("first");
     for (i, sample) in first.iter().enumerate() {
         assert_close(*sample, 0.5, &format!("attack frame sample {i}"));
     }
@@ -78,7 +83,9 @@ fn frame_bidi_smooth_uses_release_time_for_falling_changes() {
         0.0,
     ));
     let mounted = graph.mount().expect("mount");
-    rise_runtime.apply_instructions(mounted.batch()).expect("apply");
+    rise_runtime
+        .apply_instructions(mounted.batch())
+        .expect("apply");
 
     warm_past_root_fade(&rise_runtime, sample_rate, buffer_size);
     rise_runtime.reset();
@@ -86,7 +93,9 @@ fn frame_bidi_smooth_uses_release_time_for_falling_changes() {
 
     let mut first = vec![0.0_f64; frame_length];
     let mut outputs = [first.as_mut_slice()];
-    rise_runtime.process(frame_length, &[], &mut outputs).expect("first");
+    rise_runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("first");
     for sample in &first {
         assert_close(*sample, 0.0, "first frame");
     }
@@ -101,7 +110,9 @@ fn frame_bidi_smooth_uses_release_time_for_falling_changes() {
         -1.0,
     ));
     let mounted = graph.mount().expect("mount 2");
-    fall_runtime.apply_instructions(mounted.batch()).expect("apply 2");
+    fall_runtime
+        .apply_instructions(mounted.batch())
+        .expect("apply 2");
 
     warm_past_root_fade(&fall_runtime, sample_rate, buffer_size);
     fall_runtime.reset();
@@ -109,8 +120,14 @@ fn frame_bidi_smooth_uses_release_time_for_falling_changes() {
 
     let mut second = vec![0.0_f64; frame_length];
     let mut outputs = [second.as_mut_slice()];
-    fall_runtime.process(frame_length, &[], &mut outputs).expect("second");
+    fall_runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("second");
     for (i, sample) in second.iter().enumerate() {
-        assert_close(*sample, -0.1464466094067262, &format!("release frame sample {i}"));
+        assert_close(
+            *sample,
+            -0.1464466094067262,
+            &format!("release frame sample {i}"),
+        );
     }
 }

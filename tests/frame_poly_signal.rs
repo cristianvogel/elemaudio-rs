@@ -27,7 +27,10 @@ fn build_runtime(sample_rate: f64, buffer_size: usize) -> Runtime {
 
 fn assert_close(actual: f64, expected: f64, context: &str) {
     let delta = (actual - expected).abs();
-    assert!(delta <= 1e-5, "{context}: expected {expected}, got {actual} (|delta|={delta})");
+    assert!(
+        delta <= 1e-5,
+        "{context}: expected {expected}, got {actual} (|delta|={delta})"
+    );
 }
 
 #[test]
@@ -52,7 +55,9 @@ fn frame_poly_signal_uses_internal_sine_when_path_is_missing() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
     let expected = [
         -1.0,
@@ -91,15 +96,37 @@ fn frame_poly_signal_phase_spread_offsets_lookup_positions() {
 
     let mut block = vec![0.0_f64; frame_length];
     let mut outputs = [block.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("process");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("process");
 
-    let baseline = [-1.0, -0.7071067811865476, 0.0, 0.7071067811865475, 1.0, 0.7071067811865476, 0.0, -0.7071067811865475];
+    let baseline = [
+        -1.0,
+        -0.7071067811865476,
+        0.0,
+        0.7071067811865475,
+        1.0,
+        0.7071067811865476,
+        0.0,
+        -0.7071067811865475,
+    ];
     assert!(
-        block.iter().zip(baseline).any(|(sample, base)| (*sample - base).abs() > 1e-6),
+        block
+            .iter()
+            .zip(baseline)
+            .any(|(sample, base)| (*sample - base).abs() > 1e-6),
         "phase spread should decorrelate tracks against the baseline sine frame"
     );
-    assert!(block[0].abs() < 1e-6, "phase spread sample 0 should be centered by the negative end of the internal ramp, got {}", block[0]);
-    assert!(block[4] > 0.0 && block[4] < 1.0, "phase spread sample 4 should be decorrelated but still positive, got {}", block[4]);
+    assert!(
+        block[0].abs() < 1e-6,
+        "phase spread sample 0 should be centered by the negative end of the internal ramp, got {}",
+        block[0]
+    );
+    assert!(
+        block[4] > 0.0 && block[4] < 1.0,
+        "phase spread sample 4 should be decorrelated but still positive, got {}",
+        block[4]
+    );
 }
 
 #[test]
@@ -109,7 +136,11 @@ fn frame_poly_signal_reset_restores_initial_sync_state() {
     let frame_length = 8_usize;
     let runtime = build_runtime(sample_rate, buffer_size);
 
-    let reset = elemaudio_rs::el::select(elemaudio_rs::el::ge(elemaudio_rs::el::time(), 24.0), 1.0, 0.0);
+    let reset = elemaudio_rs::el::select(
+        elemaudio_rs::el::ge(elemaudio_rs::el::time(), 24.0),
+        1.0,
+        0.0,
+    );
     let graph = Graph::new().render(extra::frame_poly_signal(
         json!({ "framelength": frame_length, "bpm": 60.0 }),
         0.0,
@@ -125,22 +156,36 @@ fn frame_poly_signal_reset_restores_initial_sync_state() {
 
     let mut first = vec![0.0_f64; frame_length];
     let mut outputs = [first.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("first");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("first");
 
     let mut second = vec![0.0_f64; frame_length];
     let mut outputs = [second.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("second");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("second");
 
     let mut third = vec![0.0_f64; frame_length];
     let mut outputs = [third.as_mut_slice()];
-    runtime.process(frame_length, &[], &mut outputs).expect("third");
+    runtime
+        .process(frame_length, &[], &mut outputs)
+        .expect("third");
 
     for (i, sample) in third.iter().enumerate() {
         let delta = (*sample - first[i]).abs();
-        assert!(delta <= 0.01, "reset sample {i}: expected approx {}, got {} (|delta|={delta})", first[i], sample);
+        assert!(
+            delta <= 0.01,
+            "reset sample {i}: expected approx {}, got {} (|delta|={delta})",
+            first[i],
+            sample
+        );
     }
     assert!(
-        second.iter().zip(first.iter()).any(|(a, b)| (*a - *b).abs() > 1e-6),
+        second
+            .iter()
+            .zip(first.iter())
+            .any(|(a, b)| (*a - *b).abs() > 1e-6),
         "second frame should drift away from the initial state before reset"
     );
 }

@@ -2,7 +2,7 @@ import type {NodeRepr_t} from "@elem-rs/core";
 import {el} from "@elem-rs/core";
 import sampleUrl from "../../../demo-resources/115bpm_808_Beat_mono.wav?url";
 import irUrl from "../../../demo-resources/SURFACE.wav?url";
-import {buildGraph as dspBuildGraph} from "../demo-dsp/sample-demo.dsp";
+import {buildGraph as dspBuildGraph} from "../demo-dsp/sample-fshift-convolvers-demo.dsp";
 import WebRenderer from "../WebRenderer";
 import "../style.css";
 
@@ -36,7 +36,7 @@ app.innerHTML = `
     <h1>elemaudiors</h1> <h3><i>extra</i> ⊙ sample ⊙ freqShift ⊙ convolver</h3>
     <p>Loads a sample and a four-channel IR from <code>demo-resources/</code> 
     then processes the audio through 
-    <code>el.extra.freqShift(...)</code> into simple <code>el.extra.convolve(...)</code>. 
+    <code>el.extra.freqShift(...)</code> into switchable <code>el.extra.convolve(...)</code> and <code>el.extra.convolveSpectral(...)</code>. 
     The demo IR has 4 channels. It has been pre-prepared so that channel 3 and 4 are reversed versions of the IR. 
     This is one way to make it trivial to swap the response in realtime.</p>
 
@@ -59,6 +59,16 @@ app.innerHTML = `
       </div>
 
       <div class="dial-strip dial-strip-ir" aria-label="IR shaping controls">
+        <div class="dial">
+        <label for="convolver-mode">
+        <span>Convolver</span>
+        <span id="convolver-mode-value">static</span>
+        </label>
+        <select id="convolver-mode" class="toggle-select">
+        <option value="static" selected>static</option>
+        <option value="spectral">spectral</option>
+        </select>
+        </div>
         <div class="dial">
         <label for="start-offset">
         <span>IR Start</span>
@@ -92,6 +102,20 @@ app.innerHTML = `
         <span>Normalise</span>
         </label>
         <input id="ir-normalize" type="checkbox" checked/>
+        </div>
+        <div class="dial">
+        <label for="spectral-tilt">
+        <span>Tilt</span>
+        <span id="spectral-tilt-value">0 dB/oct</span>
+        </label>
+        <input id="spectral-tilt" type="range" min="-12" max="12" value="0" step="1" />
+        </div>
+        <div class="dial">
+        <label for="spectral-blur">
+        <span>Blur</span>
+        <span id="spectral-blur-value">0%</span>
+        </label>
+        <input id="spectral-blur" type="range" min="0" max="95" value="0" step="1" />
         </div>
       </div>
 
@@ -163,6 +187,12 @@ const irRateValue = mustQuery<HTMLSpanElement>("#ir-rate-value");
 const irAttenuation = mustQuery<HTMLInputElement>("#ir-attenuation");
 const irAttenuationValue = mustQuery<HTMLSpanElement>("#ir-attenuation-value");
 const irNormalize = mustQuery<HTMLInputElement>("#ir-normalize");
+const convolverModeSelect = mustQuery<HTMLSelectElement>("#convolver-mode");
+const convolverModeValue = mustQuery<HTMLSpanElement>("#convolver-mode-value");
+const spectralTiltSlider = mustQuery<HTMLInputElement>("#spectral-tilt");
+const spectralTiltValue = mustQuery<HTMLSpanElement>("#spectral-tilt-value");
+const spectralBlurSlider = mustQuery<HTMLInputElement>("#spectral-blur");
+const spectralBlurValue = mustQuery<HTMLSpanElement>("#spectral-blur-value");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
@@ -254,6 +284,27 @@ async function updateIrAttenuation() {
 }
 
 async function updateIrNormalize() {
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
+}
+
+async function updateConvolverMode() {
+    convolverModeValue.textContent = convolverModeSelect.value;
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
+}
+
+async function updateSpectralTilt() {
+    spectralTiltValue.textContent = `${Number(spectralTiltSlider.value)} dB/oct`;
+    if (renderer && audioContext?.state === "running") {
+        await renderCurrentGraph();
+    }
+}
+
+async function updateSpectralBlur() {
+    spectralBlurValue.textContent = `${Number(spectralBlurSlider.value)}%`;
     if (renderer && audioContext?.state === "running") {
         await renderCurrentGraph();
     }
@@ -430,6 +481,9 @@ function buildGraph(rate: number): NodeRepr_t[] {
         irRate: Number(irRate.value),
         irAttenuationDb: Number(irAttenuation.value),
         irNormalize: irNormalize.checked,
+        convolverMode: convolverModeSelect.value as "static" | "spectral",
+        spectralTiltDbPerOct: Number(spectralTiltSlider.value),
+        spectralBlur: Number(spectralBlurSlider.value) / 100,
         chopperThreshold: Number(chopperThresholdSlider.value),
         freqShiftHz: getFreqShiftHz(),
         feedback: Number(freqShiftFeedbackSlider.value) / 100,
@@ -598,6 +652,22 @@ irNormalize.addEventListener("change", () => {
     void updateIrNormalize();
 });
 
+convolverModeSelect.addEventListener("input", () => {
+    void updateConvolverMode();
+});
+
+convolverModeSelect.addEventListener("change", () => {
+    void updateConvolverMode();
+});
+
+spectralTiltSlider.addEventListener("input", () => {
+    void updateSpectralTilt();
+});
+
+spectralBlurSlider.addEventListener("input", () => {
+    void updateSpectralBlur();
+});
+
 chopperThresholdSlider.addEventListener("input", () => {
 
     void updateChopperThreshold();
@@ -624,6 +694,9 @@ rateValue.textContent = `${Number(rateSlider.value).toFixed(2)}x`;
 blendValue.textContent = `${Math.round((Number(blendSlider.value) / 100) * 100)}%`;
 irRateValue.textContent = `${Number(irRate.value).toFixed(2)}x`;
 irAttenuationValue.textContent = `${Number(irAttenuation.value).toFixed(0)} dB`;
+convolverModeValue.textContent = convolverModeSelect.value;
+spectralTiltValue.textContent = `${Number(spectralTiltSlider.value)} dB/oct`;
+spectralBlurValue.textContent = `${Number(spectralBlurSlider.value)}%`;
 chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
 freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
 void updateFreqShiftFeedback();
