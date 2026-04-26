@@ -240,17 +240,15 @@ export function convolve(
  * Child order:
  * - `tiltDbPerOct`: frame-latched spectral tilt signal in dB/octave
  * - `blur`: frame-latched partition-to-partition magnitude smoothing signal in [0, 1)
- * - `limitDb`: frame-latched spectral magnitude soft-limiting threshold in dB
  * - `x`: audio input
  */
 export function convolveSpectral(
   props: ConvolveSpectralProps,
   tiltDbPerOct: ElemNode,
   blur: ElemNode,
-  limitDb: ElemNode,
   x: ElemNode,
 ): NodeRepr_t {
-  return createNode("extra.convolveSpectral", props, [resolve(tiltDbPerOct), resolve(blur), resolve(limitDb), resolve(x)]);
+  return createNode("extra.convolveSpectral", props, [resolve(tiltDbPerOct), resolve(blur), resolve(x)]);
 }
 
 /**

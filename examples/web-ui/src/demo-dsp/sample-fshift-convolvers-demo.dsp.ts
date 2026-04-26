@@ -31,7 +31,6 @@ export interface SampleParams {
     convolverMode: "static" | "spectral";
     spectralTiltDbPerOct: number;
     spectralBlur: number;
-    spectralLimitDb: number;
     chopperThreshold: number;
     freqShiftHz: number;
     feedback: number;
@@ -111,7 +110,6 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     function spectralConvolve(key: string, path: string, x: NodeRepr_t): NodeRepr_t {
         const tilt = el.const({key: `${key}:tilt-db-per-oct`, value: p.spectralTiltDbPerOct});
         const blur = el.const({key: `${key}:blur`, value: p.spectralBlur});
-        const limit = el.const({key: `${key}:limit-db`, value: p.spectralLimitDb});
 
         return el.extra.convolveSpectral({
                 key,
@@ -120,7 +118,6 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
             },
             tilt,
             blur,
-            limit,
             x);
     }
 

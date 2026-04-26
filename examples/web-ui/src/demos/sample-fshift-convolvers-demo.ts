@@ -115,14 +115,7 @@ app.innerHTML = `
         <span>Blur</span>
         <span id="spectral-blur-value">0%</span>
         </label>
-        <input id="spectral-blur" type="range" min="0" max="95" value="0" step="1" />
-        </div>
-        <div class="dial">
-        <label for="spectral-limit">
-        <span>Limit</span>
-        <span id="spectral-limit-value">0 dB</span>
-        </label>
-        <input id="spectral-limit" type="range" min="0" max="40" value="0" step="1" />
+        <input id="spectral-blur" type="range" min="0" max="99" value="0" step="1" />
         </div>
       </div>
 
@@ -200,8 +193,6 @@ const spectralTiltSlider = mustQuery<HTMLInputElement>("#spectral-tilt");
 const spectralTiltValue = mustQuery<HTMLSpanElement>("#spectral-tilt-value");
 const spectralBlurSlider = mustQuery<HTMLInputElement>("#spectral-blur");
 const spectralBlurValue = mustQuery<HTMLSpanElement>("#spectral-blur-value");
-const spectralLimitSlider = mustQuery<HTMLInputElement>("#spectral-limit");
-const spectralLimitValue = mustQuery<HTMLSpanElement>("#spectral-limit-value");
 const rateSlider = mustQuery<HTMLInputElement>("#rate");
 const blendSlider = mustQuery<HTMLInputElement>("#blend");
 const chopperThresholdSlider = mustQuery<HTMLInputElement>("#chopper-threshold");
@@ -314,13 +305,6 @@ async function updateSpectralTilt() {
 
 async function updateSpectralBlur() {
     spectralBlurValue.textContent = `${Number(spectralBlurSlider.value)}%`;
-    if (renderer && audioContext?.state === "running") {
-        await renderCurrentGraph();
-    }
-}
-
-async function updateSpectralLimit() {
-    spectralLimitValue.textContent = `${Number(spectralLimitSlider.value)} dB`;
     if (renderer && audioContext?.state === "running") {
         await renderCurrentGraph();
     }
@@ -500,7 +484,6 @@ function buildGraph(rate: number): NodeRepr_t[] {
         convolverMode: convolverModeSelect.value as "static" | "spectral",
         spectralTiltDbPerOct: Number(spectralTiltSlider.value),
         spectralBlur: Number(spectralBlurSlider.value) / 100,
-        spectralLimitDb: Number(spectralLimitSlider.value),
         chopperThreshold: Number(chopperThresholdSlider.value),
         freqShiftHz: getFreqShiftHz(),
         feedback: Number(freqShiftFeedbackSlider.value) / 100,
@@ -683,10 +666,6 @@ spectralBlurSlider.addEventListener("input", () => {
     void updateSpectralBlur();
 });
 
-spectralLimitSlider.addEventListener("input", () => {
-    void updateSpectralLimit();
-});
-
 chopperThresholdSlider.addEventListener("input", () => {
 
     void updateChopperThreshold();
@@ -716,7 +695,6 @@ irAttenuationValue.textContent = `${Number(irAttenuation.value).toFixed(0)} dB`;
 convolverModeValue.textContent = convolverModeSelect.value;
 spectralTiltValue.textContent = `${Number(spectralTiltSlider.value)} dB/oct`;
 spectralBlurValue.textContent = `${Number(spectralBlurSlider.value)}%`;
-spectralLimitValue.textContent = `${Number(spectralLimitSlider.value)} dB`;
 chopperThresholdValue.textContent = Number(chopperThresholdSlider.value).toFixed(2);
 freqShiftHzValue.textContent = `${Math.round(getFreqShiftHz())} Hz`;
 void updateFreqShiftFeedback();

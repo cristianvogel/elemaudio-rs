@@ -100,13 +100,11 @@ pub fn convolve(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// Child order:
 /// - `tiltDbPerOct`: frame-latched spectral tilt signal in dB/octave
 /// - `blur`: frame-latched partition-to-partition magnitude smoothing signal in `[0, 1)`
-/// - `limitDb`: frame-latched spectral magnitude soft-limiting threshold in dB
 /// - `x`: audio input
 pub fn convolve_spectral(
     props: serde_json::Value,
     tilt_db_per_oct: impl Into<ElemNode>,
     blur: impl Into<ElemNode>,
-    limit_db: impl Into<ElemNode>,
     x: impl Into<ElemNode>,
 ) -> Node {
     Node::new(
@@ -115,7 +113,6 @@ pub fn convolve_spectral(
         vec![
             resolve(tilt_db_per_oct),
             resolve(blur),
-            resolve(limit_db),
             resolve(x),
         ],
     )

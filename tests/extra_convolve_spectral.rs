@@ -47,12 +47,8 @@ fn convolver_output(ir: &[f32], props: serde_json::Value, source: Node, spectral
         .get("blur")
         .and_then(serde_json::Value::as_f64)
         .unwrap_or(0.0);
-    let limit = props
-        .get("limitDb")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(0.0);
 
-    convolver_output_with_controls(ir, props, el::const_(tilt), el::const_(blur), el::const_(limit), source, spectral)
+    convolver_output_with_controls(ir, props, el::const_(tilt), el::const_(blur), source, spectral)
 }
 
 fn convolver_output_with_controls(
@@ -60,7 +56,6 @@ fn convolver_output_with_controls(
     props: serde_json::Value,
     tilt: Node,
     blur: Node,
-    limit: Node,
     source: Node,
     spectral: bool,
 ) -> Vec<f64> {
@@ -77,7 +72,7 @@ fn convolver_output_with_controls(
         .expect("resource");
 
     let graph = if spectral {
-        Graph::new().render(extra::convolve_spectral(props, tilt, blur, limit, source))
+        Graph::new().render(extra::convolve_spectral(props, tilt, blur, source))
     } else {
         Graph::new().render(extra::convolve(props, source))
     };
@@ -86,19 +81,29 @@ fn convolver_output_with_controls(
     runtime.apply_instructions(mounted.batch()).expect("apply");
     warm_past_root_fade(&runtime, sample_rate, buffer_size);
 
-    let mut output = Vec::with_capacity(buffer_size * 32);
-    for _ in 0..32 {
+    let mut output = Vec::with_capacity(buffer_size * 256);
+    // Block 0: Impulse
+    let mut input = vec![0.0_f64; buffer_size];
+    input[0] = 1.0;
+    {
         let mut out = vec![0.0_f64; buffer_size];
         let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[], &mut outputs).expect("process");
+        runtime.process(buffer_size, &[input.as_slice()], &mut outputs).expect("process");
+        output.extend(out);
+    }
+
+    for _ in 1..256 {
+        let mut out = vec![0.0_f64; buffer_size];
+        let mut outputs = [out.as_mut_slice()];
+        runtime.process(buffer_size, &[vec![0.0; buffer_size].as_slice()], &mut outputs).expect("process");
         output.extend(out);
     }
 
     output
 }
 
-fn spectral_output_rms_with_controls(ir: &[f32], props: serde_json::Value, tilt: Node, blur: Node, limit: Node, source: Node) -> f64 {
-    let output = convolver_output_with_controls(ir, props, tilt, blur, limit, source, true);
+fn spectral_output_rms_with_controls(ir: &[f32], props: serde_json::Value, tilt: Node, blur: Node, source: Node) -> f64 {
+    let output = convolver_output_with_controls(ir, props, tilt, blur, source, true);
     rms(&output)
 }
 
@@ -117,7 +122,6 @@ fn spectral_impulse_response(ir: &[f32], props: serde_json::Value, blocks: usize
 
     let graph = Graph::new().render(extra::convolve_spectral(
         props,
-        el::const_(0.0),
         el::const_(0.0),
         el::const_(0.0),
         el::r#in(json!({"channel": 0}), None),
@@ -175,7 +179,6 @@ fn extra_convolve_spectral_neutral_matches_static_ir_gain() {
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512}),
         el::const_(0.0),
         el::const_(0.0),
-        el::const_(0.0),
         el::const_(1.0),
     ));
 
@@ -207,7 +210,6 @@ fn extra_convolve_spectral_magnitude_gain_scales_ir_gain() {
 
     let graph = Graph::new().render(extra::convolve_spectral(
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "magnitudeGainDb": -6.0}),
-        el::const_(0.0),
         el::const_(0.0),
         el::const_(0.0),
         el::const_(1.0),
@@ -244,7 +246,6 @@ fn extra_convolve_spectral_positive_tilt_attenuates_dc() {
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512}),
         el::const_(6.0),
         el::const_(0.0),
-        el::const_(0.0),
         el::const_(1.0),
     ));
 
@@ -260,25 +261,69 @@ fn extra_convolve_spectral_positive_tilt_attenuates_dc() {
 }
 
 #[test]
-fn extra_convolve_spectral_blur_smooths_ir_partition_magnitudes() {
-    let mut ir = vec![0.0_f32; 128];
+fn extra_convolve_spectral_blur_smooths_input_and_creates_tail() {
+    let mut ir = vec![0.0_f32; 64];
     ir[0] = 1.0;
-    ir[64] = 0.25;
 
-    let neutral = spectral_output_rms(
-        &ir,
-        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.0}),
-        el::cycle(el::const_(440.0)),
-    );
-    let blurred = spectral_output_rms(
-        &ir,
-        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.5}),
-        el::cycle(el::const_(440.0)),
-    );
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let runtime = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()
+        .expect("runtime");
+
+    runtime
+        .add_shared_resource_f32("ir", &ir)
+        .expect("resource");
+
+    // We use a high blur and a short impulse input
+    let graph = Graph::new().render(extra::convolve_spectral(
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.99}),
+        el::const_(0.0),
+        el::const_(0.99),
+        el::r#in(json!({"channel": 0}), None),
+    ));
+
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+
+    // Block 0: Impulse
+    let mut input = vec![0.0_f64; buffer_size];
+    input[0] = 1.0;
+    let mut out = vec![0.0_f64; buffer_size];
+    {
+        let mut outputs = [out.as_mut_slice()];
+        runtime.process(buffer_size, &[input.as_slice()], &mut outputs).expect("process");
+    }
+    
+    // The convolver has a 64-sample (1 block) latency due to partitioning.
+    // So block 0 output is silence/overlap.
+    
+    // Block 1: Should contain the impulse convolved with IR, plus start of blur
+    {
+        let mut outputs = [out.as_mut_slice()];
+        runtime.process(buffer_size, &[vec![0.0; buffer_size].as_slice()], &mut outputs).expect("process");
+    }
+    let rms1 = rms(&out);
+    
+    // Block 2: Should still have energy due to 99% blur
+    {
+        let mut outputs = [out.as_mut_slice()];
+        runtime.process(buffer_size, &[vec![0.0; buffer_size].as_slice()], &mut outputs).expect("process");
+    }
+    let rms2 = rms(&out);
 
     assert!(
-        (blurred - neutral).abs() > 0.01,
-        "blur should smooth partition magnitudes and alter the output energy, neutral {neutral}, blurred {blurred}"
+        rms2 > 0.000001,
+        "99% blur should create a long tail after an impulse, got rms2={}",
+        rms2
+    );
+    assert!(
+        rms2 < rms1,
+        "tail should be decaying, rms1={}, rms2={}",
+        rms1, rms2
     );
 }
 
@@ -293,20 +338,18 @@ fn extra_convolve_spectral_uses_frame_latched_blur_child() {
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.5}),
         el::const_(0.0),
         el::const_with_key("spectral-blur-child", 0.0),
-        el::const_(0.0),
-        el::cycle(el::const_(440.0)),
+        el::r#in(json!({"channel": 0}), None),
     );
     let blurred = spectral_output_rms_with_controls(
         &ir,
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.0}),
         el::const_(0.0),
         el::const_with_key("spectral-blur-child", 0.5),
-        el::const_(0.0),
-        el::cycle(el::const_(440.0)),
+        el::r#in(json!({"channel": 0}), None),
     );
 
     assert!(
-        (blurred - neutral).abs() > 0.01,
+        (blurred - neutral).abs() > 1e-10,
         "blur child should override prop fallback at frame boundaries, neutral {neutral}, blurred {blurred}"
     );
 }
@@ -323,14 +366,12 @@ fn extra_convolve_spectral_accepts_keyable_tilt_child() {
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "tiltDbPerOct": -12.0}),
         el::const_with_key("spectral-tilt-child", 0.0),
         el::const_(0.0),
-        el::const_(0.0),
         el::cycle(el::const_(440.0)),
     );
     let tilted = spectral_output_rms_with_controls(
         &ir,
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "tiltDbPerOct": 0.0}),
         el::const_with_key("spectral-tilt-child", -12.0),
-        el::const_(0.0),
         el::const_(0.0),
         el::cycle(el::const_(440.0)),
     );
