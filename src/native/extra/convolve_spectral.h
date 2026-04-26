@@ -13,6 +13,7 @@
 #include <elem/GraphNode.h>
 #include <elem/SingleWriterSingleReaderQueue.h>
 
+#include "../third_party/framelib/FrameLib_Dependencies/Interpolation.hpp"
 #include "../third_party/framelib/FrameLib_Dependencies/SpectralFunctions.hpp"
 #include "../third_party/framelib/FrameLib_Dependencies/SpectralProcessor.hpp"
 #include "../third_party/framelib/FrameLib_Dependencies/tlsf/tlsf.h"
@@ -41,6 +42,38 @@ namespace elem
 
         std::vector<T> real;
         std::vector<T> imag;
+    };
+
+    template <typename T>
+    struct FrameLibMagnitudeMovingAverage {
+        explicit FrameLibMagnitudeMovingAverage(size_t size = 0)
+            : average(size, T(0))
+        {}
+
+        void reset()
+        {
+            std::fill(average.begin(), average.end(), T(0));
+            initialized = false;
+        }
+
+        T process(size_t bin, T input, T alpha)
+        {
+            if (!initialized) {
+                average[bin] = input;
+                return input;
+            }
+
+            average[bin] = linear_interp<T>()(alpha, average[bin], input);
+            return average[bin];
+        }
+
+        void finishFrame()
+        {
+            initialized = true;
+        }
+
+        std::vector<T> average;
+        bool initialized{false};
     };
 
     struct FrameLibTlsfAllocator {
@@ -105,7 +138,9 @@ namespace elem
             , blockOutput(partSize, T(0))
             , currentInput(spectrumSize)
             , accum(spectrumSize)
+            , processedIr(spectrumSize)
             , multiplyTemp(spectrumSize)
+            , magnitudeAverage(spectrumSize)
         {
             auto const safeIrSize = std::max<size_t>(1, ir.size());
             partitionCount = (safeIrSize + partSize - 1) / partSize;
@@ -131,7 +166,7 @@ namespace elem
             }
         }
 
-        void process(T const* input, T* output, size_t count)
+        void process(T const* input, T* output, size_t count, T gain, T tiltDb, T blurAmount)
         {
             for (size_t i = 0; i < count; ++i) {
                 output[i] = blockOutput[outputRead++];
@@ -140,13 +175,13 @@ namespace elem
                 inputBlock[inputFill++] = std::isfinite(static_cast<double>(sample)) ? sample : T(0);
 
                 if (inputFill == partSize) {
-                    processPartition();
+                    processPartition(gain, tiltDb, blurAmount);
                 }
             }
         }
 
     private:
-        void processPartition()
+        void processPartition(T gain, T tiltDb, T blurAmount)
         {
             std::fill(inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), inputBlock.end(), T(0));
 
@@ -160,12 +195,16 @@ namespace elem
             auto accumSplit = accum.split();
             auto tempSplit = multiplyTemp.split();
             auto const scale = T(0.25) / static_cast<T>(fftSize);
+            auto const blurAlpha = movingAverageAlpha(blurAmount);
+            magnitudeAverage.reset();
 
             for (size_t partition = 0; partition < partitionCount; ++partition) {
                 auto const inputIndex = (writeIndex + partitionCount - partition) % partitionCount;
                 auto inputSplit = inputSpectra[inputIndex].split();
                 auto irSplit = irSpectra[partition].split();
-                ir_convolve_real(&tempSplit, &inputSplit, &irSplit, fftSize, scale);
+                auto processedIrSplit = processedIr.split();
+                processIrSpectrum(processedIrSplit, irSplit, gain, tiltDb, blurAlpha);
+                ir_convolve_real(&tempSplit, &inputSplit, &processedIrSplit, fftSize, scale);
 
                 for (size_t bin = 0; bin < spectrumSize; ++bin) {
                     accum.real[bin] += multiplyTemp.real[bin];
@@ -185,6 +224,51 @@ namespace elem
             inputFill = 0;
             outputRead = 0;
             writeIndex = (writeIndex + 1) % partitionCount;
+        }
+
+        void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha)
+        {
+            for (size_t bin = 0; bin < spectrumSize; ++bin) {
+                auto const real = static_cast<double>(input.realp[bin]);
+                auto const imag = static_cast<double>(input.imagp[bin]);
+                auto const magnitude = std::sqrt(real * real + imag * imag);
+                auto const smoothedMagnitude = static_cast<double>(magnitudeAverage.process(bin, static_cast<T>(magnitude), blurAlpha));
+
+                auto const binGain = spectralBinGain(bin, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
+                auto const scaledMagnitude = smoothedMagnitude * binGain;
+                auto const phaseScale = magnitude > 1.0e-20 ? scaledMagnitude / magnitude : 0.0;
+                output.realp[bin] = static_cast<T>(real * phaseScale);
+                output.imagp[bin] = static_cast<T>(imag * phaseScale);
+            }
+
+            magnitudeAverage.finishFrame();
+        }
+
+        static T movingAverageAlpha(T blurAmount)
+        {
+            auto const clamped = std::max(T(0), std::min(T(0.999), blurAmount));
+            return T(1) - clamped;
+        }
+
+        static double dbToGain(double db)
+        {
+            return std::pow(10.0, db / 20.0);
+        }
+
+        static double spectralBinGain(size_t bin, size_t complexSize, double tiltDb)
+        {
+            if (std::abs(tiltDb) < 1.0e-12 || bin == 0 || complexSize <= 1) {
+                return 1.0;
+            }
+
+            auto const normalized = static_cast<double>(bin) / static_cast<double>(complexSize - 1);
+            if (tiltDb > 0.0) {
+                auto const octavesFromNyquist = std::log2(std::max(normalized, 1.0 / static_cast<double>(complexSize - 1)));
+                return dbToGain(tiltDb * octavesFromNyquist);
+            }
+
+            auto const octavesFromLowestBin = std::log2(std::max(1.0, static_cast<double>(bin)));
+            return dbToGain(tiltDb * octavesFromLowestBin);
         }
 
         static size_t requiredPoolBytes(size_t fftSize)
@@ -209,7 +293,9 @@ namespace elem
         std::vector<T> blockOutput;
         FrameLibSplitBuffer<T> currentInput;
         FrameLibSplitBuffer<T> accum;
+        FrameLibSplitBuffer<T> processedIr;
         FrameLibSplitBuffer<T> multiplyTemp;
+        FrameLibMagnitudeMovingAverage<T> magnitudeAverage;
         std::vector<FrameLibSplitBuffer<T>> irSpectra;
         std::vector<FrameLibSplitBuffer<T>> inputSpectra;
     };
@@ -278,7 +364,7 @@ namespace elem
                 }
 
                 magnitudeGain.store(dbToGain(parsed), std::memory_order_relaxed);
-                return rebuildConvolver(resources);
+                return elem::ReturnCode::Ok();
             }
 
             if (key == "tiltDbPerOct") {
@@ -292,7 +378,7 @@ namespace elem
                 }
 
                 tiltDbPerOct.store(parsed, std::memory_order_relaxed);
-                return rebuildConvolver(resources);
+                return elem::ReturnCode::Ok();
             }
 
             if (key == "blur") {
@@ -306,7 +392,7 @@ namespace elem
                 }
 
                 blur.store(parsed, std::memory_order_relaxed);
-                return rebuildConvolver(resources);
+                return elem::ReturnCode::Ok();
             }
 
             return GraphNode<FloatType>::setProperty(key, val);
@@ -337,7 +423,10 @@ namespace elem
                     scratchIn[i] = std::isfinite(source) ? source : 0.0;
                 }
 
-                convolver->process(scratchIn.data(), scratchOut.data(), numSamples);
+                convolver->process(scratchIn.data(), scratchOut.data(), numSamples,
+                                   magnitudeGain.load(std::memory_order_relaxed),
+                                   tiltDbPerOct.load(std::memory_order_relaxed),
+                                   blur.load(std::memory_order_relaxed));
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = scratchOut[i];
@@ -355,7 +444,10 @@ namespace elem
                     scratchDataIn[i] = std::isfinite(source) ? source : 0.0;
                 }
 
-                convolver->process(scratchDataIn, scratchDataOut, numSamples);
+                convolver->process(scratchDataIn, scratchDataOut, numSamples,
+                                   magnitudeGain.load(std::memory_order_relaxed),
+                                   tiltDbPerOct.load(std::memory_order_relaxed),
+                                   blur.load(std::memory_order_relaxed));
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = static_cast<double>(scratchDataOut[i]);
@@ -399,56 +491,11 @@ namespace elem
             }
 
             auto const partSize = std::max<size_t>(16, partitionSize.load(std::memory_order_relaxed));
-            auto const fftSize = partSize * 2;
-            auto const complexSize = fftSize >> 1;
             auto const partitionCount = (irLen + partSize - 1) / partSize;
-            auto const gain = magnitudeGain.load(std::memory_order_relaxed);
-            auto const tilt = tiltDbPerOct.load(std::memory_order_relaxed);
-            auto const blurAmount = blur.load(std::memory_order_relaxed);
-
-            spectral_processor<double> processor(fftSize);
-            auto const fftLog2 = spectral_processor<double>::calc_fft_size_log2(fftSize);
-
-            std::vector<double> frame(fftSize, 0.0);
-            FrameLibSplitBuffer<double> spectrum(complexSize);
-            std::vector<double> previousMagnitude(complexSize, 0.0);
             std::vector<double> prepared(partitionCount * partSize, 0.0);
 
-            for (size_t partition = 0; partition < partitionCount; ++partition) {
-                std::fill(frame.begin(), frame.end(), 0.0f);
-                auto const offset = partition * partSize;
-                auto const copyCount = std::min(partSize, irLen - offset);
-                for (size_t i = 0; i < copyCount; ++i) {
-                    frame[i] = static_cast<double>(bufferView.data()[offset + i]);
-                }
-
-                auto split = spectrum.split();
-                processor.rfft(split, frame.data(), fftSize, fftLog2);
-
-                for (size_t bin = 0; bin < complexSize; ++bin) {
-                    auto const real = static_cast<double>(spectrum.real[bin]);
-                    auto const imag = static_cast<double>(spectrum.imag[bin]);
-                    auto magnitude = std::sqrt(real * real + imag * imag);
-
-                    if (blurAmount > 0.0 && partition > 0) {
-                        magnitude = (1.0 - blurAmount) * magnitude + blurAmount * previousMagnitude[bin];
-                    }
-
-                    previousMagnitude[bin] = magnitude;
-
-                    auto const binGain = spectralBinGain(bin, complexSize, tilt) * gain;
-                    auto const scaledMagnitude = magnitude * binGain;
-                    auto const phaseScale = magnitude > 1.0e-20 ? scaledMagnitude / magnitude : 0.0;
-                    spectrum.real[bin] = real * phaseScale;
-                    spectrum.imag[bin] = imag * phaseScale;
-                }
-
-                processor.rifft(frame.data(), split, fftLog2);
-                auto const scale = 0.5 / static_cast<double>(fftSize);
-                for (auto& sample : frame) {
-                    sample *= scale;
-                }
-                std::copy_n(frame.data(), copyCount, prepared.data() + offset);
+            for (size_t i = 0; i < irLen; ++i) {
+                prepared[i] = static_cast<double>(bufferView.data()[i]);
             }
 
             return prepared;
@@ -466,22 +513,6 @@ namespace elem
         static double dbToGain(double db)
         {
             return std::pow(10.0, db / 20.0);
-        }
-
-        static double spectralBinGain(size_t bin, size_t complexSize, double tiltDb)
-        {
-            if (std::abs(tiltDb) < 1.0e-12 || bin == 0 || complexSize <= 1) {
-                return 1.0;
-            }
-
-            auto const normalized = static_cast<double>(bin) / static_cast<double>(complexSize - 1);
-            if (tiltDb > 0.0) {
-                auto const octavesFromNyquist = std::log2(std::max(normalized, 1.0 / static_cast<double>(complexSize - 1)));
-                return dbToGain(tiltDb * octavesFromNyquist);
-            }
-
-            auto const octavesFromLowestBin = std::log2(std::max(1.0, static_cast<double>(bin)));
-            return dbToGain(tiltDb * octavesFromLowestBin);
         }
 
         std::string path;
