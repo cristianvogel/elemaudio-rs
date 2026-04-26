@@ -173,6 +173,11 @@ cargo doc --open
 - Elementary: https://www.elementary.audio/
 - Keys guide: https://www.elementary.audio/docs/guides/Understanding_Keys
 
+### Internal Technical Docs
+
+- [FrameLib FFT Integration](docs/FrameLib-FFT-Integration.md) - Details on block sizes, latency, and spectral format.
+- [Spectral Convolver Design](docs/Spectral-Convolver-FrameLib-Design.md) - Design notes for the `convolveSpectral` node.
+
 Development notes live under `docs/`.
 
 ## Notes

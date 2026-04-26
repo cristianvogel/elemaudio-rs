@@ -141,7 +141,7 @@ namespace elem
             , accum(spectrumSize)
             , processedIr(spectrumSize)
             , multiplyTemp(spectrumSize)
-            , magnitudeAverage(spectrumSize + 1)
+            , magnitudeAverage(spectrumSize + 2)
         {
             auto const safeIrSize = std::max<size_t>(1, ir.size());
             partitionCount = (safeIrSize + partSize - 1) / partSize;
@@ -172,9 +172,22 @@ namespace elem
             magnitudeAverage.reset();
         }
 
-        void process(T const* input, T const* tiltInput, T const* blurInput, T* output, size_t count, T gain)
+        void process(T const* input, T const* tiltInput, T const* blurInput, T* output, size_t count, T gain, SingleWriterSingleReaderQueue<std::shared_ptr<FrameLibSpectralConvolver<T>>>& queue)
         {
             for (size_t i = 0; i < count; ++i) {
+                if (inputFill == 0 && queue.size() > 0) {
+                    std::shared_ptr<FrameLibSpectralConvolver<T>> next;
+                    while (queue.size() > 0) {
+                        queue.pop(next);
+                    }
+
+                    if (next) {
+                        // Carry over state if possible, or just replace
+                        // To avoid dirtying phase, we only swap when inputFill is 0 (start of a partition)
+                        *this = std::move(*next);
+                    }
+                }
+
                 output[i] = blockOutput[outputRead++];
 
                 auto const sample = input[i];
@@ -249,9 +262,21 @@ namespace elem
         void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha, size_t partition)
         {
             // Bin 0 in FrameLib's real FFT format contains DC in the real part and Nyquist in the imaginary part.
-            // We pass them through with the overall gain applied, but without tilt or blurring.
-            output.realp[0] = input.realp[0] * gain;
-            output.imagp[0] = input.imagp[0] * gain;
+            // We apply the overall gain, tilt (for Nyquist), and blur (smoothing) to both.
+
+            // Handle DC (Real part of bin 0)
+            // DC is conceptually at "frequency 0". We apply the tilt calculated for bin 0.
+            auto const dcReal = static_cast<double>(input.realp[0]);
+            auto const smoothedDc = static_cast<double>(magnitudeAverage.process(spectrumSize, static_cast<T>(std::abs(dcReal)), blurAlpha));
+            auto const dcGain = spectralBinGain(0, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
+            output.realp[0] = static_cast<T>(std::copysign(smoothedDc * dcGain, dcReal));
+
+            // Handle Nyquist (Imaginary part of bin 0)
+            // Nyquist is exactly at bin = spectrumSize
+            auto const nyqReal = static_cast<double>(input.imagp[0]);
+            auto const smoothedNyq = static_cast<double>(magnitudeAverage.process(spectrumSize + 1, static_cast<T>(std::abs(nyqReal)), blurAlpha));
+            auto const nyqGain = spectralBinGain(spectrumSize, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
+            output.imagp[0] = static_cast<T>(std::copysign(smoothedNyq * nyqGain, nyqReal));
 
             for (size_t bin = 1; bin < spectrumSize; ++bin) {
                 auto const real = static_cast<double>(input.realp[bin]);
@@ -268,19 +293,6 @@ namespace elem
             }
 
             magnitudeAverage.finishFrame();
-        }
-
-        static double randomPhase(size_t partition, size_t bin)
-        {
-            auto x = static_cast<uint64_t>(partition + 1) * 0x9E3779B97F4A7C15ULL;
-            x ^= static_cast<uint64_t>(bin + 1) * 0xBF58476D1CE4E5B9ULL;
-            x ^= x >> 30;
-            x *= 0xBF58476D1CE4E5B9ULL;
-            x ^= x >> 27;
-            x *= 0x94D049BB133111EBULL;
-            x ^= x >> 31;
-            auto const unit = static_cast<double>(x >> 11) * (1.0 / 9007199254740992.0);
-            return unit * 6.28318530717958647692;
         }
 
         static T movingAverageAlpha(T blurAmount)
@@ -300,25 +312,21 @@ namespace elem
                 return 1.0;
             }
 
-            // Note: bin 0 (DC/Nyquist) is handled outside this function in processIrSpectrum
-            if (bin == 0) {
-                return 1.0;
-            }
-
-            auto const normalized = static_cast<double>(bin) / static_cast<double>(maxBin);
-            if (tiltDb > 0.0) {
-                // High-shelf/Tilt up: higher bins get more gain.
-                // At Nyquist (bin == maxBin, normalized == 1.0), octavesFromNyquist is 0, gain is 1.0 (0dB).
-                // Lower bins get less gain.
-                auto const octavesFromNyquist = std::log2(std::max(normalized, 1.0 / static_cast<double>(maxBin)));
-                return dbToGain(tiltDb * octavesFromNyquist);
-            }
-
-            // Tilt down: lower bins get more gain.
-            // At bin 1 (lowest non-DC bin), octavesFromLowestBin is 0, gain is 1.0 (0dB).
-            // Higher bins get less gain (tiltDb is negative).
-            auto const octavesFromLowestBin = std::log2(std::max(1.0, static_cast<double>(bin)));
-            return dbToGain(tiltDb * octavesFromLowestBin);
+            // We use a fixed pivot at the geometric center of the spectrum (in frequency).
+            // This ensures +tilt and -tilt are symmetric and continuous.
+            // maxBin is typically fftSize / 2, representing Nyquist.
+            // Bin 1 is the lowest frequency (excluding DC).
+            // Pivot is sqrt(1 * maxBin) in bin-space.
+            auto const pivotBin = std::sqrt(static_cast<double>(maxBin));
+            
+            // We use (bin + 1) to avoid log2(0) and to provide a smoother transition from DC.
+            // Since DC is effectively bin 0, we can think of the spectrum starting at bin 0.
+            // Using a small offset for the log helps stabilize the very low end.
+            auto const octavesFromPivot = std::log2((static_cast<double>(bin) + 1.0) / (pivotBin + 1.0));
+            
+            // We clamp the gain to a reasonable range (e.g. +/- 40dB) to prevent "explosion"
+            // while still allowing significant spectral shaping.
+            return dbToGain(std::clamp(tiltDb * octavesFromPivot, -40.0, 40.0));
         }
 
         static size_t requiredPoolBytes(size_t fftSize)
@@ -422,11 +430,18 @@ namespace elem
             auto numChannels = ctx.numInputChannels;
             auto numSamples = ctx.numSamples;
 
-            while (convolverQueue.size() > 0) {
-                convolverQueue.pop(convolver);
+            if (numChannels == 0) {
+                std::fill_n(outputData, numSamples, FloatType(0));
+                return;
             }
 
-            if (numChannels == 0 || convolver == nullptr) {
+            if (!convolver) {
+                while (convolverQueue.size() > 0) {
+                    convolverQueue.pop(convolver);
+                }
+            }
+
+            if (!convolver) {
                 std::fill_n(outputData, numSamples, FloatType(0));
                 return;
             }
@@ -456,7 +471,7 @@ namespace elem
                 }
 
                 convolver->process(scratchIn.data(), tiltData, blurData, scratchOut.data(), numSamples,
-                                   magnitudeGain.load(std::memory_order_relaxed));
+                                   magnitudeGain.load(std::memory_order_relaxed), convolverQueue);
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = scratchOut[i];
@@ -474,7 +489,7 @@ namespace elem
                 }
 
                 convolver->process(scratchDataIn, tiltInput, blurInput, scratchDataOut, numSamples,
-                                   magnitudeGain.load(std::memory_order_relaxed));
+                                   magnitudeGain.load(std::memory_order_relaxed), convolverQueue);
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = static_cast<double>(scratchDataOut[i]);
