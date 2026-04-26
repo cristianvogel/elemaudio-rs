@@ -245,7 +245,8 @@ namespace elem
             auto const dc = static_cast<double>(input.realp[0]);
             auto const dcMagnitude = std::abs(dc);
             auto const smoothedDc = static_cast<double>(magnitudeAverage.process(0, static_cast<T>(dcMagnitude), blurAlpha));
-            output.realp[0] = static_cast<T>((dc < 0.0 ? -smoothedDc : smoothedDc) * static_cast<double>(gain));
+            auto const dcGain = spectralBinGain(1, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
+            output.realp[0] = static_cast<T>((dc < 0.0 ? -smoothedDc : smoothedDc) * dcGain);
 
             auto const nyquist = static_cast<double>(input.imagp[0]);
             auto const nyquistMagnitude = std::abs(nyquist);

@@ -218,6 +218,39 @@ fn extra_convolve_spectral_magnitude_gain_scales_ir_gain() {
 }
 
 #[test]
+fn extra_convolve_spectral_positive_tilt_attenuates_dc() {
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let runtime = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()
+        .expect("runtime");
+
+    let ir = vec![1.0_f32, 1.0_f32];
+    runtime
+        .add_shared_resource_f32("ir", &ir)
+        .expect("resource");
+
+    let graph = Graph::new().render(extra::convolve_spectral(
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512}),
+        el::const_(6.0),
+        el::const_(0.0),
+        el::const_(1.0),
+    ));
+
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+    warm_past_root_fade(&runtime, sample_rate, buffer_size);
+
+    let last = settle_last_sample(&runtime, buffer_size, 20);
+    assert!(
+        last < 1.0,
+        "positive spectral tilt should attenuate DC/constant response, got {last}"
+    );
+}
+
+#[test]
 fn extra_convolve_spectral_blur_smooths_ir_partition_magnitudes() {
     let mut ir = vec![0.0_f32; 128];
     ir[0] = 1.0;
