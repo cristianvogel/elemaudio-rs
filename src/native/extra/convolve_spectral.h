@@ -1,31 +1,226 @@
 #pragma once
 
-#include <AudioFFT.h>
-#include <TwoStageFFTConvolver.h>
-
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
+#include <cstdlib>
 #include <cmath>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <elem/GraphNode.h>
 #include <elem/SingleWriterSingleReaderQueue.h>
 
+#include "../third_party/framelib/FrameLib_Dependencies/SpectralFunctions.hpp"
+#include "../third_party/framelib/FrameLib_Dependencies/SpectralProcessor.hpp"
+#include "../third_party/framelib/FrameLib_Dependencies/tlsf/tlsf.h"
+
 namespace elem
 {
+    template <typename T>
+    struct FrameLibSplitBuffer {
+        using Split = typename FFTTypes<T>::Split;
+
+        explicit FrameLibSplitBuffer(size_t size = 0)
+            : real(size, T(0))
+            , imag(size, T(0))
+        {}
+
+        Split split()
+        {
+            return Split { real.data(), imag.data() };
+        }
+
+        void clear()
+        {
+            std::fill(real.begin(), real.end(), T(0));
+            std::fill(imag.begin(), imag.end(), T(0));
+        }
+
+        std::vector<T> real;
+        std::vector<T> imag;
+    };
+
+    struct FrameLibTlsfAllocator {
+        struct State {
+            explicit State(size_t bytes)
+                : storage(std::malloc(bytes))
+                , size(bytes)
+                , tlsf(storage != nullptr ? tlsf_create_with_pool(storage, bytes) : nullptr)
+            {}
+
+            ~State()
+            {
+                if (tlsf != nullptr) {
+                    tlsf_destroy(tlsf);
+                }
+                std::free(storage);
+            }
+
+            void* storage{nullptr};
+            size_t size{0};
+            tlsf_t tlsf{nullptr};
+        };
+
+        explicit FrameLibTlsfAllocator(size_t bytes = defaultPoolBytes)
+            : state(std::make_shared<State>(std::max(bytes, defaultPoolBytes)))
+        {}
+
+        template <typename T>
+        T* allocate(size_t count)
+        {
+            auto* ptr = state && state->tlsf ? tlsf_memalign(state->tlsf, alignof(T), count * sizeof(T)) : nullptr;
+            return static_cast<T*>(ptr);
+        }
+
+        template <typename T>
+        void deallocate(T*& ptr)
+        {
+            if (ptr != nullptr && state && state->tlsf) {
+                tlsf_free(state->tlsf, ptr);
+                ptr = nullptr;
+            }
+        }
+
+        static constexpr size_t defaultPoolBytes = 1024 * 1024;
+        std::shared_ptr<State> state;
+    };
+
+    template <typename T>
+    struct FrameLibSpectralConvolver {
+        using Split = typename FFTTypes<T>::Split;
+
+        FrameLibSpectralConvolver(size_t partitionSize, std::vector<T> const& ir)
+            : partSize(std::max<size_t>(16, partitionSize))
+            , fftSize(partSize * 2)
+            , fftLog2(spectral_processor<T, FrameLibTlsfAllocator>::calc_fft_size_log2(fftSize))
+            , spectrumSize(fftSize >> 1)
+            , allocator(requiredPoolBytes(fftSize))
+            , processor(allocator, fftSize)
+            , inputBlock(fftSize, T(0))
+            , fftOutput(fftSize, T(0))
+            , overlap(partSize, T(0))
+            , blockOutput(partSize, T(0))
+            , currentInput(spectrumSize)
+            , accum(spectrumSize)
+            , multiplyTemp(spectrumSize)
+        {
+            auto const safeIrSize = std::max<size_t>(1, ir.size());
+            partitionCount = (safeIrSize + partSize - 1) / partSize;
+            irSpectra.reserve(partitionCount);
+            inputSpectra.reserve(partitionCount);
+
+            for (size_t i = 0; i < partitionCount; ++i) {
+                irSpectra.emplace_back(spectrumSize);
+                inputSpectra.emplace_back(spectrumSize);
+            }
+
+            std::vector<T> frame(fftSize, T(0));
+            for (size_t partition = 0; partition < partitionCount; ++partition) {
+                std::fill(frame.begin(), frame.end(), T(0));
+                auto const offset = partition * partSize;
+                auto const copyCount = offset < ir.size() ? std::min(partSize, ir.size() - offset) : size_t(0);
+                if (copyCount > 0) {
+                    std::copy_n(ir.data() + offset, copyCount, frame.data());
+                }
+
+                auto split = irSpectra[partition].split();
+                processor.rfft(split, frame.data(), fftSize, fftLog2);
+            }
+        }
+
+        void process(T const* input, T* output, size_t count)
+        {
+            for (size_t i = 0; i < count; ++i) {
+                output[i] = blockOutput[outputRead++];
+
+                auto const sample = input[i];
+                inputBlock[inputFill++] = std::isfinite(static_cast<double>(sample)) ? sample : T(0);
+
+                if (inputFill == partSize) {
+                    processPartition();
+                }
+            }
+        }
+
+    private:
+        void processPartition()
+        {
+            std::fill(inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), inputBlock.end(), T(0));
+
+            auto currentSplit = currentInput.split();
+            processor.rfft(currentSplit, inputBlock.data(), fftSize, fftLog2);
+
+            std::copy(currentInput.real.begin(), currentInput.real.end(), inputSpectra[writeIndex].real.begin());
+            std::copy(currentInput.imag.begin(), currentInput.imag.end(), inputSpectra[writeIndex].imag.begin());
+
+            accum.clear();
+            auto accumSplit = accum.split();
+            auto tempSplit = multiplyTemp.split();
+            auto const scale = T(0.25) / static_cast<T>(fftSize);
+
+            for (size_t partition = 0; partition < partitionCount; ++partition) {
+                auto const inputIndex = (writeIndex + partitionCount - partition) % partitionCount;
+                auto inputSplit = inputSpectra[inputIndex].split();
+                auto irSplit = irSpectra[partition].split();
+                ir_convolve_real(&tempSplit, &inputSplit, &irSplit, fftSize, scale);
+
+                for (size_t bin = 0; bin < spectrumSize; ++bin) {
+                    accum.real[bin] += multiplyTemp.real[bin];
+                    accum.imag[bin] += multiplyTemp.imag[bin];
+                }
+            }
+
+            processor.rifft(fftOutput.data(), accumSplit, fftLog2);
+
+            for (size_t i = 0; i < partSize; ++i) {
+                auto const wet = fftOutput[i] + overlap[i];
+                blockOutput[i] = std::isfinite(static_cast<double>(wet)) ? wet : T(0);
+                overlap[i] = fftOutput[i + partSize];
+            }
+
+            std::fill(inputBlock.begin(), inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), T(0));
+            inputFill = 0;
+            outputRead = 0;
+            writeIndex = (writeIndex + 1) % partitionCount;
+        }
+
+        static size_t requiredPoolBytes(size_t fftSize)
+        {
+            return std::max<size_t>(FrameLibTlsfAllocator::defaultPoolBytes, fftSize * 32);
+        }
+
+        size_t partSize;
+        size_t fftSize;
+        uintptr_t fftLog2;
+        size_t spectrumSize;
+        size_t partitionCount{0};
+        size_t writeIndex{0};
+        size_t inputFill{0};
+        size_t outputRead{0};
+
+        FrameLibTlsfAllocator allocator;
+        spectral_processor<T, FrameLibTlsfAllocator> processor;
+        std::vector<T> inputBlock;
+        std::vector<T> fftOutput;
+        std::vector<T> overlap;
+        std::vector<T> blockOutput;
+        FrameLibSplitBuffer<T> currentInput;
+        FrameLibSplitBuffer<T> accum;
+        FrameLibSplitBuffer<T> multiplyTemp;
+        std::vector<FrameLibSplitBuffer<T>> irSpectra;
+        std::vector<FrameLibSplitBuffer<T>> inputSpectra;
+    };
+
     template <typename FloatType>
     struct SpectralConvolutionNode : public GraphNode<FloatType> {
         SpectralConvolutionNode(NodeId id, FloatType const sr, int const blockSize)
             : GraphNode<FloatType>::GraphNode(id, sr, blockSize)
         {
-            scratchFloatIn.resize(blockSize);
-            scratchFloatOut.resize(blockSize);
-            if constexpr (std::is_same_v<FloatType, double>) {
-                scratchIn.resize(blockSize);
-                scratchOut.resize(blockSize);
-            }
+            scratchIn.resize(blockSize);
+            scratchOut.resize(blockSize);
         }
 
         int setProperty(std::string const& key, js::Value const& val, SharedResourceMap& resources) override
@@ -139,13 +334,13 @@ namespace elem
                 auto const* sourceInput = inputData[0];
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const source = static_cast<double>(sourceInput[i]);
-                    scratchFloatIn[i] = std::isfinite(source) ? static_cast<float>(source) : 0.0f;
+                    scratchIn[i] = std::isfinite(source) ? source : 0.0;
                 }
 
-                convolver->process(scratchFloatIn.data(), scratchFloatOut.data(), numSamples);
+                convolver->process(scratchIn.data(), scratchOut.data(), numSamples);
 
                 for (size_t i = 0; i < numSamples; ++i) {
-                    auto const wet = static_cast<double>(scratchFloatOut[i]);
+                    auto const wet = scratchOut[i];
                     outputData[i] = std::isfinite(wet) ? static_cast<FloatType>(wet) : FloatType(0);
                 }
             }
@@ -157,7 +352,7 @@ namespace elem
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const source = static_cast<double>(sourceInput[i]);
-                    scratchDataIn[i] = std::isfinite(source) ? static_cast<float>(source) : 0.0f;
+                    scratchDataIn[i] = std::isfinite(source) ? source : 0.0;
                 }
 
                 convolver->process(scratchDataIn, scratchDataOut, numSamples);
@@ -169,13 +364,11 @@ namespace elem
             }
         }
 
-        SingleWriterSingleReaderQueue<std::shared_ptr<fftconvolver::TwoStageFFTConvolver>> convolverQueue;
-        std::shared_ptr<fftconvolver::TwoStageFFTConvolver> convolver;
+        SingleWriterSingleReaderQueue<std::shared_ptr<FrameLibSpectralConvolver<double>>> convolverQueue;
+        std::shared_ptr<FrameLibSpectralConvolver<double>> convolver;
 
-        std::vector<float> scratchIn;
-        std::vector<float> scratchOut;
-        std::vector<float> scratchFloatIn;
-        std::vector<float> scratchFloatOut;
+        std::vector<double> scratchIn;
+        std::vector<double> scratchOut;
 
     private:
         int rebuildConvolver(SharedResourceMap& resources)
@@ -192,66 +385,69 @@ namespace elem
             auto bufferView = resource->getChannelData(0);
             auto preparedIr = prepareSpectralIr(bufferView);
 
-            auto co = std::make_shared<fftconvolver::TwoStageFFTConvolver>();
-            co->reset();
             auto const headSize = partitionSize.load(std::memory_order_relaxed);
-            auto const tailSize = std::max(headSize, tailBlockSize.load(std::memory_order_relaxed));
-            co->init(headSize, tailSize, preparedIr.data(), preparedIr.size());
+            auto co = std::make_shared<FrameLibSpectralConvolver<double>>(headSize, preparedIr);
             convolverQueue.push(std::move(co));
             return elem::ReturnCode::Ok();
         }
 
-        std::vector<float> prepareSpectralIr(BufferView<float> const& bufferView) const
+        std::vector<double> prepareSpectralIr(BufferView<float> const& bufferView) const
         {
             auto const irLen = bufferView.size();
             if (irLen == 0) {
-                return {0.0f};
+                return {0.0};
             }
 
             auto const partSize = std::max<size_t>(16, partitionSize.load(std::memory_order_relaxed));
             auto const fftSize = partSize * 2;
-            auto const complexSize = audiofft::AudioFFT::ComplexSize(fftSize);
+            auto const complexSize = fftSize >> 1;
             auto const partitionCount = (irLen + partSize - 1) / partSize;
             auto const gain = magnitudeGain.load(std::memory_order_relaxed);
             auto const tilt = tiltDbPerOct.load(std::memory_order_relaxed);
             auto const blurAmount = blur.load(std::memory_order_relaxed);
 
-            audiofft::AudioFFT fft;
-            fft.init(fftSize);
+            spectral_processor<double> processor(fftSize);
+            auto const fftLog2 = spectral_processor<double>::calc_fft_size_log2(fftSize);
 
-            std::vector<float> frame(fftSize, 0.0f);
-            std::vector<float> re(complexSize, 0.0f);
-            std::vector<float> im(complexSize, 0.0f);
-            std::vector<float> previousMagnitude(complexSize, 0.0f);
-            std::vector<float> prepared(partitionCount * partSize, 0.0f);
+            std::vector<double> frame(fftSize, 0.0);
+            FrameLibSplitBuffer<double> spectrum(complexSize);
+            std::vector<double> previousMagnitude(complexSize, 0.0);
+            std::vector<double> prepared(partitionCount * partSize, 0.0);
 
             for (size_t partition = 0; partition < partitionCount; ++partition) {
                 std::fill(frame.begin(), frame.end(), 0.0f);
                 auto const offset = partition * partSize;
                 auto const copyCount = std::min(partSize, irLen - offset);
-                std::copy_n(bufferView.data() + offset, copyCount, frame.data());
+                for (size_t i = 0; i < copyCount; ++i) {
+                    frame[i] = static_cast<double>(bufferView.data()[offset + i]);
+                }
 
-                fft.fft(frame.data(), re.data(), im.data());
+                auto split = spectrum.split();
+                processor.rfft(split, frame.data(), fftSize, fftLog2);
 
                 for (size_t bin = 0; bin < complexSize; ++bin) {
-                    auto const real = static_cast<double>(re[bin]);
-                    auto const imag = static_cast<double>(im[bin]);
+                    auto const real = static_cast<double>(spectrum.real[bin]);
+                    auto const imag = static_cast<double>(spectrum.imag[bin]);
                     auto magnitude = std::sqrt(real * real + imag * imag);
 
                     if (blurAmount > 0.0 && partition > 0) {
                         magnitude = (1.0 - blurAmount) * magnitude + blurAmount * previousMagnitude[bin];
                     }
 
-                    previousMagnitude[bin] = static_cast<float>(magnitude);
+                    previousMagnitude[bin] = magnitude;
 
                     auto const binGain = spectralBinGain(bin, complexSize, tilt) * gain;
                     auto const scaledMagnitude = magnitude * binGain;
                     auto const phaseScale = magnitude > 1.0e-20 ? scaledMagnitude / magnitude : 0.0;
-                    re[bin] = static_cast<float>(real * phaseScale);
-                    im[bin] = static_cast<float>(imag * phaseScale);
+                    spectrum.real[bin] = real * phaseScale;
+                    spectrum.imag[bin] = imag * phaseScale;
                 }
 
-                fft.ifft(frame.data(), re.data(), im.data());
+                processor.rifft(frame.data(), split, fftLog2);
+                auto const scale = 0.5 / static_cast<double>(fftSize);
+                for (auto& sample : frame) {
+                    sample *= scale;
+                }
                 std::copy_n(frame.data(), copyCount, prepared.data() + offset);
             }
 
@@ -279,8 +475,13 @@ namespace elem
             }
 
             auto const normalized = static_cast<double>(bin) / static_cast<double>(complexSize - 1);
-            auto const octavesFromNyquist = std::log2(std::max(normalized, 1.0 / static_cast<double>(complexSize - 1)));
-            return dbToGain(tiltDb * octavesFromNyquist);
+            if (tiltDb > 0.0) {
+                auto const octavesFromNyquist = std::log2(std::max(normalized, 1.0 / static_cast<double>(complexSize - 1)));
+                return dbToGain(tiltDb * octavesFromNyquist);
+            }
+
+            auto const octavesFromLowestBin = std::log2(std::max(1.0, static_cast<double>(bin)));
+            return dbToGain(tiltDb * octavesFromLowestBin);
         }
 
         std::string path;

@@ -10,6 +10,12 @@ fn main() {
         format!("{manifest_dir}/src/vendor/elementary/runtime/elem/third-party");
     let vendor_fft_convolver = format!("{manifest_dir}/src/vendor/elementary/wasm/FFTConvolver");
     let native_runtime = format!("{manifest_dir}/src/native");
+    let framelib_fft = format!(
+        "{manifest_dir}/src/native/third_party/framelib/FrameLib_Dependencies/HISSTools_FFT"
+    );
+    let framelib_tlsf = format!(
+        "{manifest_dir}/src/native/third_party/framelib/FrameLib_Dependencies/tlsf"
+    );
 
     println!("cargo:rerun-if-changed=src/ffi/elementary_bridge.cpp");
     println!("cargo:rerun-if-changed=src/vendor/elementary/runtime");
@@ -24,10 +30,12 @@ fn main() {
         .file(format!("{vendor_fft_convolver}/Utilities.cpp"))
         .file(format!("{vendor_fft_convolver}/FFTConvolver.cpp"))
         .file(format!("{vendor_fft_convolver}/TwoStageFFTConvolver.cpp"))
+        .file(format!("{framelib_fft}/HISSTools_FFT.cpp"))
         .include(&vendor_runtime)
         .include(&vendor_third_party)
         .include(&vendor_fft_convolver)
         .include(&native_runtime)
+        .define("NO_NATIVE_FFT", None)
         .flag_if_supported("-w") // stop vendor/bridge compilation emitting tonnes of warning spam
         .flag_if_supported("-std=c++17");
 
@@ -36,4 +44,9 @@ fn main() {
     }
 
     build.compile("elementary_bridge");
+
+    cc::Build::new()
+        .file(format!("{framelib_tlsf}/tlsf.c"))
+        .flag_if_supported("-w")
+        .compile("framelib_tlsf");
 }

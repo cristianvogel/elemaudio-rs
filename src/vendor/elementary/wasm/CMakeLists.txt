@@ -9,7 +9,9 @@ add_executable(${TargetName}
   ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver/TwoStageFFTConvolver.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver/FFTConvolver.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver/AudioFFT.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver/Utilities.cpp)
+  ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver/Utilities.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../native/third_party/framelib/FrameLib_Dependencies/HISSTools_FFT/HISSTools_FFT.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../native/third_party/framelib/FrameLib_Dependencies/tlsf/tlsf.c)
 
 target_include_directories(${TargetName} PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/FFTConvolver
@@ -17,6 +19,9 @@ target_include_directories(${TargetName} PRIVATE
 
 target_compile_features(${TargetName} PRIVATE
   cxx_std_17)
+
+target_compile_definitions(${TargetName} PRIVATE
+  NO_NATIVE_FFT)
 
 target_link_libraries(${TargetName} PRIVATE
   elem::runtime)

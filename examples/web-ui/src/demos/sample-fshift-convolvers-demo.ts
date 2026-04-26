@@ -247,7 +247,7 @@ function updateIrToggleLabel() {
 }
 
 async function updateBlend() {
-    const blend = Number(blendSlider.value) / 100;
+    const blend = Number(blendSlider.value) ;
     blendValue.textContent = `${Math.round(blend * 100)}%`;
 
     if (renderer && audioContext?.state === "running") {
@@ -519,8 +519,6 @@ async function renderCurrentGraph() {
 
     const rate = Number(rateSlider.value);
     rateValue.textContent = `${rate.toFixed(2)}x`;
-    status.textContent = isStopped ? "Audio stopped" : (sampleLoaded ? "Playing sample" : "Loading sample");
-
     status.textContent = JSON.stringify( await renderer.render(...buildGraph(rate)));
 }
 
