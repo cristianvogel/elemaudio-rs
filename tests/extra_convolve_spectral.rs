@@ -29,6 +29,16 @@ fn settle_last_sample(runtime: &Runtime, size: usize, blocks: usize) -> f64 {
 }
 
 fn spectral_output_rms(ir: &[f32], props: serde_json::Value, source: Node) -> f64 {
+    let output = convolver_output(ir, props, source, true);
+    rms(&output)
+}
+
+fn rms(samples: &[f64]) -> f64 {
+    let sum_squares = samples.iter().map(|sample| sample * sample).sum::<f64>();
+    (sum_squares / samples.len() as f64).sqrt()
+}
+
+fn convolver_output(ir: &[f32], props: serde_json::Value, source: Node, spectral: bool) -> Vec<f64> {
     let sample_rate = 48_000.0;
     let buffer_size = 64;
     let runtime = Runtime::new()
@@ -41,26 +51,76 @@ fn spectral_output_rms(ir: &[f32], props: serde_json::Value, source: Node) -> f6
         .add_shared_resource_f32("ir", ir)
         .expect("resource");
 
-    let graph = Graph::new().render(extra::convolve_spectral(props, source));
+    let graph = if spectral {
+        Graph::new().render(extra::convolve_spectral(props, source))
+    } else {
+        Graph::new().render(extra::convolve(props, source))
+    };
 
     let mounted = graph.mount().expect("mount");
     runtime.apply_instructions(mounted.batch()).expect("apply");
     warm_past_root_fade(&runtime, sample_rate, buffer_size);
 
-    let mut sum_squares = 0.0;
-    let mut samples = 0;
+    let mut output = Vec::with_capacity(buffer_size * 32);
     for _ in 0..32 {
         let mut out = vec![0.0_f64; buffer_size];
         let mut outputs = [out.as_mut_slice()];
         runtime.process(buffer_size, &[], &mut outputs).expect("process");
-
-        for sample in out {
-            sum_squares += sample * sample;
-            samples += 1;
-        }
+        output.extend(out);
     }
 
-    (sum_squares / samples as f64).sqrt()
+    output
+}
+
+fn spectral_impulse_response(ir: &[f32], props: serde_json::Value, blocks: usize) -> Vec<f64> {
+    let sample_rate = 48_000.0;
+    let buffer_size = 64;
+    let runtime = Runtime::new()
+        .sample_rate(sample_rate)
+        .buffer_size(buffer_size)
+        .call()
+        .expect("runtime");
+
+    runtime
+        .add_shared_resource_f32("ir", ir)
+        .expect("resource");
+
+    let graph = Graph::new().render(extra::convolve_spectral(
+        props,
+        el::r#in(json!({"channel": 0}), None),
+    ));
+
+    let mounted = graph.mount().expect("mount");
+    runtime.apply_instructions(mounted.batch()).expect("apply");
+
+    let mut warm_remaining = ((sample_rate * 0.040).ceil() as usize).max(buffer_size);
+    while warm_remaining > 0 {
+        let this_block = warm_remaining.min(buffer_size);
+        let input = vec![0.0_f64; this_block];
+        let mut out = vec![0.0_f64; this_block];
+        let mut outputs = [out.as_mut_slice()];
+        runtime
+            .process(this_block, &[input.as_slice()], &mut outputs)
+            .expect("warm process");
+        warm_remaining -= this_block;
+    }
+
+    let mut output = Vec::with_capacity(buffer_size * blocks);
+    for block in 0..blocks {
+        let mut input = vec![0.0_f64; buffer_size];
+        if block == 0 {
+            input[0] = 1.0;
+        }
+
+        let mut out = vec![0.0_f64; buffer_size];
+        let mut outputs = [out.as_mut_slice()];
+        runtime
+            .process(buffer_size, &[input.as_slice()], &mut outputs)
+            .expect("process");
+        output.extend(out);
+    }
+
+    output
 }
 
 #[test]
@@ -146,5 +206,67 @@ fn extra_convolve_spectral_blur_smooths_ir_partition_magnitudes() {
     assert!(
         (blurred - neutral).abs() > 0.01,
         "blur should smooth partition magnitudes and alter the output energy, neutral {neutral}, blurred {blurred}"
+    );
+}
+
+#[test]
+fn extra_convolve_spectral_neutral_impulse_response_is_clean_delayed_fir() {
+    let mut ir = vec![0.0_f32; 192];
+    ir[0] = 0.7;
+    ir[17] = -0.3;
+    ir[64] = 0.2;
+    ir[129] = -0.1;
+
+    let output = spectral_impulse_response(
+        &ir,
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512}),
+        5,
+    );
+
+    let mut expected = vec![0.0; output.len()];
+    for (i, sample) in ir.iter().enumerate() {
+        expected[64 + i] = f64::from(*sample);
+    }
+
+    let diff = output.iter().zip(expected.iter()).map(|(a, b)| a - b).collect::<Vec<_>>();
+
+    assert!(
+        rms(&diff) < 1e-9,
+        "neutral spectral convolver should reproduce the delayed FIR impulse response, diff rms {}",
+        rms(&diff)
+    );
+}
+
+#[test]
+fn extra_convolve_spectral_randomize_phase_is_opt_in() {
+    let mut ir = vec![0.0_f32; 128];
+    ir[0] = 1.0;
+    ir[9] = 0.5;
+    ir[64] = -0.25;
+
+    let source = el::cycle(el::const_(440.0));
+    let preserved = convolver_output(
+        &ir,
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512}),
+        source.clone(),
+        true,
+    );
+    let randomized = convolver_output(
+        &ir,
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "randomizePhase": true}),
+        source,
+        true,
+    );
+
+    let diff = preserved
+        .iter()
+        .zip(randomized.iter())
+        .map(|(a, b)| a - b)
+        .collect::<Vec<_>>();
+
+    assert!(
+        rms(&diff) > 0.01,
+        "randomizePhase should audibly alter non-DC spectral phase, diff rms {}",
+        rms(&diff)
     );
 }
