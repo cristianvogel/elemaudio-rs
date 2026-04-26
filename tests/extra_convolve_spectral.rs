@@ -260,72 +260,12 @@ fn extra_convolve_spectral_positive_tilt_attenuates_dc() {
     );
 }
 
-#[test]
-fn extra_convolve_spectral_blur_smooths_input_and_creates_tail() {
-    let mut ir = vec![0.0_f32; 64];
-    ir[0] = 1.0;
-
-    let sample_rate = 48_000.0;
-    let buffer_size = 64;
-    let runtime = Runtime::new()
-        .sample_rate(sample_rate)
-        .buffer_size(buffer_size)
-        .call()
-        .expect("runtime");
-
-    runtime
-        .add_shared_resource_f32("ir", &ir)
-        .expect("resource");
-
-    // We use a high blur and a short impulse input
-    let graph = Graph::new().render(extra::convolve_spectral(
-        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.99}),
-        el::const_(0.0),
-        el::const_(0.99),
-        el::r#in(json!({"channel": 0}), None),
-    ));
-
-    let mounted = graph.mount().expect("mount");
-    runtime.apply_instructions(mounted.batch()).expect("apply");
-    warm_past_root_fade(&runtime, sample_rate, buffer_size);
-
-    // Block 0: Impulse
-    let mut input = vec![0.0_f64; buffer_size];
-    input[0] = 1.0;
-    let mut out = vec![0.0_f64; buffer_size];
-    {
-        let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[input.as_slice()], &mut outputs).expect("process");
-    }
-    
-    // The convolver has a 64-sample (1 block) latency due to partitioning.
-    // So block 0 output is silence/overlap.
-    
-    // Block 1: Should contain the impulse convolved with IR, plus start of blur
-    {
-        let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[vec![0.0; buffer_size].as_slice()], &mut outputs).expect("process");
-    }
-    let rms1 = rms(&out);
-    
-    // Block 2: Should still have energy due to 99% blur
-    {
-        let mut outputs = [out.as_mut_slice()];
-        runtime.process(buffer_size, &[vec![0.0; buffer_size].as_slice()], &mut outputs).expect("process");
-    }
-    let rms2 = rms(&out);
-
-    assert!(
-        rms2 > 0.000001,
-        "99% blur should create a long tail after an impulse, got rms2={}",
-        rms2
-    );
-    assert!(
-        rms2 < rms1,
-        "tail should be decaying, rms1={}, rms2={}",
-        rms1, rms2
-    );
-}
+// `extra_convolve_spectral_blur_smooths_input_and_creates_tail` was
+// removed: it was added during the FrameBlur experiment and assumed
+// input-side magnitude smoothing. The musical 1-pole model only smooths
+// IR magnitudes, so this assertion was incompatible by construction. If
+// input-side smoothing is revisited later, restore the test from the
+// FrameBlur commit history and adjust it to match the chosen model.
 
 #[test]
 fn extra_convolve_spectral_uses_frame_latched_blur_child() {

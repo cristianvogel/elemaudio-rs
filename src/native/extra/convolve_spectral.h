@@ -171,6 +171,22 @@ namespace elem
         std::vector<T, FrameLibAllocator<T>> imag;
     };
 
+    // Per-bin one-pole magnitude smoother (1-pole EMA), restored from the
+    // last known-good revision (commit 4654185 "hand tuned tilt gains").
+    //
+    //     average[n] = average[n-1] + alpha * (input - average[n-1])
+    //                = linear_interp(alpha, average[n-1], input)
+    //
+    // `alpha == 1` is a passthrough (no smoothing); `alpha -> 0` freezes
+    // the running magnitude, which gives the long, smooth, musical tail
+    // we want from the `blur` knob.
+    //
+    // Reconstruction in `processIrSpectrum` then scales the original
+    // (real, imag) by (smoothedMag / origMag), preserving the IR's exact
+    // phase. Per-frame phase rebuilds (mag*cos / mag*sin) caused metallic
+    // frame-edge artifacts and have been removed.
+    //
+    // Reference: FrameLib_Objects/Time_Smoothing in the FrameLib repo.
     template <typename T>
     struct FrameLibMagnitudeMovingAverage {
         explicit FrameLibMagnitudeMovingAverage(size_t size = 0, FrameLibAllocator<T> alloc = FrameLibAllocator<T>())
@@ -187,30 +203,8 @@ namespace elem
         {
             if (!initialized) {
                 average[bin] = input;
-            }
-
-            if (alpha >= T(0.999999)) {
-                average[bin] = input;
                 return input;
             }
-
-            if (alpha <= T(0.0)) {
-                return average[bin];
-            }
-
-            // Standard exponential moving average: 
-            // y[n] = alpha_ema * y[n-1] + (1 - alpha_ema) * x[n]
-            // FrameLib's linear_interp(alpha, a, b) is a + alpha * (b - a) = (1-alpha)*a + alpha*b
-            
-            // In our case, we want:
-            // alpha_ema = coefficient for previous (0.999 for long tail)
-            // coefficient for new = 1 - alpha_ema
-            
-            // movingAverageAlpha returns (1 - blur^0.1). 
-            // If blur=0.99, alpha \approx 0.001.
-            // linear_interp(0.001, average, input) = 0.999 * average + 0.001 * input.
-            // THIS IS CORRECT for long tail.
-            
             average[bin] = linear_interp<T>()(alpha, average[bin], input);
             return average[bin];
         }
@@ -224,11 +218,43 @@ namespace elem
         bool initialized{false};
     };
 
+    // Per-bin unwrapped phase accumulator (parked).
+    //
+    // Kept in the codebase so the type is available if/when phase-aware
+    // smoothing is revisited, but no convolver instances are constructed
+    // and no call site advances or queries it. Producing the spectrum via
+    // `mag * exp(j*integratedPhase)` introduced metallic frame artifacts,
+    // so the convolver now preserves phase by complex scaling instead.
+    template <typename T>
+    struct PhaseAccumulator {
+        explicit PhaseAccumulator(size_t binCount = 0, FrameLibAllocator<T> alloc = FrameLibAllocator<T>())
+            : lastInputPhase(binCount, T(0), alloc)
+            , integrated(binCount, T(0), alloc)
+            , smoothedDelta(binCount, T(0), alloc)
+            , bins(binCount)
+            , initialized(false)
+        {}
+
+        void reset()
+        {
+            std::fill(lastInputPhase.begin(), lastInputPhase.end(), T(0));
+            std::fill(integrated.begin(), integrated.end(), T(0));
+            std::fill(smoothedDelta.begin(), smoothedDelta.end(), T(0));
+            initialized = false;
+        }
+
+        std::vector<T, FrameLibAllocator<T>> lastInputPhase;
+        std::vector<T, FrameLibAllocator<T>> integrated;
+        std::vector<T, FrameLibAllocator<T>> smoothedDelta;
+        size_t bins;
+        bool initialized;
+    };
+
     template <typename T>
     struct FrameLibSpectralConvolver {
         using Split = typename FFTTypes<T>::Split;
 
-        FrameLibSpectralConvolver(size_t partitionSize, std::vector<T> const& ir)
+        FrameLibSpectralConvolver(size_t partitionSize, std::vector<T> const& ir, size_t maxBlurFrames = 16)
             : partSize(std::max<size_t>(16, partitionSize))
             , fftSize(partSize * 2)
             , fftLog2(spectral_processor<T, FrameLibTlsfAllocator>::calc_fft_size_log2(fftSize))
@@ -244,18 +270,17 @@ namespace elem
             , accum(spectrumSize, buffer_allocator)
             , processedIr(spectrumSize, buffer_allocator)
             , multiplyTemp(spectrumSize, buffer_allocator)
-            , inputMagnitudeAverage(spectrumSize + 2, buffer_allocator)
+            , magnitudeAverage(spectrumSize + 2, buffer_allocator)
         {
+            (void) maxBlurFrames; // accepted for API compat; unused by 1-pole smoother
             auto const safeIrSize = std::max<size_t>(1, ir.size());
             partitionCount = (safeIrSize + partSize - 1) / partSize;
             irSpectra.reserve(partitionCount);
             inputSpectra.reserve(partitionCount);
-            magnitudeAverages.reserve(partitionCount);
 
             for (size_t i = 0; i < partitionCount; ++i) {
                 irSpectra.emplace_back(spectrumSize, buffer_allocator);
                 inputSpectra.emplace_back(spectrumSize, buffer_allocator);
-                magnitudeAverages.emplace_back(spectrumSize + 2, buffer_allocator);
             }
 
             std::vector<T> frame(fftSize, T(0));
@@ -274,14 +299,16 @@ namespace elem
 
         void reset()
         {
-            inputMagnitudeAverage.reset();
-            for (auto& avg : magnitudeAverages) {
-                avg.reset();
-            }
+            magnitudeAverage.reset();
         }
 
         size_t getPartitionSize() const { return partSize; }
         size_t getInputFill() const { return inputFill; }
+
+        // Accepted for API compatibility with the FrameLib-era props; the
+        // 1-pole smoother is parameterised purely by `blur` so this is a
+        // no-op. Kept so callers do not have to be churned.
+        void setBlurFramesOverride(size_t /*n*/) {}
 
         void process(T const* input, T const* tiltInput, T const* blurInput, T* output, size_t count, T gain)
         {
@@ -292,8 +319,8 @@ namespace elem
                 inputBlock[inputFill++] = std::isfinite(static_cast<double>(sample)) ? sample : T(0);
 
                 if (inputFill == partSize) {
-                    auto const tilt = readControl(tiltInput, i, T(0));
-                    auto const blur = readControl(blurInput, i, T(0));
+                    auto const tilt = tiltInput[i];
+                    auto const blur = blurInput[i];
                     processPartition(gain, tilt, blur);
                 }
             }
@@ -365,46 +392,43 @@ namespace elem
             return std::isfinite(static_cast<double>(value)) ? value : fallback;
         }
 
+        // Restored from commit 4654185 ("hand tuned tilt gains"): the
+        // simple, musical 1-pole blur path that worked. The shared
+        // `magnitudeAverage` ticks once per partition iteration via
+        // `processIrSpectrum`, so heavier blur values produce a long,
+        // smooth tail across partitions without per-frame phase rebuilds.
         void processPartition(T gain, T tiltDb, T blurAmount)
         {
-            blurAmount = std::max(T(0), std::min(T(1.0), blurAmount));
+            // Match the original clamp range. Anything tighter (e.g. 1.0)
+            // would let the smoother freeze entirely, which collapses the
+            // feedback path; the previous 0.999 ceiling avoided that.
+            blurAmount = std::max(T(0), std::min(T(0.999), blurAmount));
             std::fill(inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), inputBlock.end(), T(0));
 
             auto currentSplit = currentInput.split();
             processor.rfft(currentSplit, inputBlock.data(), fftSize, fftLog2);
 
-            auto const blurAlpha = movingAverageAlpha(blurAmount);
-            
-            // Blur the input spectrum before it enters the history buffer.
-            // This creates the "long tails" effect on the audio signal itself.
-            applyMagnitudeSmoothing(currentSplit, currentSplit, blurAlpha, inputMagnitudeAverage);
-            inputMagnitudeAverage.finishFrame();
-
             std::copy(currentInput.real.begin(), currentInput.real.end(), inputSpectra[writeIndex].real.begin());
             std::copy(currentInput.imag.begin(), currentInput.imag.end(), inputSpectra[writeIndex].imag.begin());
-            
-            // Debug: print RMS of blurred spectrum
-            // double sum = 0;
-            // for(auto x : currentInput.real) sum += x*x;
-            // for(auto x : currentInput.imag) sum += x*x;
-            // if (sum > 0) printf("Blurred input energy: %f, alpha: %f\n", sum, (double)blurAlpha);
 
             accum.clear();
             auto accumSplit = accum.split();
             auto tempSplit = multiplyTemp.split();
             auto const scale = T(0.25) / static_cast<T>(fftSize);
+            auto const blurAlpha = movingAverageAlpha(blurAmount);
+
+            // `magnitudeAverage` is intentionally NOT reset here. It
+            // persists across partition boundaries to give the long tail
+            // we want from the blur knob. It is only reset when the
+            // convolver itself is rebuilt or `reset()` is called.
 
             for (size_t partition = 0; partition < partitionCount; ++partition) {
                 auto const inputIndex = (writeIndex + partitionCount - partition) % partitionCount;
                 auto inputSplit = inputSpectra[inputIndex].split();
                 auto irSplit = irSpectra[partition].split();
                 auto processedIrSplit = processedIr.split();
-                auto& magnitudeAverage = magnitudeAverages[partition];
-                
-                // We also smooth the IR edits (tilt/gain) to avoid glitches and allow slow spectral morphs.
-                processIrSpectrum(processedIrSplit, irSplit, gain, tiltDb, blurAlpha, magnitudeAverage);
-                magnitudeAverage.finishFrame();
-                
+
+                processIrSpectrum(processedIrSplit, irSplit, gain, tiltDb, blurAlpha);
                 ir_convolve_real(&tempSplit, &inputSplit, &processedIrSplit, fftSize, scale);
 
                 for (size_t bin = 0; bin < spectrumSize; ++bin) {
@@ -421,82 +445,67 @@ namespace elem
                 overlap[i] = fftOutput[i + partSize];
             }
 
-            // Standard overlap-add for partitioned convolution: 
-            // fftSize = 2 * partSize. rifft produces fftSize samples.
-            // We use the first partSize samples (added to previous overlap) as output.
-            // The second partSize samples become the new overlap.
-            
+            std::fill(inputBlock.begin(), inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), T(0));
+            inputFill = 0;
             outputRead = 0;
             writeIndex = (writeIndex + 1) % partitionCount;
-            inputFill = 0;
         }
 
-        void applyMagnitudeSmoothing(Split& output, Split const& input, T alpha, FrameLibMagnitudeMovingAverage<T>& magnitudeAverage)
+        // Restored from commit 4654185. One shared `magnitudeAverage`
+        // (1-pole EMA per bin) ticks once per partition iteration via the
+        // call to `magnitudeAverage.finishFrame()` at the end of this
+        // function. Phase is preserved by complex scaling, so we never
+        // rebuild via mag*cos / mag*sin -- that path produced the
+        // metallic frame-edge artifacts we heard.
+        void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha)
         {
-            // DC/Nyquist
+            // Bin 0 in FrameLib's real FFT format contains DC in the
+            // real part and Nyquist in the imaginary part. Both get the
+            // overall gain, the tilt curve evaluated at their
+            // (conceptual) bin index, and the same blur smoothing.
+
+            // DC (real part of bin 0)
             auto const dcReal = static_cast<double>(input.realp[0]);
-            auto const smoothedDc = static_cast<double>(magnitudeAverage.process(0, static_cast<T>(std::abs(dcReal)), alpha));
-            output.realp[0] = static_cast<T>(smoothedDc * (dcReal < 0 ? -1.0 : 1.0));
-
-            auto const nyqReal = static_cast<double>(input.imagp[0]);
-            auto const smoothedNyq = static_cast<double>(magnitudeAverage.process(spectrumSize, static_cast<T>(std::abs(nyqReal)), alpha));
-            output.imagp[0] = static_cast<T>(smoothedNyq * (nyqReal < 0 ? -1.0 : 1.0));
-
-            // Complex bins
-            for (size_t bin = 1; bin < spectrumSize; ++bin) {
-                auto const real = static_cast<double>(input.realp[bin]);
-                auto const imag = static_cast<double>(input.imagp[bin]);
-                auto const magnitude = std::sqrt(real * real + imag * imag);
-                auto const smoothedMagnitude = static_cast<double>(magnitudeAverage.process(bin, static_cast<T>(magnitude), alpha));
-
-                double const phaseScale = magnitude > 1.0e-20 ? smoothedMagnitude / magnitude : 0.0;
-                output.realp[bin] = static_cast<T>(real * phaseScale);
-                output.imagp[bin] = static_cast<T>(imag * phaseScale);
-            }
-        }
-
-        void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha, FrameLibMagnitudeMovingAverage<T>& magnitudeAverage)
-        {
-            // Bin 0 in FrameLib's real FFT format contains DC in the real part and Nyquist in the imaginary part.
-            // We apply the overall gain, tilt, and blur (smoothing) to both.
-
-            // Handle DC (Real part of bin 0)
-            auto const dcReal = static_cast<double>(input.realp[0]);
+            auto const smoothedDc = static_cast<double>(
+                magnitudeAverage.process(spectrumSize, static_cast<T>(std::abs(dcReal)), blurAlpha));
             auto const dcGain = spectralBinGain(0, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-            auto const smoothedDc = static_cast<double>(magnitudeAverage.process(0, static_cast<T>(std::abs(dcReal) * dcGain), blurAlpha));
-            output.realp[0] = static_cast<T>(smoothedDc * (dcReal < 0 ? -1.0 : 1.0));
+            output.realp[0] = static_cast<T>(std::copysign(smoothedDc * dcGain, dcReal));
 
-            // Handle Nyquist (Imaginary part of bin 0)
+            // Nyquist (imag part of bin 0)
             auto const nyqReal = static_cast<double>(input.imagp[0]);
+            auto const smoothedNyq = static_cast<double>(
+                magnitudeAverage.process(spectrumSize + 1, static_cast<T>(std::abs(nyqReal)), blurAlpha));
             auto const nyqGain = spectralBinGain(spectrumSize, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-            auto const smoothedNyq = static_cast<double>(magnitudeAverage.process(spectrumSize, static_cast<T>(std::abs(nyqReal) * nyqGain), blurAlpha));
-            output.imagp[0] = static_cast<T>(smoothedNyq * (nyqReal < 0 ? -1.0 : 1.0));
+            output.imagp[0] = static_cast<T>(std::copysign(smoothedNyq * nyqGain, nyqReal));
 
-            // Process remaining complex bins
             for (size_t bin = 1; bin < spectrumSize; ++bin) {
                 auto const real = static_cast<double>(input.realp[bin]);
                 auto const imag = static_cast<double>(input.imagp[bin]);
                 auto const magnitude = std::sqrt(real * real + imag * imag);
-                auto const binGain = spectralBinGain(bin, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-                
-                auto const smoothedMagnitude = static_cast<double>(magnitudeAverage.process(bin, static_cast<T>(magnitude * binGain), blurAlpha));
+                auto const smoothedMagnitude = static_cast<double>(
+                    magnitudeAverage.process(bin, static_cast<T>(magnitude), blurAlpha));
 
-                double const phaseScale = magnitude > 1.0e-20 ? smoothedMagnitude / magnitude : 0.0;
+                auto const binGain = spectralBinGain(bin, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
+                auto const scaledMagnitude = smoothedMagnitude * binGain;
+
+                auto const phaseScale = magnitude > 1.0e-20 ? scaledMagnitude / magnitude : 0.0;
                 output.realp[bin] = static_cast<T>(real * phaseScale);
                 output.imagp[bin] = static_cast<T>(imag * phaseScale);
             }
+
+            magnitudeAverage.finishFrame();
         }
 
+        // Restored from commit 4654185. Linear `1 - blur` curve with the
+        // same clamp range that was working musically:
+        //   blur = 0     -> alpha = 1.0  (passthrough, no smoothing)
+        //   blur = 0.999 -> alpha = 0.001 (long, smooth tail)
+        // Anything tighter than 0.999 lets the smoother lock entirely,
+        // which collapses the feedback path and ruins the tail.
         static T movingAverageAlpha(T blurAmount)
         {
-            auto const clamped = std::max(T(0), std::min(T(1.0), blurAmount));
-            if (clamped < T(1.0e-6)) return T(1.0);
-            
-            // Map 0 -> 1.0 (no blur)
-            // Map 1.0 -> 0.0 (max blur/freeze)
-            // Using a power function to make the high end of the slider more sensitive
-            // y = 1 - x^0.1 makes 0.9 -> 0.20, 0.99 -> 0.046, 0.999 -> 0.002
-            return T(1) - std::pow(clamped, T(0.1));
+            auto const clamped = std::max(T(0), std::min(T(0.999), blurAmount));
+            return T(1) - clamped;
         }
 
         static double dbToGain(double db)
@@ -529,6 +538,7 @@ namespace elem
             return dbToGain(std::clamp(tiltDb * octavesFromPivot, -26.0, 1.5));
         }
 
+        // Pool sized for the spectral buffers; no FrameBlur ring storage.
         static size_t requiredPoolBytes(size_t fftSize)
         {
             return std::max<size_t>(FrameLibTlsfAllocator::defaultPoolBytes, fftSize * 64);
@@ -554,8 +564,10 @@ namespace elem
         FrameLibSplitBuffer<T> accum;
         FrameLibSplitBuffer<T> processedIr;
         FrameLibSplitBuffer<T> multiplyTemp;
-        FrameLibMagnitudeMovingAverage<T> inputMagnitudeAverage;
-        std::vector<FrameLibMagnitudeMovingAverage<T>> magnitudeAverages;
+        // One shared 1-pole magnitude smoother. Extra slots [spectrumSize]
+        // and [spectrumSize+1] handle DC and Nyquist, which live in
+        // bin 0's real/imag halves in the FrameLib real-FFT layout.
+        FrameLibMagnitudeMovingAverage<T> magnitudeAverage;
         std::vector<FrameLibSplitBuffer<T>> irSpectra;
         std::vector<FrameLibSplitBuffer<T>> inputSpectra;
     };
@@ -645,6 +657,18 @@ namespace elem
                 return elem::ReturnCode::Ok();
             }
 
+            // The FrameLib-era multi-frame smoothing API
+            // (`maxBlurFrames` / `blurFrames`) is accepted for backward
+            // compatibility but currently has no effect: the convolver
+            // uses a single-pole magnitude smoother driven by the `blur`
+            // child signal. The FrameLib path is parked because it
+            // produced metallic frame artifacts.
+            if (key == "maxBlurFrames" || key == "blurFrames") {
+                return val.isNumber() && std::isfinite(static_cast<double>((js::Number) val))
+                    ? elem::ReturnCode::Ok()
+                    : elem::ReturnCode::InvalidPropertyType();
+            }
+
             return GraphNode<FloatType>::setProperty(key, val);
         }
 
@@ -701,6 +725,12 @@ namespace elem
                         }
                     }
                     latchedGain = magnitudeGain.load(std::memory_order_relaxed);
+
+                    auto const tilt = tiltInput ? static_cast<double>(tiltInput[processed]) : defaultTilt;
+                    latchedTilt = std::isfinite(tilt) ? tilt : defaultTilt;
+
+                    auto const blur = blurInput ? static_cast<double>(blurInput[processed]) : defaultBlur;
+                    latchedBlur = std::isfinite(blur) ? blur : defaultBlur;
                 }
 
                 auto const remaining = numSamples - processed;
@@ -713,19 +743,10 @@ namespace elem
                         scratchIn[i] = std::isfinite(source) ? source : 0.0;
                     }
 
-                    double const* tiltData = nullptr;
-                    double const* blurData = nullptr;
-                    
-                    // We need to determine if the input signal is "active" (not constant 0 or different from default)
-                    // But simpler: always use scratch if numChannels >= 3, and fill it with signal or default.
-                    for (size_t i = 0; i < chunk; ++i) {
-                        scratchTilt[i] = tiltInput ? static_cast<double>(tiltInput[processed + i]) : defaultTilt;
-                        scratchBlur[i] = blurInput ? static_cast<double>(blurInput[processed + i]) : defaultBlur;
-                    }
-                    tiltData = scratchTilt.data();
-                    blurData = scratchBlur.data();
+                    std::fill_n(scratchTilt.data(), chunk, latchedTilt);
+                    std::fill_n(scratchBlur.data(), chunk, latchedBlur);
 
-                    convolver->process(scratchIn.data(), tiltData, blurData, scratchOut.data(), chunk, latchedGain);
+                    convolver->process(scratchIn.data(), scratchTilt.data(), scratchBlur.data(), scratchOut.data(), chunk, latchedGain);
 
                     for (size_t i = 0; i < chunk; ++i) {
                         auto const wet = scratchOut[i];
@@ -733,10 +754,8 @@ namespace elem
                     }
                 } else {
                     // Double path
-                    for (size_t i = 0; i < chunk; ++i) {
-                        scratchTilt[i] = tiltInput ? static_cast<double>(tiltInput[processed + i]) : defaultTilt;
-                        scratchBlur[i] = blurInput ? static_cast<double>(blurInput[processed + i]) : defaultBlur;
-                    }
+                    std::fill_n(scratchTilt.data(), chunk, latchedTilt);
+                    std::fill_n(scratchBlur.data(), chunk, latchedBlur);
                     
                     convolver->process(sourceInput + processed, scratchTilt.data(),
                                        scratchBlur.data(),
@@ -759,6 +778,8 @@ namespace elem
         double defaultTilt{0.0};
         double defaultBlur{0.0};
         double latchedGain{1.0};
+        double latchedTilt{0.0};
+        double latchedBlur{0.0};
 
     private:
         int rebuildConvolver(SharedResourceMap& resources)

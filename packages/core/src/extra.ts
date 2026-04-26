@@ -51,6 +51,15 @@ export interface ExtraConvolveProps extends Record<string, unknown> {
 
 /**
  * Props for `el.extra.convolveSpectral(...)`.
+ *
+ * Smoothing model (FrameBlur):
+ * - Per-bin magnitude moving average modelled on FrameLib_MovingAverage,
+ *   with separate alpha_up / alpha_down derived from `blurFrames`.
+ * - Per-bin unwrapped phase accumulator that smooths phase deltas across
+ *   frames (modelled on FrameLib_FrameDelta + integration), so the
+ *   reconstructed spectrum keeps phase coherence under heavy blur.
+ *
+ * Reference: see `FrameLib_Objects/Time_Smoothing` in the FrameLib repo.
  */
 export interface ConvolveSpectralProps extends Record<string, unknown> {
   /** Optional authoring key used for stable identity. */
@@ -61,6 +70,20 @@ export interface ConvolveSpectralProps extends Record<string, unknown> {
   partitionSize?: number;
   /** Optional global spectral magnitude gain in dB. */
   magnitudeGainDb?: number;
+  /**
+   * Maximum capacity of the FrameBlur smoother (in frames). Larger values
+   * cost more memory but allow longer-windowed magnitude smoothing. A
+   * change here triggers a convolver rebuild because the ring size is
+   * fixed at construction. Defaults to `16`.
+   */
+  maxBlurFrames?: number;
+  /**
+   * Active blur window length in frames (`1..maxBlurFrames`). When set
+   * non-zero this overrides the continuous `blur` 0..1 child argument and
+   * pins the smoothing window. Set to `0` to return control to the `blur`
+   * child signal.
+   */
+  blurFrames?: number;
 }
 
 /**

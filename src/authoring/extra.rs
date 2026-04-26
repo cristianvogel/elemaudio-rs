@@ -90,16 +90,32 @@ pub fn convolve(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
     Node::new("extra.convolve", props, vec![resolve(x)])
 }
 
-/// Prototype convolution helper with fixed-size magnitude-only spectral IR edits.
+/// Prototype convolution helper with fixed-size spectral IR edits.
+///
+/// Smoothing (FrameBlur) uses FrameLib `Time_Smoothing` semantics:
+/// - magnitudes flow through a per-bin moving average modelled on
+///   `FrameLib_MovingAverage` (separate `alpha_up` / `alpha_down` derived
+///   from `blurFrames` for asymmetric attack/release),
+/// - phases flow through a per-bin unwrapped accumulator that smooths
+///   phase *deltas* across frames (modelled on `FrameLib_FrameDelta` plus
+///   integration). This preserves phase coherence under heavy blur.
 ///
 /// Props:
 /// - `path`: shared resource id for the impulse response
 /// - `partitionSize`: optional power-of-two IR edit partition size, rounded up
 /// - `magnitudeGainDb`: optional global spectral magnitude gain in dB
+/// - `maxBlurFrames`: optional capacity of the FrameBlur smoother in frames.
+///   Larger values cost more memory but allow longer windowed smoothing.
+///   A change triggers a convolver rebuild. Defaults to `16`.
+/// - `blurFrames`: optional active smoothing window in frames
+///   (`1..maxBlurFrames`). When non-zero this overrides the continuous
+///   `blur` child and pins the smoothing window. Set to `0` to hand
+///   control back to the `blur` child signal.
 ///
 /// Child order:
 /// - `tiltDbPerOct`: frame-latched spectral tilt signal in dB/octave
-/// - `blur`: frame-latched partition-to-partition magnitude smoothing signal in `[0, 1)`
+/// - `blur`: frame-latched 0..1 smoothing amount (mapped internally to a
+///   frame count and a phase-delta smoothing alpha)
 /// - `x`: audio input
 pub fn convolve_spectral(
     props: serde_json::Value,
