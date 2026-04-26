@@ -26,6 +26,8 @@ export interface SampleParams {
     rate: number;
     blend: number;
     irRate: number;
+    irAttenuationDb: number;
+    irNormalize: boolean;
     chopperThreshold: number;
     freqShiftHz: number;
     feedback: number;
@@ -89,27 +91,21 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     const shiftDown = leftBands[0];
     const shiftUp = rightBands[1];
 
-    const leftWet = el.extra.convolve({
-            key: "sample:left-wet",
-            path: p.leftIrPath,
-            normalize: false,
-            irAttenuationDb: 20,
-            rate: p.irRate,
-            start: p.irStart,
-            end: p.irEnd
-        },
-        shiftDown);
+    function staticConvolve(key: string, path: string, x: NodeRepr_t): NodeRepr_t {
+        return el.extra.convolve({
+                key,
+                path,
+                normalize: p.irNormalize,
+                irAttenuationDb: p.irAttenuationDb,
+                rate: p.irRate,
+                start: p.irStart,
+                end: p.irEnd
+            },
+            x);
+    }
 
-    const rightWet = el.extra.convolve({
-            key: "sample:right-wet",
-            path: p.rightIrPath,
-            normalize: false,
-            irAttenuationDb: 20,
-            rate: p.irRate,
-            start: p.irStart,
-            end: p.irEnd
-        },
-        shiftUp);
+    const leftWet = staticConvolve("sample:left-wet", p.leftIrPath, shiftDown);
+    const rightWet = staticConvolve("sample:right-wet", p.rightIrPath, shiftUp);
 
     return [
         el.select(blendNode, leftWet, shiftDown),
