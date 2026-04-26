@@ -21,13 +21,139 @@
 
 namespace elem
 {
+    struct FrameLibTlsfAllocator {
+        using value_type = void;
+        using size_type = size_t;
+        using difference_type = ptrdiff_t;
+        using propagate_on_container_move_assignment = std::true_type;
+
+        struct State {
+            explicit State(size_t bytes)
+                : storage(std::malloc(bytes))
+                , size(bytes)
+                , tlsf(storage != nullptr ? tlsf_create_with_pool(storage, bytes) : nullptr)
+            {}
+
+            ~State()
+            {
+                if (tlsf != nullptr) {
+                    tlsf_destroy(tlsf);
+                }
+                std::free(storage);
+            }
+
+            void* allocate(size_t size, size_t alignment)
+            {
+                if (tlsf == nullptr) return nullptr;
+                return tlsf_memalign(tlsf, alignment, size);
+            }
+
+            void deallocate(void* ptr)
+            {
+                if (ptr != nullptr && tlsf != nullptr) {
+                    tlsf_free(tlsf, ptr);
+                }
+            }
+
+            void* storage{nullptr};
+            size_t size{0};
+            tlsf_t tlsf{nullptr};
+        };
+
+        explicit FrameLibTlsfAllocator(size_t bytes = defaultPoolBytes)
+            : state(std::make_shared<State>(std::max(bytes, defaultPoolBytes)))
+        {}
+
+        void* allocate(size_t size, size_t alignment = alignof(std::max_align_t))
+        {
+            auto* ptr = state ? state->allocate(size, alignment) : nullptr;
+            if (ptr == nullptr) {
+                throw std::bad_alloc();
+            }
+            return ptr;
+        }
+
+        void deallocate(void* ptr, size_t /*size*/ = 0)
+        {
+            if (state) {
+                state->deallocate(ptr);
+            }
+        }
+
+        template <typename T>
+        T* allocate(size_t count)
+        {
+            return static_cast<T*>(allocate(count * sizeof(T), alignof(T)));
+        }
+
+        template <typename T>
+        void deallocate(T*& ptr)
+        {
+            if (ptr != nullptr) {
+                deallocate(ptr, 0);
+                ptr = nullptr;
+            }
+        }
+
+        static constexpr size_t defaultPoolBytes = 1024 * 1024 * 4;
+        std::shared_ptr<State> state;
+    };
+
+    // Standard allocator wrapper for FrameLib TLSF
+    template <typename T>
+    struct FrameLibAllocator {
+        using value_type = T;
+        using size_type = size_t;
+        using difference_type = ptrdiff_t;
+        using propagate_on_container_move_assignment = std::true_type;
+
+        std::shared_ptr<FrameLibTlsfAllocator::State> state;
+
+        FrameLibAllocator() = default;
+        FrameLibAllocator(FrameLibTlsfAllocator& alloc) : state(alloc.state) {}
+        FrameLibAllocator(std::shared_ptr<FrameLibTlsfAllocator::State> s) : state(s) {}
+
+        template <typename U>
+        FrameLibAllocator(const FrameLibAllocator<U>& other) : state(other.state) {}
+
+        T* allocate(size_t n) {
+            if (state) {
+                auto* ptr = static_cast<T*>(state->allocate(n * sizeof(T), alignof(T)));
+                if (ptr) return ptr;
+            }
+            auto* ptr = static_cast<T*>(std::malloc(n * sizeof(T)));
+            if (ptr == nullptr) {
+                throw std::bad_alloc();
+            }
+            return ptr;
+        }
+
+        void deallocate(T* p, size_t /*n*/ = 0) {
+            if (state) {
+                state->deallocate(p);
+            } else {
+                std::free(p);
+            }
+        }
+
+        template <typename U>
+        bool operator==(const FrameLibAllocator<U>& other) const {
+            return state == other.state;
+        }
+
+        template <typename U>
+        bool operator!=(const FrameLibAllocator<U>& other) const {
+            return !(*this == other);
+        }
+    };
+
     template <typename T>
     struct FrameLibSplitBuffer {
         using Split = typename FFTTypes<T>::Split;
 
-        explicit FrameLibSplitBuffer(size_t size = 0)
-            : real(size, T(0))
-            , imag(size, T(0))
+        explicit FrameLibSplitBuffer(size_t size = 0, FrameLibAllocator<T> alloc = FrameLibAllocator<T>())
+            : real(size, alloc)
+            , imag(size, alloc)
         {}
 
         Split split()
@@ -41,14 +167,14 @@ namespace elem
             std::fill(imag.begin(), imag.end(), T(0));
         }
 
-        std::vector<T> real;
-        std::vector<T> imag;
+        std::vector<T, FrameLibAllocator<T>> real;
+        std::vector<T, FrameLibAllocator<T>> imag;
     };
 
     template <typename T>
     struct FrameLibMagnitudeMovingAverage {
-        explicit FrameLibMagnitudeMovingAverage(size_t size = 0)
-            : average(size, T(0))
+        explicit FrameLibMagnitudeMovingAverage(size_t size = 0, FrameLibAllocator<T> alloc = FrameLibAllocator<T>())
+            : average(size, T(0), alloc)
         {}
 
         void reset()
@@ -73,53 +199,8 @@ namespace elem
             initialized = true;
         }
 
-        std::vector<T> average;
+        std::vector<T, FrameLibAllocator<T>> average;
         bool initialized{false};
-    };
-
-    struct FrameLibTlsfAllocator {
-        struct State {
-            explicit State(size_t bytes)
-                : storage(std::malloc(bytes))
-                , size(bytes)
-                , tlsf(storage != nullptr ? tlsf_create_with_pool(storage, bytes) : nullptr)
-            {}
-
-            ~State()
-            {
-                if (tlsf != nullptr) {
-                    tlsf_destroy(tlsf);
-                }
-                std::free(storage);
-            }
-
-            void* storage{nullptr};
-            size_t size{0};
-            tlsf_t tlsf{nullptr};
-        };
-
-        explicit FrameLibTlsfAllocator(size_t bytes = defaultPoolBytes)
-            : state(std::make_shared<State>(std::max(bytes, defaultPoolBytes)))
-        {}
-
-        template <typename T>
-        T* allocate(size_t count)
-        {
-            auto* ptr = state && state->tlsf ? tlsf_memalign(state->tlsf, alignof(T), count * sizeof(T)) : nullptr;
-            return static_cast<T*>(ptr);
-        }
-
-        template <typename T>
-        void deallocate(T*& ptr)
-        {
-            if (ptr != nullptr && state && state->tlsf) {
-                tlsf_free(state->tlsf, ptr);
-                ptr = nullptr;
-            }
-        }
-
-        static constexpr size_t defaultPoolBytes = 1024 * 1024;
-        std::shared_ptr<State> state;
     };
 
     template <typename T>
@@ -132,16 +213,17 @@ namespace elem
             , fftLog2(spectral_processor<T, FrameLibTlsfAllocator>::calc_fft_size_log2(fftSize))
             , spectrumSize(fftSize >> 1)
             , allocator(requiredPoolBytes(fftSize))
+            , buffer_allocator(allocator)
             , processor(allocator, fftSize)
-            , inputBlock(fftSize, T(0))
-            , fftOutput(fftSize, T(0))
-            , overlap(partSize, T(0))
-            , blockOutput(partSize, T(0))
-            , currentInput(spectrumSize)
-            , accum(spectrumSize)
-            , processedIr(spectrumSize)
-            , multiplyTemp(spectrumSize)
-            , magnitudeAverage(spectrumSize + 2)
+            , inputBlock(fftSize, T(0), buffer_allocator)
+            , fftOutput(fftSize, T(0), buffer_allocator)
+            , overlap(partSize, T(0), buffer_allocator)
+            , blockOutput(partSize, T(0), buffer_allocator)
+            , currentInput(spectrumSize, buffer_allocator)
+            , accum(spectrumSize, buffer_allocator)
+            , processedIr(spectrumSize, buffer_allocator)
+            , multiplyTemp(spectrumSize, buffer_allocator)
+            , magnitudeAverage(spectrumSize + 2, buffer_allocator)
         {
             auto const safeIrSize = std::max<size_t>(1, ir.size());
             partitionCount = (safeIrSize + partSize - 1) / partSize;
@@ -149,8 +231,8 @@ namespace elem
             inputSpectra.reserve(partitionCount);
 
             for (size_t i = 0; i < partitionCount; ++i) {
-                irSpectra.emplace_back(spectrumSize);
-                inputSpectra.emplace_back(spectrumSize);
+                irSpectra.emplace_back(spectrumSize, buffer_allocator);
+                inputSpectra.emplace_back(spectrumSize, buffer_allocator);
             }
 
             std::vector<T> frame(fftSize, T(0));
@@ -172,22 +254,9 @@ namespace elem
             magnitudeAverage.reset();
         }
 
-        void process(T const* input, T const* tiltInput, T const* blurInput, T* output, size_t count, T gain, SingleWriterSingleReaderQueue<std::shared_ptr<FrameLibSpectralConvolver<T>>>& queue)
+        void process(T const* input, T const* tiltInput, T const* blurInput, T const* limitInput, T* output, size_t count, T gain)
         {
             for (size_t i = 0; i < count; ++i) {
-                if (inputFill == 0 && queue.size() > 0) {
-                    std::shared_ptr<FrameLibSpectralConvolver<T>> next;
-                    while (queue.size() > 0) {
-                        queue.pop(next);
-                    }
-
-                    if (next) {
-                        // Carry over state if possible, or just replace
-                        // To avoid dirtying phase, we only swap when inputFill is 0 (start of a partition)
-                        *this = std::move(*next);
-                    }
-                }
-
                 output[i] = blockOutput[outputRead++];
 
                 auto const sample = input[i];
@@ -196,12 +265,68 @@ namespace elem
                 if (inputFill == partSize) {
                     auto const tilt = readControl(tiltInput, i, T(0));
                     auto const blur = readControl(blurInput, i, T(0));
-                    processPartition(gain, tilt, blur);
+                    auto const limit = readControl(limitInput, i, T(0));
+                    processPartition(gain, tilt, blur, limit);
                 }
             }
         }
 
     private:
+        void swapState(FrameLibSpectralConvolver& other)
+        {
+            // We only swap data that doesn't involve the allocator or internal references
+            // if the FFT sizes are the same. If they differ, we'd need a more complex strategy,
+            // but the current architecture ensures this is called on compatible objects or
+            // completely replaces them (which we avoid here).
+            if (fftSize != other.fftSize) {
+                // If sizes differ, we can't easily swap without reallocating or breaking invariants.
+                // For now, we assume the user doesn't change partition size frequently, 
+                // and if they do, we might just accept a glitch or find a better way.
+                return;
+            }
+
+            std::swap(partitionCount, other.partitionCount);
+            std::swap(writeIndex, other.writeIndex);
+            
+            // We swap the contents of the vectors/buffers.
+            // Since they use different allocators, we must be careful.
+            // std::vector swap is O(1) if allocators are equal. 
+            // Here they are NOT equal (different TlsfAllocator states).
+            // In C++11+, if propagate_on_container_swap is false (default) and allocators 
+            // are not equal, it's UB or it might do a linear copy.
+            // Our FrameLibAllocator doesn't define propagate_on_container_swap, so it's false.
+            
+            // Safer to just swap the contents of the shared_ptrs if we used them,
+            // but here we have flat vectors.
+            
+            // Actually, the most robust way to "replace" is to swap the data members 
+            // that are NOT bound to the allocator by reference at construction time.
+            
+            irSpectra.swap(other.irSpectra);
+            inputSpectra.swap(other.inputSpectra);
+            
+            // Note: magnitudeAverage is a single instance and we are inside swapState
+            // which was noted as potentially UB or safe depending on allocators.
+            // But swapState itself is not currently called in a way that matters 
+            // as the Node uses shared_ptr swaps.
+            // Still, let's keep it consistent.
+            // We can't swap vectors with different allocators easily if propagate is false.
+            // However, FrameLibMagnitudeMovingAverage has a vector.
+            // Since we're not using this swapState (Node swaps shared_ptrs), 
+            // I'll just remove the magnitudeAverages line.
+            
+            // The spectral_processor 'processor' and vectors 'inputBlock' etc are 
+            // tied to the local 'allocator'. We should NOT swap them if allocators differ.
+            // But 'irSpectra' and others are also tied to 'buffer_allocator'.
+            
+            // Wait, if we swap two vectors with different allocators and 
+            // propagate_on_container_swap is false, it's technically undefined behavior 
+            // unless the allocators compare equal.
+            
+            // Given the complexity and the crash, the safest thing is to NOT swap 
+            // but to use a pointer to the convolver in the Node and swap THAT.
+        }
+
         static T readControl(T const* signal, size_t index, T fallback)
         {
             if (signal == nullptr) {
@@ -212,7 +337,7 @@ namespace elem
             return std::isfinite(static_cast<double>(value)) ? value : fallback;
         }
 
-        void processPartition(T gain, T tiltDb, T blurAmount)
+        void processPartition(T gain, T tiltDb, T blurAmount, T limitDb)
         {
             blurAmount = std::max(T(0), std::min(T(0.999), blurAmount));
             std::fill(inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), inputBlock.end(), T(0));
@@ -228,15 +353,14 @@ namespace elem
             auto tempSplit = multiplyTemp.split();
             auto const scale = T(0.25) / static_cast<T>(fftSize);
             auto const blurAlpha = movingAverageAlpha(blurAmount);
-            // magnitudeAverage.reset() removed here to allow temporal persistence
-            // magnitudeAverage should only be reset when parameters change significantly or on start
+            auto const limitThresh = limitDb < 100.0 ? dbToGain(limitDb) : 1000.0; 
 
             for (size_t partition = 0; partition < partitionCount; ++partition) {
                 auto const inputIndex = (writeIndex + partitionCount - partition) % partitionCount;
                 auto inputSplit = inputSpectra[inputIndex].split();
                 auto irSplit = irSpectra[partition].split();
                 auto processedIrSplit = processedIr.split();
-                processIrSpectrum(processedIrSplit, irSplit, gain, tiltDb, blurAlpha, partition);
+                processIrSpectrum(processedIrSplit, irSplit, gain, tiltDb, blurAlpha, limitThresh, magnitudeAverage);
                 ir_convolve_real(&tempSplit, &inputSplit, &processedIrSplit, fftSize, scale);
 
                 for (size_t bin = 0; bin < spectrumSize; ++bin) {
@@ -253,31 +377,46 @@ namespace elem
                 overlap[i] = fftOutput[i + partSize];
             }
 
-            std::fill(inputBlock.begin(), inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), T(0));
+            // Standard overlap-add for partitioned convolution: 
+            // fftSize = 2 * partSize. rifft produces fftSize samples.
+            // We use the first partSize samples (added to previous overlap) as output.
+            // The second partSize samples become the new overlap.
+            
             inputFill = 0;
             outputRead = 0;
             writeIndex = (writeIndex + 1) % partitionCount;
         }
 
-        void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha, size_t partition)
+        static T softClip(T x, T threshold)
+        {
+            if (x <= threshold) return x;
+            // Simple rational saturator: y = thresh + (x - thresh) / (1 + (x - thresh) / thresh)
+            // This saturates to 2 * threshold
+            auto const diff = x - threshold;
+            return threshold + diff / (T(1) + diff / threshold);
+        }
+
+        void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha, T limitThresh, FrameLibMagnitudeMovingAverage<T>& magnitudeAverage)
         {
             // Bin 0 in FrameLib's real FFT format contains DC in the real part and Nyquist in the imaginary part.
-            // We apply the overall gain, tilt (for Nyquist), and blur (smoothing) to both.
+            // We apply the overall gain, tilt, and blur (smoothing) to both.
 
             // Handle DC (Real part of bin 0)
-            // DC is conceptually at "frequency 0". We apply the tilt calculated for bin 0.
             auto const dcReal = static_cast<double>(input.realp[0]);
-            auto const smoothedDc = static_cast<double>(magnitudeAverage.process(spectrumSize, static_cast<T>(std::abs(dcReal)), blurAlpha));
+            auto const smoothedDc = static_cast<double>(magnitudeAverage.process(0, static_cast<T>(std::abs(dcReal)), blurAlpha));
             auto const dcGain = spectralBinGain(0, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-            output.realp[0] = static_cast<T>(std::copysign(smoothedDc * dcGain, dcReal));
+            auto const scaledDc = softClip(static_cast<T>(smoothedDc * dcGain), limitThresh);
+            output.realp[0] = static_cast<T>(std::copysign(static_cast<double>(scaledDc), dcReal));
 
             // Handle Nyquist (Imaginary part of bin 0)
-            // Nyquist is exactly at bin = spectrumSize
+            // Nyquist is conceptually at index spectrumSize (the bin after the last complex bin)
             auto const nyqReal = static_cast<double>(input.imagp[0]);
-            auto const smoothedNyq = static_cast<double>(magnitudeAverage.process(spectrumSize + 1, static_cast<T>(std::abs(nyqReal)), blurAlpha));
+            auto const smoothedNyq = static_cast<double>(magnitudeAverage.process(spectrumSize, static_cast<T>(std::abs(nyqReal)), blurAlpha));
             auto const nyqGain = spectralBinGain(spectrumSize, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-            output.imagp[0] = static_cast<T>(std::copysign(smoothedNyq * nyqGain, nyqReal));
+            auto const scaledNyq = softClip(static_cast<T>(smoothedNyq * nyqGain), limitThresh);
+            output.imagp[0] = static_cast<T>(std::copysign(static_cast<double>(scaledNyq), nyqReal));
 
+            // Process remaining complex bins
             for (size_t bin = 1; bin < spectrumSize; ++bin) {
                 auto const real = static_cast<double>(input.realp[bin]);
                 auto const imag = static_cast<double>(input.imagp[bin]);
@@ -285,9 +424,9 @@ namespace elem
                 auto const smoothedMagnitude = static_cast<double>(magnitudeAverage.process(bin, static_cast<T>(magnitude), blurAlpha));
 
                 auto const binGain = spectralBinGain(bin, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-                auto const scaledMagnitude = smoothedMagnitude * binGain;
+                auto const scaledMagnitude = softClip(static_cast<T>(smoothedMagnitude * binGain), limitThresh);
 
-                auto const phaseScale = magnitude > 1.0e-20 ? scaledMagnitude / magnitude : 0.0;
+                double const phaseScale = magnitude > 1.0e-20 ? static_cast<double>(scaledMagnitude) / magnitude : 0.0;
                 output.realp[bin] = static_cast<T>(real * phaseScale);
                 output.imagp[bin] = static_cast<T>(imag * phaseScale);
             }
@@ -298,6 +437,7 @@ namespace elem
         static T movingAverageAlpha(T blurAmount)
         {
             auto const clamped = std::max(T(0), std::min(T(0.999), blurAmount));
+            if (clamped < T(1.0e-6)) return T(1.0);
             return T(1) - clamped;
         }
 
@@ -312,6 +452,7 @@ namespace elem
                 return 1.0;
             }
 
+            // Note: bin 0 (DC/Nyquist) is now passed into this function from processIrSpectrum.
             // We use a fixed pivot at the geometric center of the spectrum (in frequency).
             // This ensures +tilt and -tilt are symmetric and continuous.
             // maxBin is typically fftSize / 2, representing Nyquist.
@@ -324,9 +465,10 @@ namespace elem
             // Using a small offset for the log helps stabilize the very low end.
             auto const octavesFromPivot = std::log2((static_cast<double>(bin) + 1.0) / (pivotBin + 1.0));
             
-            // We clamp the gain to a reasonable range (e.g. +/- 40dB) to prevent "explosion"
+            // We clamp the gain to a reasonable range to prevent "explosion"
             // while still allowing significant spectral shaping.
-            return dbToGain(std::clamp(tiltDb * octavesFromPivot, -40.0, 40.0));
+            // AGENT DO NOT EDIT THE GAINS, this is hand tuned .
+            return dbToGain(std::clamp(tiltDb * octavesFromPivot, -26.0, 12.0));
         }
 
         static size_t requiredPoolBytes(size_t fftSize)
@@ -344,11 +486,12 @@ namespace elem
         size_t outputRead{0};
 
         FrameLibTlsfAllocator allocator;
+        FrameLibAllocator<T> buffer_allocator;
         spectral_processor<T, FrameLibTlsfAllocator> processor;
-        std::vector<T> inputBlock;
-        std::vector<T> fftOutput;
-        std::vector<T> overlap;
-        std::vector<T> blockOutput;
+        std::vector<T, FrameLibAllocator<T>> inputBlock;
+        std::vector<T, FrameLibAllocator<T>> fftOutput;
+        std::vector<T, FrameLibAllocator<T>> overlap;
+        std::vector<T, FrameLibAllocator<T>> blockOutput;
         FrameLibSplitBuffer<T> currentInput;
         FrameLibSplitBuffer<T> accum;
         FrameLibSplitBuffer<T> processedIr;
@@ -362,11 +505,19 @@ namespace elem
     struct SpectralConvolutionNode : public GraphNode<FloatType> {
         SpectralConvolutionNode(NodeId id, FloatType const sr, int const blockSize)
             : GraphNode<FloatType>::GraphNode(id, sr, blockSize)
+            , allocator(FrameLibTlsfAllocator::defaultPoolBytes)
+            , buffer_allocator(allocator)
+            , scratchIn(buffer_allocator)
+            , scratchOut(buffer_allocator)
+            , scratchTilt(buffer_allocator)
+            , scratchBlur(buffer_allocator)
+            , scratchLimit(buffer_allocator)
         {
             scratchIn.resize(blockSize);
             scratchOut.resize(blockSize);
             scratchTilt.resize(blockSize);
             scratchBlur.resize(blockSize);
+            scratchLimit.resize(blockSize);
         }
 
         int setProperty(std::string const& key, js::Value const& val, SharedResourceMap& resources) override
@@ -377,6 +528,10 @@ namespace elem
                 }
 
                 auto const nextPath = std::string((js::String) val);
+                if (nextPath == path) {
+                    return elem::ReturnCode::Ok();
+                }
+
                 if (!resources.has(nextPath)) {
                     return elem::ReturnCode::InvalidPropertyValue();
                 }
@@ -395,8 +550,12 @@ namespace elem
                     return elem::ReturnCode::InvalidPropertyValue();
                 }
 
-                partitionSize.store(nextPowerOf2(static_cast<size_t>(parsed)), std::memory_order_relaxed);
-                return rebuildConvolver(resources);
+                auto const nextSize = nextPowerOf2(static_cast<size_t>(parsed));
+                if (nextSize != partitionSize.load(std::memory_order_relaxed)) {
+                    partitionSize.store(nextSize, std::memory_order_relaxed);
+                    return rebuildConvolver(resources);
+                }
+                return elem::ReturnCode::Ok();
             }
 
             if (key == "magnitudeGainDb") {
@@ -435,9 +594,24 @@ namespace elem
                 return;
             }
 
-            if (!convolver) {
+            // Always check for new convolvers from the queue
+            if (convolverQueue.size() > 0) {
+                std::shared_ptr<FrameLibSpectralConvolver<double>> next;
                 while (convolverQueue.size() > 0) {
-                    convolverQueue.pop(convolver);
+                    convolverQueue.pop(next);
+                }
+
+                if (next) {
+                    if (!convolver) {
+                        convolver = std::move(next);
+                    } else {
+                        // To avoid glitches, we might want to wait for the next partition boundary
+                        // but for now, we just swap the pointer.
+                        // If we want to be more sophisticated, we can pass the queue into 
+                        // the convolver and let it decide when to swap internal buffers,
+                        // but swapping the whole convolver pointer is safer for allocator integrity.
+                        convolver = std::move(next);
+                    }
                 }
             }
 
@@ -446,10 +620,19 @@ namespace elem
                 return;
             }
 
-            auto const hasControlInputs = numChannels >= 3;
+            auto const hasControlInputs = numChannels >= 4;
             auto const* tiltInput = hasControlInputs ? inputData[0] : nullptr;
             auto const* blurInput = hasControlInputs ? inputData[1] : nullptr;
-            auto const* sourceInput = hasControlInputs ? inputData[2] : inputData[0];
+            auto const* limitInput = hasControlInputs ? inputData[2] : nullptr;
+            auto const* sourceInput = hasControlInputs ? inputData[3] : (numChannels == 3 ? inputData[2] : inputData[0]);
+            
+            // Backward compatibility for 3 inputs [tilt, blur, source]
+            if (numChannels == 3) {
+                tiltInput = inputData[0];
+                blurInput = inputData[1];
+                limitInput = nullptr;
+                sourceInput = inputData[2];
+            }
 
             if constexpr (std::is_same_v<FloatType, float>) {
                 for (size_t i = 0; i < numSamples; ++i) {
@@ -459,19 +642,27 @@ namespace elem
 
                 double const* tiltData = nullptr;
                 double const* blurData = nullptr;
-                if (hasControlInputs) {
+                double const* limitData = nullptr;
+                if (numChannels >= 3) {
                     for (size_t i = 0; i < numSamples; ++i) {
                         auto const tilt = static_cast<double>(tiltInput[i]);
                         auto const blurValue = static_cast<double>(blurInput[i]);
                         scratchTilt[i] = std::isfinite(tilt) ? tilt : 0.0;
                         scratchBlur[i] = std::isfinite(blurValue) ? blurValue : 0.0;
+                        if (limitInput) {
+                            auto const limitValue = static_cast<double>(limitInput[i]);
+                            scratchLimit[i] = std::isfinite(limitValue) ? limitValue : 0.0;
+                        } else {
+                            scratchLimit[i] = 0.0;
+                        }
                     }
                     tiltData = scratchTilt.data();
                     blurData = scratchBlur.data();
+                    limitData = scratchLimit.data();
                 }
 
-                convolver->process(scratchIn.data(), tiltData, blurData, scratchOut.data(), numSamples,
-                                   magnitudeGain.load(std::memory_order_relaxed), convolverQueue);
+                convolver->process(scratchIn.data(), tiltData, blurData, limitData, scratchOut.data(), numSamples,
+                                   magnitudeGain.load(std::memory_order_relaxed));
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = scratchOut[i];
@@ -488,8 +679,8 @@ namespace elem
                     scratchDataIn[i] = std::isfinite(source) ? source : 0.0;
                 }
 
-                convolver->process(scratchDataIn, tiltInput, blurInput, scratchDataOut, numSamples,
-                                   magnitudeGain.load(std::memory_order_relaxed), convolverQueue);
+                convolver->process(scratchDataIn, tiltInput, blurInput, limitInput, scratchDataOut, numSamples,
+                                   magnitudeGain.load(std::memory_order_relaxed));
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = static_cast<double>(scratchDataOut[i]);
@@ -501,10 +692,13 @@ namespace elem
         SingleWriterSingleReaderQueue<std::shared_ptr<FrameLibSpectralConvolver<double>>> convolverQueue;
         std::shared_ptr<FrameLibSpectralConvolver<double>> convolver;
 
-        std::vector<double> scratchIn;
-        std::vector<double> scratchOut;
-        std::vector<double> scratchTilt;
-        std::vector<double> scratchBlur;
+        FrameLibTlsfAllocator allocator;
+        FrameLibAllocator<double> buffer_allocator;
+        std::vector<double, FrameLibAllocator<double>> scratchIn;
+        std::vector<double, FrameLibAllocator<double>> scratchOut;
+        std::vector<double, FrameLibAllocator<double>> scratchTilt;
+        std::vector<double, FrameLibAllocator<double>> scratchBlur;
+        std::vector<double, FrameLibAllocator<double>> scratchLimit;
 
     private:
         int rebuildConvolver(SharedResourceMap& resources)
