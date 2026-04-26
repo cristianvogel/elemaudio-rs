@@ -63,9 +63,9 @@ export interface ConvolveSpectralProps extends Record<string, unknown> {
   tailBlockSize?: number;
   /** Optional global spectral magnitude gain in dB. */
   magnitudeGainDb?: number;
-  /** Optional spectral tilt in dB/octave, referenced to Nyquist. */
+  /** Optional fallback spectral tilt in dB/octave, referenced to Nyquist. */
   tiltDbPerOct?: number;
-  /** Optional partition-to-partition magnitude smoothing in [0, 1). */
+  /** Optional fallback partition-to-partition magnitude smoothing in [0, 1). */
   blur?: number;
 }
 
@@ -243,17 +243,21 @@ export function convolve(
  * - `partitionSize`: optional power-of-two IR edit partition size
  * - `tailBlockSize`: optional tail block size for the internal convolver
  * - `magnitudeGainDb`: optional global spectral magnitude gain in dB
- * - `tiltDbPerOct`: optional spectral tilt applied around Nyquist
- * - `blur`: optional partition-to-partition magnitude smoothing in [0, 1)
+ * - `tiltDbPerOct`: optional fallback spectral tilt applied around Nyquist
+ * - `blur`: optional fallback partition-to-partition magnitude smoothing in [0, 1)
  *
  * Child order:
+ * - `tiltDbPerOct`: frame-latched spectral tilt signal in dB/octave
+ * - `blur`: frame-latched partition-to-partition magnitude smoothing signal in [0, 1)
  * - `x`: audio input
  */
 export function convolveSpectral(
   props: ConvolveSpectralProps,
+  tiltDbPerOct: ElemNode,
+  blur: ElemNode,
   x: ElemNode,
 ): NodeRepr_t {
-  return createNode("extra.convolveSpectral", props, [resolve(x)]);
+  return createNode("extra.convolveSpectral", props, [resolve(tiltDbPerOct), resolve(blur), resolve(x)]);
 }
 
 /**

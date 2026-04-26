@@ -97,13 +97,24 @@ pub fn convolve(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// - `partitionSize`: optional power-of-two IR edit partition size, rounded up
 /// - `tailBlockSize`: optional tail block size for the internal convolver, rounded up
 /// - `magnitudeGainDb`: optional global spectral magnitude gain in dB
-/// - `tiltDbPerOct`: optional spectral tilt applied around Nyquist
-/// - `blur`: optional partition-to-partition magnitude smoothing in `[0, 1)`
+/// - `tiltDbPerOct`: optional fallback spectral tilt applied around Nyquist
+/// - `blur`: optional fallback partition-to-partition magnitude smoothing in `[0, 1)`
 ///
 /// Child order:
+/// - `tiltDbPerOct`: frame-latched spectral tilt signal in dB/octave
+/// - `blur`: frame-latched partition-to-partition magnitude smoothing signal in `[0, 1)`
 /// - `x`: audio input
-pub fn convolve_spectral(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
-    Node::new("extra.convolveSpectral", props, vec![resolve(x)])
+pub fn convolve_spectral(
+    props: serde_json::Value,
+    tilt_db_per_oct: impl Into<ElemNode>,
+    blur: impl Into<ElemNode>,
+    x: impl Into<ElemNode>,
+) -> Node {
+    Node::new(
+        "extra.convolveSpectral",
+        props,
+        vec![resolve(tilt_db_per_oct), resolve(blur), resolve(x)],
+    )
 }
 
 /// Crunch distortion helper.

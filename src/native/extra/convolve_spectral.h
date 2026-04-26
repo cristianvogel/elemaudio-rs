@@ -167,7 +167,7 @@ namespace elem
             }
         }
 
-        void process(T const* input, T* output, size_t count, T gain, T tiltDb, T blurAmount, bool randomizePhase)
+        void process(T const* input, T const* tiltInput, T const* blurInput, T* output, size_t count, T gain, T tiltDb, T blurAmount, bool randomizePhase)
         {
             for (size_t i = 0; i < count; ++i) {
                 output[i] = blockOutput[outputRead++];
@@ -176,14 +176,27 @@ namespace elem
                 inputBlock[inputFill++] = std::isfinite(static_cast<double>(sample)) ? sample : T(0);
 
                 if (inputFill == partSize) {
-                    processPartition(gain, tiltDb, blurAmount, randomizePhase);
+                    auto const tilt = readControl(tiltInput, i, tiltDb);
+                    auto const blur = readControl(blurInput, i, blurAmount);
+                    processPartition(gain, tilt, blur, randomizePhase);
                 }
             }
         }
 
     private:
+        static T readControl(T const* signal, size_t index, T fallback)
+        {
+            if (signal == nullptr) {
+                return fallback;
+            }
+
+            auto const value = signal[index];
+            return std::isfinite(static_cast<double>(value)) ? value : fallback;
+        }
+
         void processPartition(T gain, T tiltDb, T blurAmount, bool randomizePhase)
         {
+            blurAmount = std::max(T(0), std::min(T(0.999), blurAmount));
             std::fill(inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), inputBlock.end(), T(0));
 
             auto currentSplit = currentInput.split();
@@ -340,6 +353,8 @@ namespace elem
         {
             scratchIn.resize(blockSize);
             scratchOut.resize(blockSize);
+            scratchTilt.resize(blockSize);
+            scratchBlur.resize(blockSize);
         }
 
         int setProperty(std::string const& key, js::Value const& val, SharedResourceMap& resources) override
@@ -458,14 +473,31 @@ namespace elem
                 return;
             }
 
+            auto const hasControlInputs = numChannels >= 3;
+            auto const* tiltInput = hasControlInputs ? inputData[0] : nullptr;
+            auto const* blurInput = hasControlInputs ? inputData[1] : nullptr;
+            auto const* sourceInput = hasControlInputs ? inputData[2] : inputData[0];
+
             if constexpr (std::is_same_v<FloatType, float>) {
-                auto const* sourceInput = inputData[0];
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const source = static_cast<double>(sourceInput[i]);
                     scratchIn[i] = std::isfinite(source) ? source : 0.0;
                 }
 
-                convolver->process(scratchIn.data(), scratchOut.data(), numSamples,
+                double const* tiltData = nullptr;
+                double const* blurData = nullptr;
+                if (hasControlInputs) {
+                    for (size_t i = 0; i < numSamples; ++i) {
+                        auto const tilt = static_cast<double>(tiltInput[i]);
+                        auto const blurValue = static_cast<double>(blurInput[i]);
+                        scratchTilt[i] = std::isfinite(tilt) ? tilt : tiltDbPerOct.load(std::memory_order_relaxed);
+                        scratchBlur[i] = std::isfinite(blurValue) ? blurValue : blur.load(std::memory_order_relaxed);
+                    }
+                    tiltData = scratchTilt.data();
+                    blurData = scratchBlur.data();
+                }
+
+                convolver->process(scratchIn.data(), tiltData, blurData, scratchOut.data(), numSamples,
                                    magnitudeGain.load(std::memory_order_relaxed),
                                    tiltDbPerOct.load(std::memory_order_relaxed),
                                    blur.load(std::memory_order_relaxed),
@@ -478,7 +510,6 @@ namespace elem
             }
 
             if constexpr (std::is_same_v<FloatType, double>) {
-                auto const* sourceInput = inputData[0];
                 auto* scratchDataIn = scratchIn.data();
                 auto* scratchDataOut = scratchOut.data();
 
@@ -487,7 +518,7 @@ namespace elem
                     scratchDataIn[i] = std::isfinite(source) ? source : 0.0;
                 }
 
-                convolver->process(scratchDataIn, scratchDataOut, numSamples,
+                convolver->process(scratchDataIn, tiltInput, blurInput, scratchDataOut, numSamples,
                                    magnitudeGain.load(std::memory_order_relaxed),
                                    tiltDbPerOct.load(std::memory_order_relaxed),
                                    blur.load(std::memory_order_relaxed),
@@ -505,6 +536,8 @@ namespace elem
 
         std::vector<double> scratchIn;
         std::vector<double> scratchOut;
+        std::vector<double> scratchTilt;
+        std::vector<double> scratchBlur;
 
     private:
         int rebuildConvolver(SharedResourceMap& resources)

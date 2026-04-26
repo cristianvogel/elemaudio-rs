@@ -108,15 +108,18 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
     }
 
     function spectralConvolve(key: string, path: string, x: NodeRepr_t): NodeRepr_t {
+        const tilt = el.const({key: `${key}:tilt-db-per-oct`, value: p.spectralTiltDbPerOct});
+        const blur = el.const({key: `${key}:blur`, value: p.spectralBlur});
+
         return el.extra.convolveSpectral({
                 key,
                 path,
                 partitionSize: 512,
                 tailBlockSize: 4096,
-                magnitudeGainDb: -p.irAttenuationDb,
-                tiltDbPerOct: p.spectralTiltDbPerOct,
-                blur: ( p.spectralBlur )
+                magnitudeGainDb: -p.irAttenuationDb
             },
+            tilt,
+            blur,
             x);
     }
 

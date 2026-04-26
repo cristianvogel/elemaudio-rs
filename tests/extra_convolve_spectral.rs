@@ -39,6 +39,26 @@ fn rms(samples: &[f64]) -> f64 {
 }
 
 fn convolver_output(ir: &[f32], props: serde_json::Value, source: Node, spectral: bool) -> Vec<f64> {
+    let tilt = props
+        .get("tiltDbPerOct")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    let blur = props
+        .get("blur")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+
+    convolver_output_with_controls(ir, props, el::const_(tilt), el::const_(blur), source, spectral)
+}
+
+fn convolver_output_with_controls(
+    ir: &[f32],
+    props: serde_json::Value,
+    tilt: Node,
+    blur: Node,
+    source: Node,
+    spectral: bool,
+) -> Vec<f64> {
     let sample_rate = 48_000.0;
     let buffer_size = 64;
     let runtime = Runtime::new()
@@ -52,7 +72,7 @@ fn convolver_output(ir: &[f32], props: serde_json::Value, source: Node, spectral
         .expect("resource");
 
     let graph = if spectral {
-        Graph::new().render(extra::convolve_spectral(props, source))
+        Graph::new().render(extra::convolve_spectral(props, tilt, blur, source))
     } else {
         Graph::new().render(extra::convolve(props, source))
     };
@@ -72,6 +92,11 @@ fn convolver_output(ir: &[f32], props: serde_json::Value, source: Node, spectral
     output
 }
 
+fn spectral_output_rms_with_controls(ir: &[f32], props: serde_json::Value, tilt: Node, blur: Node, source: Node) -> f64 {
+    let output = convolver_output_with_controls(ir, props, tilt, blur, source, true);
+    rms(&output)
+}
+
 fn spectral_impulse_response(ir: &[f32], props: serde_json::Value, blocks: usize) -> Vec<f64> {
     let sample_rate = 48_000.0;
     let buffer_size = 64;
@@ -87,6 +112,8 @@ fn spectral_impulse_response(ir: &[f32], props: serde_json::Value, blocks: usize
 
     let graph = Graph::new().render(extra::convolve_spectral(
         props,
+        el::const_(0.0),
+        el::const_(0.0),
         el::r#in(json!({"channel": 0}), None),
     ));
 
@@ -140,6 +167,8 @@ fn extra_convolve_spectral_neutral_matches_static_ir_gain() {
 
     let graph = Graph::new().render(extra::convolve_spectral(
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512}),
+        el::const_(0.0),
+        el::const_(0.0),
         el::const_(1.0),
     ));
 
@@ -171,6 +200,8 @@ fn extra_convolve_spectral_magnitude_gain_scales_ir_gain() {
 
     let graph = Graph::new().render(extra::convolve_spectral(
         json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "magnitudeGainDb": -6.0}),
+        el::const_(0.0),
+        el::const_(0.0),
         el::const_(1.0),
     ));
 
@@ -206,6 +237,61 @@ fn extra_convolve_spectral_blur_smooths_ir_partition_magnitudes() {
     assert!(
         (blurred - neutral).abs() > 0.01,
         "blur should smooth partition magnitudes and alter the output energy, neutral {neutral}, blurred {blurred}"
+    );
+}
+
+#[test]
+fn extra_convolve_spectral_uses_frame_latched_blur_child() {
+    let mut ir = vec![0.0_f32; 128];
+    ir[0] = 1.0;
+    ir[64] = 0.25;
+
+    let neutral = spectral_output_rms_with_controls(
+        &ir,
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.5}),
+        el::const_(0.0),
+        el::const_with_key("spectral-blur-child", 0.0),
+        el::cycle(el::const_(440.0)),
+    );
+    let blurred = spectral_output_rms_with_controls(
+        &ir,
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "blur": 0.0}),
+        el::const_(0.0),
+        el::const_with_key("spectral-blur-child", 0.5),
+        el::cycle(el::const_(440.0)),
+    );
+
+    assert!(
+        (blurred - neutral).abs() > 0.01,
+        "blur child should override prop fallback at frame boundaries, neutral {neutral}, blurred {blurred}"
+    );
+}
+
+#[test]
+fn extra_convolve_spectral_accepts_keyable_tilt_child() {
+    let mut ir = vec![0.0_f32; 128];
+    ir[0] = 1.0;
+    ir[8] = -0.75;
+    ir[32] = 0.5;
+
+    let neutral = spectral_output_rms_with_controls(
+        &ir,
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "tiltDbPerOct": -12.0}),
+        el::const_with_key("spectral-tilt-child", 0.0),
+        el::const_(0.0),
+        el::cycle(el::const_(440.0)),
+    );
+    let tilted = spectral_output_rms_with_controls(
+        &ir,
+        json!({"path": "ir", "partitionSize": 64, "tailBlockSize": 512, "tiltDbPerOct": 0.0}),
+        el::const_with_key("spectral-tilt-child", -12.0),
+        el::const_(0.0),
+        el::cycle(el::const_(440.0)),
+    );
+
+    assert!(
+        (tilted - neutral).abs() > 0.01,
+        "tilt child should override prop fallback at frame boundaries, neutral {neutral}, tilted {tilted}"
     );
 }
 
