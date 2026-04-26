@@ -59,14 +59,8 @@ export interface ConvolveSpectralProps extends Record<string, unknown> {
   path: string;
   /** Optional power-of-two IR edit partition size. Non-powers are rounded up natively. */
   partitionSize?: number;
-  /** Optional tail block size for the internal convolver. Non-powers are rounded up natively. */
-  tailBlockSize?: number;
   /** Optional global spectral magnitude gain in dB. */
   magnitudeGainDb?: number;
-  /** Optional fallback spectral tilt in dB/octave, referenced to Nyquist. */
-  tiltDbPerOct?: number;
-  /** Optional fallback partition-to-partition magnitude smoothing in [0, 1). */
-  blur?: number;
 }
 
 /**
@@ -241,10 +235,7 @@ export function convolve(
  * Props:
  * - `path`: shared resource id for the impulse response
  * - `partitionSize`: optional power-of-two IR edit partition size
- * - `tailBlockSize`: optional tail block size for the internal convolver
  * - `magnitudeGainDb`: optional global spectral magnitude gain in dB
- * - `tiltDbPerOct`: optional fallback spectral tilt applied around Nyquist
- * - `blur`: optional fallback partition-to-partition magnitude smoothing in [0, 1)
  *
  * Child order:
  * - `tiltDbPerOct`: frame-latched spectral tilt signal in dB/octave

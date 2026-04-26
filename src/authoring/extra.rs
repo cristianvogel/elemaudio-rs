@@ -95,10 +95,7 @@ pub fn convolve(props: serde_json::Value, x: impl Into<ElemNode>) -> Node {
 /// Props:
 /// - `path`: shared resource id for the impulse response
 /// - `partitionSize`: optional power-of-two IR edit partition size, rounded up
-/// - `tailBlockSize`: optional tail block size for the internal convolver, rounded up
 /// - `magnitudeGainDb`: optional global spectral magnitude gain in dB
-/// - `tiltDbPerOct`: optional fallback spectral tilt applied around Nyquist
-/// - `blur`: optional fallback partition-to-partition magnitude smoothing in `[0, 1)`
 ///
 /// Child order:
 /// - `tiltDbPerOct`: frame-latched spectral tilt signal in dB/octave

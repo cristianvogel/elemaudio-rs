@@ -167,7 +167,12 @@ namespace elem
             }
         }
 
-        void process(T const* input, T const* tiltInput, T const* blurInput, T* output, size_t count, T gain, T tiltDb, T blurAmount, bool randomizePhase)
+        void reset()
+        {
+            magnitudeAverage.reset();
+        }
+
+        void process(T const* input, T const* tiltInput, T const* blurInput, T* output, size_t count, T gain)
         {
             for (size_t i = 0; i < count; ++i) {
                 output[i] = blockOutput[outputRead++];
@@ -176,9 +181,9 @@ namespace elem
                 inputBlock[inputFill++] = std::isfinite(static_cast<double>(sample)) ? sample : T(0);
 
                 if (inputFill == partSize) {
-                    auto const tilt = readControl(tiltInput, i, tiltDb);
-                    auto const blur = readControl(blurInput, i, blurAmount);
-                    processPartition(gain, tilt, blur, randomizePhase);
+                    auto const tilt = readControl(tiltInput, i, T(0));
+                    auto const blur = readControl(blurInput, i, T(0));
+                    processPartition(gain, tilt, blur);
                 }
             }
         }
@@ -194,7 +199,7 @@ namespace elem
             return std::isfinite(static_cast<double>(value)) ? value : fallback;
         }
 
-        void processPartition(T gain, T tiltDb, T blurAmount, bool randomizePhase)
+        void processPartition(T gain, T tiltDb, T blurAmount)
         {
             blurAmount = std::max(T(0), std::min(T(0.999), blurAmount));
             std::fill(inputBlock.begin() + static_cast<std::ptrdiff_t>(partSize), inputBlock.end(), T(0));
@@ -210,14 +215,15 @@ namespace elem
             auto tempSplit = multiplyTemp.split();
             auto const scale = T(0.25) / static_cast<T>(fftSize);
             auto const blurAlpha = movingAverageAlpha(blurAmount);
-            magnitudeAverage.reset();
+            // magnitudeAverage.reset() removed here to allow temporal persistence
+            // magnitudeAverage should only be reset when parameters change significantly or on start
 
             for (size_t partition = 0; partition < partitionCount; ++partition) {
                 auto const inputIndex = (writeIndex + partitionCount - partition) % partitionCount;
                 auto inputSplit = inputSpectra[inputIndex].split();
                 auto irSplit = irSpectra[partition].split();
                 auto processedIrSplit = processedIr.split();
-                processIrSpectrum(processedIrSplit, irSplit, gain, tiltDb, blurAlpha, randomizePhase, partition);
+                processIrSpectrum(processedIrSplit, irSplit, gain, tiltDb, blurAlpha, partition);
                 ir_convolve_real(&tempSplit, &inputSplit, &processedIrSplit, fftSize, scale);
 
                 for (size_t bin = 0; bin < spectrumSize; ++bin) {
@@ -240,19 +246,12 @@ namespace elem
             writeIndex = (writeIndex + 1) % partitionCount;
         }
 
-        void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha, bool randomizePhase, size_t partition)
+        void processIrSpectrum(Split& output, Split const& input, T gain, T tiltDb, T blurAlpha, size_t partition)
         {
-            auto const dc = static_cast<double>(input.realp[0]);
-            auto const dcMagnitude = std::abs(dc);
-            auto const smoothedDc = static_cast<double>(magnitudeAverage.process(0, static_cast<T>(dcMagnitude), blurAlpha));
-            auto const dcGain = spectralBinGain(1, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-            output.realp[0] = static_cast<T>((dc < 0.0 ? -smoothedDc : smoothedDc) * dcGain);
-
-            auto const nyquist = static_cast<double>(input.imagp[0]);
-            auto const nyquistMagnitude = std::abs(nyquist);
-            auto const smoothedNyquist = static_cast<double>(magnitudeAverage.process(spectrumSize, static_cast<T>(nyquistMagnitude), blurAlpha));
-            auto const nyquistGain = spectralBinGain(spectrumSize, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
-            output.imagp[0] = static_cast<T>((nyquist < 0.0 ? -smoothedNyquist : smoothedNyquist) * nyquistGain);
+            // Bin 0 in FrameLib's real FFT format contains DC in the real part and Nyquist in the imaginary part.
+            // We pass them through with the overall gain applied, but without tilt or blurring.
+            output.realp[0] = input.realp[0] * gain;
+            output.imagp[0] = input.imagp[0] * gain;
 
             for (size_t bin = 1; bin < spectrumSize; ++bin) {
                 auto const real = static_cast<double>(input.realp[bin]);
@@ -263,16 +262,9 @@ namespace elem
                 auto const binGain = spectralBinGain(bin, spectrumSize, static_cast<double>(tiltDb)) * static_cast<double>(gain);
                 auto const scaledMagnitude = smoothedMagnitude * binGain;
 
-                if (!randomizePhase || magnitude <= 1.0e-20) {
-                    auto const phaseScale = magnitude > 1.0e-20 ? scaledMagnitude / magnitude : 0.0;
-                    output.realp[bin] = static_cast<T>(real * phaseScale);
-                    output.imagp[bin] = static_cast<T>(imag * phaseScale);
-                    continue;
-                }
-
-                auto const phase = randomPhase(partition, bin);
-                output.realp[bin] = static_cast<T>(std::cos(phase) * scaledMagnitude);
-                output.imagp[bin] = static_cast<T>(std::sin(phase) * scaledMagnitude);
+                auto const phaseScale = magnitude > 1.0e-20 ? scaledMagnitude / magnitude : 0.0;
+                output.realp[bin] = static_cast<T>(real * phaseScale);
+                output.imagp[bin] = static_cast<T>(imag * phaseScale);
             }
 
             magnitudeAverage.finishFrame();
@@ -304,16 +296,27 @@ namespace elem
 
         static double spectralBinGain(size_t bin, size_t maxBin, double tiltDb)
         {
-            if (std::abs(tiltDb) < 1.0e-12 || bin == 0 || maxBin <= 1) {
+            if (std::abs(tiltDb) < 1.0e-12 || maxBin <= 1) {
+                return 1.0;
+            }
+
+            // Note: bin 0 (DC/Nyquist) is handled outside this function in processIrSpectrum
+            if (bin == 0) {
                 return 1.0;
             }
 
             auto const normalized = static_cast<double>(bin) / static_cast<double>(maxBin);
             if (tiltDb > 0.0) {
+                // High-shelf/Tilt up: higher bins get more gain.
+                // At Nyquist (bin == maxBin, normalized == 1.0), octavesFromNyquist is 0, gain is 1.0 (0dB).
+                // Lower bins get less gain.
                 auto const octavesFromNyquist = std::log2(std::max(normalized, 1.0 / static_cast<double>(maxBin)));
                 return dbToGain(tiltDb * octavesFromNyquist);
             }
 
+            // Tilt down: lower bins get more gain.
+            // At bin 1 (lowest non-DC bin), octavesFromLowestBin is 0, gain is 1.0 (0dB).
+            // Higher bins get less gain (tiltDb is negative).
             auto const octavesFromLowestBin = std::log2(std::max(1.0, static_cast<double>(bin)));
             return dbToGain(tiltDb * octavesFromLowestBin);
         }
@@ -388,20 +391,6 @@ namespace elem
                 return rebuildConvolver(resources);
             }
 
-            if (key == "tailBlockSize") {
-                if (!val.isNumber()) {
-                    return elem::ReturnCode::InvalidPropertyType();
-                }
-
-                auto const parsed = static_cast<double>((js::Number) val);
-                if (!std::isfinite(parsed) || parsed < 16.0) {
-                    return elem::ReturnCode::InvalidPropertyValue();
-                }
-
-                tailBlockSize.store(nextPowerOf2(static_cast<size_t>(parsed)), std::memory_order_relaxed);
-                return rebuildConvolver(resources);
-            }
-
             if (key == "magnitudeGainDb") {
                 if (!val.isNumber()) {
                     return elem::ReturnCode::InvalidPropertyType();
@@ -416,47 +405,15 @@ namespace elem
                 return elem::ReturnCode::Ok();
             }
 
-            if (key == "tiltDbPerOct") {
-                if (!val.isNumber()) {
-                    return elem::ReturnCode::InvalidPropertyType();
-                }
-
-                auto const parsed = static_cast<double>((js::Number) val);
-                if (!std::isfinite(parsed)) {
-                    return elem::ReturnCode::InvalidPropertyValue();
-                }
-
-                tiltDbPerOct.store(parsed, std::memory_order_relaxed);
-                return elem::ReturnCode::Ok();
-            }
-
-            if (key == "blur") {
-                if (!val.isNumber()) {
-                    return elem::ReturnCode::InvalidPropertyType();
-                }
-
-                auto const parsed = static_cast<double>((js::Number) val);
-                if (!std::isfinite(parsed) || parsed < 0.0 || parsed >= 1.0) {
-                    return elem::ReturnCode::InvalidPropertyValue();
-                }
-
-                blur.store(parsed, std::memory_order_relaxed);
-                return elem::ReturnCode::Ok();
-            }
-
-            if (key == "randomizePhase") {
-                if (!val.isBool()) {
-                    return elem::ReturnCode::InvalidPropertyType();
-                }
-
-                randomizePhase.store(static_cast<bool>(val), std::memory_order_relaxed);
-                return elem::ReturnCode::Ok();
-            }
-
             return GraphNode<FloatType>::setProperty(key, val);
         }
 
-        void reset() override {}
+        void reset() override
+        {
+            if (convolver) {
+                convolver->reset();
+            }
+        }
 
         void process(BlockContext<FloatType> const& ctx) override
         {
@@ -491,18 +448,15 @@ namespace elem
                     for (size_t i = 0; i < numSamples; ++i) {
                         auto const tilt = static_cast<double>(tiltInput[i]);
                         auto const blurValue = static_cast<double>(blurInput[i]);
-                        scratchTilt[i] = std::isfinite(tilt) ? tilt : tiltDbPerOct.load(std::memory_order_relaxed);
-                        scratchBlur[i] = std::isfinite(blurValue) ? blurValue : blur.load(std::memory_order_relaxed);
+                        scratchTilt[i] = std::isfinite(tilt) ? tilt : 0.0;
+                        scratchBlur[i] = std::isfinite(blurValue) ? blurValue : 0.0;
                     }
                     tiltData = scratchTilt.data();
                     blurData = scratchBlur.data();
                 }
 
                 convolver->process(scratchIn.data(), tiltData, blurData, scratchOut.data(), numSamples,
-                                   magnitudeGain.load(std::memory_order_relaxed),
-                                   tiltDbPerOct.load(std::memory_order_relaxed),
-                                   blur.load(std::memory_order_relaxed),
-                                   randomizePhase.load(std::memory_order_relaxed));
+                                   magnitudeGain.load(std::memory_order_relaxed));
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = scratchOut[i];
@@ -520,10 +474,7 @@ namespace elem
                 }
 
                 convolver->process(scratchDataIn, tiltInput, blurInput, scratchDataOut, numSamples,
-                                   magnitudeGain.load(std::memory_order_relaxed),
-                                   tiltDbPerOct.load(std::memory_order_relaxed),
-                                   blur.load(std::memory_order_relaxed),
-                                   randomizePhase.load(std::memory_order_relaxed));
+                                   magnitudeGain.load(std::memory_order_relaxed));
 
                 for (size_t i = 0; i < numSamples; ++i) {
                     auto const wet = static_cast<double>(scratchDataOut[i]);
@@ -595,11 +546,7 @@ namespace elem
 
         std::string path;
         std::atomic<size_t> partitionSize{512};
-        std::atomic<size_t> tailBlockSize{4096};
         std::atomic<double> magnitudeGain{1.0};
-        std::atomic<double> tiltDbPerOct{0.0};
-        std::atomic<double> blur{0.0};
-        std::atomic<bool> randomizePhase{false};
     };
 
 } // namespace elem

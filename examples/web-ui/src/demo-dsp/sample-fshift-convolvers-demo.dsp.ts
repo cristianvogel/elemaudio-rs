@@ -114,9 +114,7 @@ export function buildGraph(p: SampleParams): NodeRepr_t[] {
         return el.extra.convolveSpectral({
                 key,
                 path,
-                partitionSize: 512,
-                tailBlockSize: 4096,
-                magnitudeGainDb: -p.irAttenuationDb
+                magnitudeGainDb: -p.irAttenuationDb,
             },
             tilt,
             blur,
